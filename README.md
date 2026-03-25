@@ -88,6 +88,16 @@ Then in Claude Code:
 
 ### Memory-Bank cross-device sync
 
+Cross-device memory sync requires the [memory-bank](https://github.com/jung-wan-kim/memory-bank) plugin:
+
+```bash
+# Install memory-bank plugin (one-time)
+/plugin marketplace add https://github.com/jung-wan-kim/memory-bank
+/plugin install memory-bank
+```
+
+Then on each device:
+
 ```bash
 # On Device B after git pull:
 ./import-sync.sh
