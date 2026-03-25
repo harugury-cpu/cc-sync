@@ -1,0 +1,26 @@
+# CLAUDE.md (Example)
+
+## User Preferences
+
+- Response language: Korean (or your language)
+- Auto commit: commit + push on success
+- Task-based workflow: use TaskCreate/TaskUpdate for all requests
+
+## Telegram Notifications (Optional)
+
+Set environment variables instead of hardcoding:
+
+```bash
+export TELEGRAM_BOT_TOKEN="your-bot-token"
+export TELEGRAM_CHAT_ID="your-chat-id"
+```
+
+## Architecture Principles
+
+- Auto dispatch: automatically select orchestrator based on task size
+- Error recovery: bug-fixer auto-invocation (max 3 retries with strategy rotation)
+
+## Security
+
+- Never commit API keys, tokens, or passwords
+- `.env`, `settings.local.json` must be in .gitignore

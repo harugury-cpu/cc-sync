@@ -1,0 +1,31 @@
+{
+  "env": {
+    "TELEGRAM_BOT_TOKEN": "",
+    "TELEGRAM_CHAT_ID": ""
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git:*)",
+      "Bash(npm:*)",
+      "Bash(node:*)",
+      "Read",
+      "Write",
+      "Edit"
+    ],
+    "deny": []
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": []
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": []
+      }
+    ]
+  }
+}
