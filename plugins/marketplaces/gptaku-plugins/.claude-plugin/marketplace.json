@@ -1,0 +1,73 @@
+{
+  "name": "gptaku-plugins",
+  "description": "GPTaku plugins for Claude Code - documentation guides and developer tools",
+  "owner": {
+    "name": "fivetaku",
+    "url": "https://github.com/fivetaku"
+  },
+  "plugins": [
+    {
+      "name": "docs-guide",
+      "description": "Fetch and explain official documentation for any library/framework using llms.txt pattern",
+      "source": "./plugins/docs-guide",
+      "category": "development",
+      "tags": ["documentation", "llms-txt", "official-docs", "guide"]
+    },
+    {
+      "name": "git-teacher",
+      "description": "Git/GitHub onboarding for non-developers using cloud folder analogy. 5-phase approach with Korean language support.",
+      "source": "./plugins/git-teacher",
+      "category": "education",
+      "tags": ["git", "github", "onboarding", "beginner", "korean", "education"]
+    },
+    {
+      "name": "vibe-sunsang",
+      "description": "AI mentor agent for vibe coders - analyzes Claude Code conversations and provides growth coaching with 4 workspace types (Builder/Explorer/Designer/Operator).",
+      "source": "./plugins/vibe-sunsang",
+      "category": "education",
+      "tags": ["mentor", "growth", "coaching", "retrospective", "vibe-coding", "korean", "education"]
+    },
+    {
+      "name": "deep-research",
+      "description": "AI-powered deep research with multi-agent source verification, 7-phase pipeline, and structured report generation.",
+      "source": "./plugins/deep-research",
+      "category": "productivity",
+      "tags": ["research", "deep-research", "multi-agent", "citations", "source-verification", "academic"]
+    },
+    {
+      "name": "pumasi",
+      "description": "Parallel coding orchestration — Claude as PM, Codex CLI instances as parallel developers with 7-phase workflow.",
+      "source": "./plugins/pumasi",
+      "category": "development",
+      "tags": ["codex", "parallel", "orchestration", "multi-agent", "delegation", "pumasi"]
+    },
+    {
+      "name": "show-me-the-prd",
+      "description": "Interview-driven PRD generator for vibe coders — from one sentence to 4 design documents (PRD, data model, phases, project spec).",
+      "source": "./plugins/show-me-the-prd",
+      "category": "productivity",
+      "tags": ["prd", "product-requirements", "vibe-coding", "interview", "design-document", "planning"]
+    },
+    {
+      "name": "kkirikkiri",
+      "description": "Natural language team builder for Claude Code Agent Teams — create purpose-driven AI teams with a single sentence. Research, development, analysis, content teams with quality verification loops.",
+      "source": "./plugins/kkirikkiri",
+      "category": "productivity",
+      "tags": ["agent-teams", "multi-agent", "team-builder", "orchestration", "korean", "codex", "gemini"]
+    },
+    {
+      "name": "skillers-suda",
+      "description": "4 persona interview-driven skill builder for vibe coders — transform vague ideas into working multi-step workflow skills with prompt/script/API/MCP/RAG step types.",
+      "source": "./plugins/skillers-suda",
+      "category": "development",
+      "tags": ["skill-builder", "interview", "workflow", "vibe-coding", "korean", "persona", "plugin-dev"]
+    },
+    {
+      "name": "nopal",
+      "description": "Google Workspace orchestration — orchestrate 9 services (Gmail, Calendar, Drive, Sheets, Docs, Slides, Chat, Tasks, Meet) with natural language via gws CLI. No Opal needed.",
+      "source": "./plugins/nopal",
+      "category": "productivity",
+      "tags": ["google-workspace", "orchestration", "gws-cli", "gmail", "calendar", "drive", "meet", "automation"]
+    }
+  ]
+}

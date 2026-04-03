@@ -11,7 +11,7 @@ sync_dir() {
     if [ -d "$src" ]; then
         mkdir -p "$dst"
         cp -r "$src"/* "$dst"/ 2>/dev/null
-        rm -rf "$dst/.git" 2>/dev/null
+        find "$dst" -type d -name .git -prune -exec rm -rf {} + 2>/dev/null
     fi
 }
 

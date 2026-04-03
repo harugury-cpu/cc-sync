@@ -1,0 +1,30 @@
+[submodule "plugins/docs-guide"]
+	path = plugins/docs-guide
+	url = https://github.com/fivetaku/docs-guide.git
+[submodule "plugins/git-teacher"]
+	path = plugins/git-teacher
+	url = https://github.com/fivetaku/git-teacher.git
+[submodule "plugins/vibe-sunsang"]
+	path = plugins/vibe-sunsang
+	url = https://github.com/fivetaku/vibe-sunsang.git
+[submodule "plugins/deep-research"]
+	path = plugins/deep-research
+	url = https://github.com/fivetaku/deep-research-kit.git
+[submodule "plugins/pumasi"]
+	path = plugins/pumasi
+	url = https://github.com/fivetaku/pumasi.git
+[submodule "plugins/show-me-the-prd"]
+	path = plugins/show-me-the-prd
+	url = https://github.com/fivetaku/show-me-the-prd.git
+[submodule "plugins/kkirikkiri"]
+	path = plugins/kkirikkiri
+	url = https://github.com/fivetaku/kkirikkiri.git
+[submodule "plugins/test-playground"]
+	path = plugins/test-playground
+	url = https://github.com/fivetaku/test-playground.git
+[submodule "plugins/skillers-suda"]
+	path = plugins/skillers-suda
+	url = https://github.com/fivetaku/skillers-suda.git
+[submodule "plugins/nopal"]
+	path = plugins/nopal
+	url = https://github.com/fivetaku/nopal.git

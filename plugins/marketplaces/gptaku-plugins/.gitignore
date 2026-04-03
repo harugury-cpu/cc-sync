@@ -1,0 +1,15 @@
+ideation/
+.DS_Store
+.omc/
+.claude/
+CLAUDE.md
+PLUGIN_STANDARD.md
+VERSIONING.md
+validate_plugins.py
+PRD/
+PRD-*/
+RESEARCH/
+scripts/
+.kkirikkiri/
+.fix-standard/
+hello-vibecoding.html
