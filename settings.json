@@ -3,83 +3,28 @@
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
   "permissions": {
-    "allow": [
-      "Bash(__NEW_LINE_c9f50e1855d874be__ curl -s \"https://hzczszqmrirlyvyzwclf.supabase.co/rest/v1/\" -H \"apikey: sb_publishable_CKhqEPq4NVnndvTlXfN31g_dxWHxpek\")",
-      "Bash(git clone:*)",
-      "Read(//private/tmp/skills-temp/**)"
-    ],
-    "deny": [
+    "ask": [
       "Bash(rm *)",
       "Bash(rmdir *)",
       "Bash(shred *)",
       "Bash(unlink *)"
     ],
-    "defaultMode": "auto",
+    "defaultMode": "bypassPermissions",
     "additionalDirectories": [
-      "/Users/harugury/.claude/skills"
+      "/Users/mac/Library/Mobile Documents/com~apple~CloudDocs/0.원진업무/1. 진행중/0. 파이썬 공부하기",
+      "/private/tmp/gas-check/api2"
     ]
   },
-  "model": "sonnet",
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash /Users/harugury/.claude/hooks/context-enrichment.sh"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Write|Edit|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/Users/harugury/.claude/memory-bank/venv/bin/python /Users/harugury/.claude/self-evolving/violation_checker.py"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash /Users/harugury/.claude/hooks/auto-validate.sh"
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash /Users/harugury/.claude/hooks/post_bash_git_commit.sh",
-            "if": "Bash(git commit*)",
-            "async": true
-          }
-        ]
-      }
-    ]
-  },
+  "model": "opusplan",
   "statusLine": {
     "type": "command",
-    "command": "node /Users/harugury/.claude/hud/omc-hud.mjs"
+    "command": "node /Users/mac/.claude/hud/omc-hud.mjs"
   },
   "enabledPlugins": {
     "oh-my-claudecode@omc": true,
-    "docs-guide@gptaku-plugins": true,
-    "git-teacher@gptaku-plugins": true,
-    "vibe-sunsang@gptaku-plugins": true,
-    "deep-research@gptaku-plugins": true,
-    "pumasi@gptaku-plugins": true,
-    "show-me-the-prd@gptaku-plugins": true,
     "kkirikkiri@gptaku-plugins": true,
-    "skillers-suda@gptaku-plugins": true,
-    "nopal@gptaku-plugins": true
+    "telegram@claude-plugins-official": false,
+    "git-teacher@gptaku-plugins": true
   },
   "extraKnownMarketplaces": {
     "omc": {
@@ -90,17 +35,28 @@
     },
     "gptaku-plugins": {
       "source": {
-        "source": "github",
-        "repo": "fivetaku/gptaku_plugins"
+        "source": "git",
+        "url": "https://github.com/fivetaku/gptaku_plugins.git"
       }
     },
-    "memory-bank": {
+    "claude-plugins-official": {
       "source": {
         "source": "github",
-        "repo": "jung-wan-kim/memory-bank"
+        "repo": "anthropics/claude-plugins-official"
       }
     }
   },
   "skipDangerousModePermissionPrompt": true,
-  "skipAutoPermissionPrompt": true
+  "mcpServers": {
+    "monday-apps-mcp": {
+      "command": "npx",
+      "args": [
+        "@mondaydotcomorg/monday-api-mcp",
+        "-t",
+        "eyJhbGciOiJIUzI1NiJ9.eyJ0aWQiOjQ1MTIxMDg2MSwiYWFpIjoxMSwidWlkIjoyODM5NjY2NiwiaWFkIjoiMjAyNC0xMi0yNFQwOTowMTo1Ny4wMDBaIiwicGVyIjoibWU6d3JpdGUiLCJhY3RpZCI6MTExNjU5NTcsInJnbiI6InVzZTEifQ.l0uAa7SJiOQL4NCfnw648jaLcLiqMLr2YcpcJpSn6jQ",
+        "--mode",
+        "apps"
+      ]
+    }
+  }
 }
