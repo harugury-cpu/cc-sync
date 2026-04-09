@@ -3,6 +3,13 @@
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
   "permissions": {
+    "allow": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep"
+    ],
     "ask": [
       "Bash(rm *)",
       "Bash(rmdir *)",
@@ -10,10 +17,7 @@
       "Bash(unlink *)"
     ],
     "defaultMode": "bypassPermissions",
-    "additionalDirectories": [
-      "/Users/mac/Library/Mobile Documents/com~apple~CloudDocs/0.원진업무/1. 진행중/0. 파이썬 공부하기",
-      "/private/tmp/gas-check/api2"
-    ]
+    "additionalDirectories": []
   },
   "model": "opusplan",
   "statusLine": {
@@ -59,6 +63,49 @@
       }
     }
   },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/harsh-critic-trigger.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/harsh-critic.sh"
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/harsh-critic-learn.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"$TOOL_INPUT\" | grep -qE '(rm\\s+-rf|DROP\\s+TABLE|force.push)' && echo 'BLOCK: dangerous command' && exit 1 || exit 0"
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/pre-commit-flow-check.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "language": "korean",
+  "effortLevel": "high",
   "skipDangerousModePermissionPrompt": true,
   "mcpServers": {
     "monday-apps-mcp": {
