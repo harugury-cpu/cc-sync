@@ -24,13 +24,20 @@
     "oh-my-claudecode@omc": true,
     "kkirikkiri@gptaku-plugins": true,
     "telegram@claude-plugins-official": false,
-    "git-teacher@gptaku-plugins": true
+    "git-teacher@gptaku-plugins": true,
+    "memory-bank@memory-bank-dev": true
   },
   "extraKnownMarketplaces": {
     "omc": {
       "source": {
         "source": "git",
         "url": "https://github.com/Yeachan-Heo/oh-my-claudecode.git"
+      }
+    },
+    "memory-bank": {
+      "source": {
+        "source": "github",
+        "repo": "jung-wan-kim/memory-bank"
       }
     },
     "gptaku-plugins": {
@@ -43,6 +50,12 @@
       "source": {
         "source": "github",
         "repo": "anthropics/claude-plugins-official"
+      }
+    },
+    "memory-bank-dev": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/jung-wan-kim/memory-bank.git"
       }
     }
   },
