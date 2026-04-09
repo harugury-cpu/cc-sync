@@ -1,66 +1,106 @@
 {
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
   "permissions": {
     "allow": [
-      "Read",
-      "Write",
-      "Edit",
-      "Glob",
-      "Grep"
+      "Bash(__NEW_LINE_c9f50e1855d874be__ curl -s \"https://hzczszqmrirlyvyzwclf.supabase.co/rest/v1/\" -H \"apikey: sb_publishable_CKhqEPq4NVnndvTlXfN31g_dxWHxpek\")",
+      "Bash(git clone:*)",
+      "Read(//private/tmp/skills-temp/**)"
     ],
-    "ask": [
+    "deny": [
       "Bash(rm *)",
       "Bash(rmdir *)",
       "Bash(shred *)",
       "Bash(unlink *)"
     ],
-    "defaultMode": "bypassPermissions",
+    "defaultMode": "auto",
     "additionalDirectories": [
-      "/Users/harugury/Documents/Obsidian Vault"
+      "/Users/harugury/.claude/skills"
     ]
   },
-  "model": "opusplan",
+  "model": "sonnet",
   "hooks": {
     "UserPromptSubmit": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/harsh-critic-trigger.sh"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/harsh-critic.sh"
-          },
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/harsh-critic-learn.sh"
+            "command": "bash /Users/harugury/.claude/hooks/context-enrichment.sh"
           }
         ]
       }
     ],
     "PreToolUse": [
       {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/harugury/.claude/memory-bank/venv/bin/python /Users/harugury/.claude/self-evolving/violation_checker.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /Users/harugury/.claude/hooks/auto-validate.sh"
+          }
+        ]
+      },
+      {
         "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "echo \"$TOOL_INPUT\" | grep -qE '(rm\\s+-rf|DROP\\s+TABLE|force.push)' && echo 'BLOCK: dangerous command' && exit 1 || exit 0"
-          },
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/pre-commit-flow-check.sh"
+            "command": "bash /Users/harugury/.claude/hooks/post_bash_git_commit.sh",
+            "if": "Bash(git commit*)",
+            "async": true
           }
         ]
       }
     ]
   },
-  "language": "korean",
-  "effortLevel": "high",
-  "skipDangerousModePermissionPrompt": true
+  "statusLine": {
+    "type": "command",
+    "command": "node /Users/harugury/.claude/hud/omc-hud.mjs"
+  },
+  "enabledPlugins": {
+    "oh-my-claudecode@omc": true,
+    "docs-guide@gptaku-plugins": true,
+    "git-teacher@gptaku-plugins": true,
+    "vibe-sunsang@gptaku-plugins": true,
+    "deep-research@gptaku-plugins": true,
+    "pumasi@gptaku-plugins": true,
+    "show-me-the-prd@gptaku-plugins": true,
+    "kkirikkiri@gptaku-plugins": true,
+    "skillers-suda@gptaku-plugins": true,
+    "nopal@gptaku-plugins": true
+  },
+  "extraKnownMarketplaces": {
+    "omc": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/Yeachan-Heo/oh-my-claudecode.git"
+      }
+    },
+    "gptaku-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "fivetaku/gptaku_plugins"
+      }
+    },
+    "memory-bank": {
+      "source": {
+        "source": "github",
+        "repo": "jung-wan-kim/memory-bank"
+      }
+    }
+  },
+  "skipDangerousModePermissionPrompt": true,
+  "skipAutoPermissionPrompt": true
 }
