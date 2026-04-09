@@ -77,6 +77,14 @@ warnIfWin32();
 async function defaultAction() {
   // Pass all CLI args through to launch (strip node + script path)
   const args = process.argv.slice(2);
+
+  // Defensive fallback: wrapper/bridge invocations must preserve explicit ask routing
+  // so nested Claude launch checks only apply to actual Claude launches.
+  if (args[0] === 'ask') {
+    await askCommand(args.slice(1));
+    return;
+  }
+
   await launchCommand(args);
 }
 
@@ -1364,8 +1372,14 @@ Examples:
         });
       }
 
+      const installed = getInstalledVersion();
+      const reportedVersion = installed?.version ?? version;
+
       console.log('');
-      console.log(chalk.gray(`Version: ${version}`));
+      console.log(chalk.gray(`Version: ${reportedVersion}`));
+      if (reportedVersion !== version) {
+        console.log(chalk.gray(`CLI package version: ${version}`));
+      }
       console.log(chalk.gray('Start Claude Code and use /oh-my-claudecode:omc-setup for interactive setup.'));
     }
   });
@@ -1415,6 +1429,29 @@ program
     } else {
       await hudMain();
     }
+  });
+
+program
+  .command('mission-board')
+  .description('Render the opt-in mission board snapshot for the current workspace')
+  .option('--json', 'Print raw mission-board JSON')
+  .action(async (options) => {
+    const { refreshMissionBoardState, renderMissionBoard } = await import('../hud/mission-board.js');
+    const state = refreshMissionBoardState(process.cwd());
+    if (options.json) {
+      console.log(JSON.stringify(state, null, 2));
+      return;
+    }
+
+    const lines = renderMissionBoard(state, {
+      enabled: true,
+      maxMissions: 5,
+      maxAgentsPerMission: 8,
+      maxTimelineEvents: 8,
+      persistCompletedForMinutes: 20,
+    });
+
+    console.log(lines.length > 0 ? lines.join('\n') : '(no active missions)');
   });
 
 /**

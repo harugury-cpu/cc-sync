@@ -30,6 +30,7 @@ _Don't learn Claude Code. Just use OMC._
 **Step 2: Setup**
 
 ```bash
+/setup
 /omc-setup
 ```
 
@@ -89,7 +90,7 @@ omc team shutdown auth-review
 
 `/omc-teams` remains as a legacy compatibility skill and now routes to `omc team ...`.
 
-For mixed Codex + Gemini work in one command, use the **`/ccg`** skill (routes via `ask-codex` + `ask-gemini`, then Claude synthesizes):
+For mixed Codex + Gemini work in one command, use the **`/ccg`** skill (routes via `/ask codex` + `/ask gemini`, then Claude synthesizes):
 
 ```bash
 /ccg Review this PR — architecture (Codex) and UI components (Gemini)
@@ -100,13 +101,23 @@ For mixed Codex + Gemini work in one command, use the **`/ccg`** skill (routes v
 | `omc team N:codex "..."`  | N Codex CLI panes  | Code review, security analysis, architecture |
 | `omc team N:gemini "..."` | N Gemini CLI panes | UI/UX design, docs, large-context tasks      |
 | `omc team N:claude "..."` | N Claude CLI panes | General tasks via Claude CLI in tmux         |
-| `/ccg`                    | ask-codex + ask-gemini | Tri-model advisor synthesis             |
+| `/ccg`                    | /ask codex + /ask gemini | Tri-model advisor synthesis           |
 
 Workers spawn on-demand and die when their task completes — no idle resource usage. Requires `codex` / `gemini` CLIs installed and an active tmux session.
 
-> **Note: Package naming** — The project is branded as **oh-my-claudecode** (repo, plugin, commands), but the npm package is published as [`oh-my-claude-sisyphus`](https://www.npmjs.com/package/oh-my-claude-sisyphus). If you install the CLI tools via npm/bun, use `npm install -g oh-my-claude-sisyphus`.
+> **Note: Package naming** — The project is branded as **oh-my-claudecode** (repo, plugin, commands), but the npm package is published as [`oh-my-claude-sisyphus`](https://www.npmjs.com/package/oh-my-claude-sisyphus). If you install or upgrade the CLI tools via npm/bun, use `npm i -g oh-my-claude-sisyphus@latest`.
 
 ### Updating
+
+If you installed OMC via npm, upgrade with the published package name:
+
+```bash
+npm i -g oh-my-claude-sisyphus@latest
+```
+
+> **Package naming note:** the repo, plugin, and commands are branded **oh-my-claudecode**, but the published npm package name remains `oh-my-claude-sisyphus`.
+
+If you installed OMC via the Claude Code marketplace/plugin flow, update with:
 
 ```bash
 # 1. Update the marketplace clone
@@ -155,7 +166,7 @@ Multiple strategies for different use cases — from Team-backed orchestration t
 | ----------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | **Team (recommended)**  | Canonical staged pipeline (`team-plan → team-prd → team-exec → team-verify → team-fix`) | Coordinated Claude agents on a shared task list        |
 | **omc team (CLI)**      | tmux CLI workers — real `claude`/`codex`/`gemini` processes in split-panes              | Codex/Gemini CLI tasks; on-demand spawn, die when done |
-| **ccg**                 | Tri-model advisors via ask-codex + ask-gemini, Claude synthesizes                         | Mixed backend+UI work needing both Codex and Gemini    |
+| **ccg**                 | Tri-model advisors via `/ask codex` + `/ask gemini`, Claude synthesizes                   | Mixed backend+UI work needing both Codex and Gemini    |
 | **Autopilot**           | Autonomous execution (single lead agent)                                                | End-to-end feature work with minimal ceremony          |
 | **Ultrawork**           | Maximum parallelism (non-team)                                                          | Burst parallel fixes/refactors where Team isn't needed |
 | **Ralph**               | Persistent mode with verify/fix loops                                                   | Tasks that must complete fully (no silent partials)    |
@@ -170,7 +181,7 @@ Multiple strategies for different use cases — from Team-backed orchestration t
 
 ### Developer Experience
 
-- **Magic keywords** - `ralph`, `ulw`, `team` for explicit control
+- **Magic keywords** - `ralph`, `ulw`, `ralplan`; Team stays explicit via `/team`
 - **HUD statusline** - Real-time orchestration metrics in your status bar
 - **Skill learning** - Extract reusable patterns from your sessions
 - **Analytics & cost tracking** - Understand token usage across all sessions
@@ -181,13 +192,13 @@ Multiple strategies for different use cases — from Team-backed orchestration t
 
 ## Magic Keywords
 
-Optional shortcuts for power users. Natural language works fine without them.
+Optional shortcuts for power users. Natural language works fine without them. Team mode is explicit: use `/team ...` or `omc team ...` rather than a keyword trigger.
 
 | Keyword                | Effect                                 | Example                                        |
 | ---------------------- | -------------------------------------- | ---------------------------------------------- |
 | `team`                 | Canonical Team orchestration           | `/team 3:executor "fix all TypeScript errors"` |
 | `omc team`             | tmux CLI workers (codex/gemini/claude) | `omc team 2:codex "security review"`           |
-| `ccg`                  | ask-codex + ask-gemini synthesis       | `/ccg review this PR`                          |
+| `ccg`                  | `/ask codex` + `/ask gemini` synthesis | `/ccg review this PR`                          |
 | `autopilot`            | Full autonomous execution              | `autopilot: build a todo app`                  |
 | `ralph`                | Persistence mode                       | `ralph: refactor auth`                         |
 | `ulw`                  | Maximum parallelism                    | `ulw fix all errors`                           |
@@ -267,6 +278,66 @@ Tag behavior:
 - Slack: supports `<@MEMBER_ID>`, `<!channel>`, `<!here>`, `<!everyone>`, `<!subteam^GROUP_ID>`
 - `file` callbacks ignore tag options
 
+### OpenClaw Integration
+
+Forward Claude Code session events to an [OpenClaw](https://openclaw.ai/) gateway to enable automated responses and workflows via your OpenClaw agent.
+
+**Quick setup (recommended):**
+
+```bash
+/oh-my-claudecode:configure-notifications
+# → When prompted, type "openclaw" → choose "OpenClaw Gateway"
+```
+
+**Manual setup:** create `~/.claude/omc_config.openclaw.json`:
+
+```json
+{
+  "enabled": true,
+  "gateways": {
+    "my-gateway": {
+      "url": "https://your-gateway.example.com/wake",
+      "headers": { "Authorization": "Bearer YOUR_TOKEN" },
+      "method": "POST",
+      "timeout": 10000
+    }
+  },
+  "hooks": {
+    "session-start": { "gateway": "my-gateway", "instruction": "Session started for {{projectName}}", "enabled": true },
+    "stop":          { "gateway": "my-gateway", "instruction": "Session stopping for {{projectName}}", "enabled": true }
+  }
+}
+```
+
+**Environment variables:**
+
+| Variable | Description |
+|----------|-------------|
+| `OMC_OPENCLAW=1` | Enable OpenClaw |
+| `OMC_OPENCLAW_DEBUG=1` | Enable debug logging |
+| `OMC_OPENCLAW_CONFIG=/path/to/config.json` | Override config file path |
+
+**Supported hook events (6 active in bridge.ts):**
+
+| Event | Trigger | Key template variables |
+|-------|---------|----------------------|
+| `session-start` | Session begins | `{{sessionId}}`, `{{projectName}}`, `{{projectPath}}` |
+| `stop` | Claude response completes | `{{sessionId}}`, `{{projectName}}` |
+| `keyword-detector` | Every prompt submission | `{{prompt}}`, `{{sessionId}}` |
+| `ask-user-question` | Claude requests user input | `{{question}}`, `{{sessionId}}` |
+| `pre-tool-use` | Before tool invocation (high frequency) | `{{toolName}}`, `{{sessionId}}` |
+| `post-tool-use` | After tool invocation (high frequency) | `{{toolName}}`, `{{sessionId}}` |
+
+**Reply channel environment variables:**
+
+| Variable | Description |
+|----------|-------------|
+| `OPENCLAW_REPLY_CHANNEL` | Reply channel (e.g. `discord`) |
+| `OPENCLAW_REPLY_TARGET` | Channel ID |
+| `OPENCLAW_REPLY_THREAD` | Thread ID |
+
+See `scripts/openclaw-gateway-demo.mjs` for a reference gateway that relays OpenClaw payloads to Discord via ClawdBot.
+
 ---
 
 ## Documentation
@@ -287,6 +358,21 @@ Tag behavior:
 
 - [Claude Code](https://docs.anthropic.com/claude-code) CLI
 - Claude Max/Pro subscription OR Anthropic API key
+
+### Platform & tmux
+
+OMC features like `omc team` and rate-limit detection require **tmux**:
+
+| Platform       | tmux provider                                            | Install                |
+| -------------- | -------------------------------------------------------- | ---------------------- |
+| macOS          | [tmux](https://github.com/tmux/tmux)                    | `brew install tmux`    |
+| Ubuntu/Debian  | tmux                                                     | `sudo apt install tmux`|
+| Fedora         | tmux                                                     | `sudo dnf install tmux`|
+| Arch           | tmux                                                     | `sudo pacman -S tmux`  |
+| Windows        | [psmux](https://github.com/marlocarlo/psmux) (native)   | `winget install psmux` |
+| Windows (WSL2) | tmux (inside WSL)                                        | `sudo apt install tmux`|
+
+> **Windows users:** [psmux](https://github.com/marlocarlo/psmux) provides a native `tmux` binary for Windows with 76 tmux-compatible commands. No WSL required.
 
 ### Optional: Multi-AI Orchestration
 

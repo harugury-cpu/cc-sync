@@ -15,6 +15,13 @@
 import { getAgentDefinitions } from '../agents/definitions.js';
 import { normalizeDelegationRole } from './delegation-routing/types.js';
 import { loadConfig } from '../config/loader.js';
+import { resolveClaudeFamily } from '../config/models.js';
+function canonicalizeSubagentType(subagentType) {
+    const hasPrefix = subagentType.startsWith('oh-my-claudecode:');
+    const rawAgentType = subagentType.replace(/^oh-my-claudecode:/, '');
+    const canonicalAgentType = normalizeDelegationRole(rawAgentType);
+    return hasPrefix ? `oh-my-claudecode:${canonicalAgentType}` : canonicalAgentType;
+}
 /**
  * Enforce model parameter for an agent delegation call
  *
@@ -26,13 +33,13 @@ import { loadConfig } from '../config/loader.js';
  * @throws Error if agent type has no default model
  */
 export function enforceModel(agentInput) {
+    const canonicalSubagentType = canonicalizeSubagentType(agentInput.subagent_type);
     // If forceInherit is enabled, skip model injection entirely so agents
     // inherit the user's Claude Code model setting (issue #1135)
     const config = loadConfig();
     if (config.routing?.forceInherit) {
-        // Strip model if present, or leave as-is if not
         const { model: _existing, ...rest } = agentInput;
-        const cleanedInput = rest;
+        const cleanedInput = { ...rest, subagent_type: canonicalSubagentType };
         return {
             originalInput: agentInput,
             modifiedInput: cleanedInput,
@@ -40,21 +47,17 @@ export function enforceModel(agentInput) {
             model: 'inherit',
         };
     }
-    // If model is already specified, return as-is
+    // If model is already specified, return as-is (but canonicalize alias names)
     if (agentInput.model) {
         return {
             originalInput: agentInput,
-            modifiedInput: agentInput,
+            modifiedInput: { ...agentInput, subagent_type: canonicalSubagentType },
             injected: false,
             model: agentInput.model,
         };
     }
-    // Extract agent type (strip oh-my-claudecode: prefix if present)
-    const rawAgentType = agentInput.subagent_type.replace(/^oh-my-claudecode:/, '');
-    // Normalize deprecated role aliases before registry lookup
-    const agentType = normalizeDelegationRole(rawAgentType);
-    // Get agent definition
-    const agentDefs = getAgentDefinitions();
+    const agentType = canonicalSubagentType.replace(/^oh-my-claudecode:/, '');
+    const agentDefs = getAgentDefinitions({ config });
     const agentDef = agentDefs[agentType];
     if (!agentDef) {
         throw new Error(`Unknown agent type: ${agentType} (from ${agentInput.subagent_type})`);
@@ -67,18 +70,17 @@ export function enforceModel(agentInput) {
     // This lets users remap tier names without the nuclear forceInherit option.
     let resolvedModel = agentDef.model;
     const aliases = config.routing?.modelAliases;
-    if (aliases && agentDef.model !== 'inherit') {
-        const alias = aliases[agentDef.model];
+    const aliasSourceModel = agentDef.defaultModel ?? agentDef.model;
+    if (aliases && aliasSourceModel && aliasSourceModel !== 'inherit') {
+        const alias = aliases[aliasSourceModel];
         if (alias) {
             resolvedModel = alias;
         }
     }
     // If the resolved model is 'inherit', don't inject any model parameter.
-    // This lets the agent inherit the parent session's model, which is essential
-    // for non-Claude providers where tier names like 'sonnet' cause 400 errors.
     if (resolvedModel === 'inherit') {
         const { model: _existing, ...rest } = agentInput;
-        const cleanedInput = rest;
+        const cleanedInput = { ...rest, subagent_type: canonicalSubagentType };
         return {
             originalInput: agentInput,
             modifiedInput: cleanedInput,
@@ -86,43 +88,40 @@ export function enforceModel(agentInput) {
             model: 'inherit',
         };
     }
-    // Convert ModelType to SDK model type
-    const sdkModel = convertToSdkModel(resolvedModel);
-    // Create modified input with model injected
+    // Normalize model to Claude Code's supported aliases (sonnet/opus/haiku).
+    // The config may resolve to full model IDs like 'claude-sonnet-4-6' or
+    // Bedrock IDs like 'us.anthropic.claude-sonnet-4-6-v1:0', but Claude Code's
+    // subagent system only accepts 'sonnet', 'opus', 'haiku', or 'inherit'.
+    // Passing full IDs causes 400 errors on Bedrock/Vertex. (issue #1201)
+    const FAMILY_TO_ALIAS = {
+        SONNET: 'sonnet',
+        OPUS: 'opus',
+        HAIKU: 'haiku',
+    };
+    const family = resolveClaudeFamily(resolvedModel);
+    const normalizedModel = family ? (FAMILY_TO_ALIAS[family] ?? resolvedModel) : resolvedModel;
     const modifiedInput = {
         ...agentInput,
-        model: sdkModel,
+        subagent_type: canonicalSubagentType,
+        model: normalizedModel,
     };
-    // Create warning message (only shown if OMC_DEBUG=true)
     let warning;
     if (process.env.OMC_DEBUG === 'true') {
-        const aliasNote = resolvedModel !== agentDef.model
-            ? ` (aliased from ${agentDef.model})`
+        const aliasNote = resolvedModel !== agentDef.model && aliasSourceModel
+            ? ` (aliased from ${aliasSourceModel})`
             : '';
-        warning = `[OMC] Auto-injecting model: ${sdkModel} for ${agentType}${aliasNote}`;
+        const normalizedNote = normalizedModel !== resolvedModel
+            ? ` (normalized from ${resolvedModel})`
+            : '';
+        warning = `[OMC] Auto-injecting model: ${normalizedModel} for ${agentType}${aliasNote}${normalizedNote}`;
     }
     return {
         originalInput: agentInput,
         modifiedInput,
         injected: true,
-        model: resolvedModel,
+        model: normalizedModel,
         warning,
     };
-}
-/**
- * Convert ModelType to SDK model format.
- *
- * Note: 'inherit' should never reach this function — it is handled
- * earlier by the forceInherit check or the explicit inherit guard.
- * The fallback to 'sonnet' is a defensive measure only.
- */
-function convertToSdkModel(model) {
-    if (model === 'inherit') {
-        // Defensive: 'inherit' should be intercepted before reaching here.
-        // Fall back to 'sonnet' to avoid breaking existing behavior.
-        return 'sonnet';
-    }
-    return model;
 }
 /**
  * Check if tool input is an agent delegation call
@@ -141,19 +140,12 @@ export function isAgentCall(toolName, toolInput) {
 }
 /**
  * Process a pre-tool-use hook for model enforcement
- *
- * @param toolName - The tool being invoked
- * @param toolInput - The tool input parameters
- * @returns Modified tool input with model enforced, or original if not an agent call
  */
 export function processPreToolUse(toolName, toolInput) {
-    // Check if this is an agent delegation call
     if (!isAgentCall(toolName, toolInput)) {
         return { modifiedInput: toolInput };
     }
-    // Enforce model parameter
     const result = enforceModel(toolInput);
-    // Log warning if debug mode is enabled and model was injected
     if (result.warning) {
         console.warn(result.warning);
     }
@@ -164,14 +156,10 @@ export function processPreToolUse(toolName, toolInput) {
 }
 /**
  * Get model for an agent type (for testing/debugging)
- *
- * @param agentType - The agent type (with or without oh-my-claudecode: prefix)
- * @returns The default model for the agent
- * @throws Error if agent type not found or has no model
  */
 export function getModelForAgent(agentType) {
-    const normalizedType = agentType.replace(/^oh-my-claudecode:/, '');
-    const agentDefs = getAgentDefinitions();
+    const normalizedType = normalizeDelegationRole(agentType.replace(/^oh-my-claudecode:/, ''));
+    const agentDefs = getAgentDefinitions({ config: loadConfig() });
     const agentDef = agentDefs[normalizedType];
     if (!agentDef) {
         throw new Error(`Unknown agent type: ${normalizedType}`);
@@ -179,6 +167,13 @@ export function getModelForAgent(agentType) {
     if (!agentDef.model) {
         throw new Error(`No default model defined for agent: ${normalizedType}`);
     }
-    return agentDef.model;
+    // Normalize to CC-supported aliases (sonnet/opus/haiku)
+    const FAMILY_TO_ALIAS = {
+        SONNET: 'sonnet',
+        OPUS: 'opus',
+        HAIKU: 'haiku',
+    };
+    const family = resolveClaudeFamily(agentDef.model);
+    return family ? (FAMILY_TO_ALIAS[family] ?? agentDef.model) : agentDef.model;
 }
 //# sourceMappingURL=delegation-enforcer.js.map
