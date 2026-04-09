@@ -10,7 +10,7 @@ sync_dir() {
     local src="$1" dst="$2"
     if [ -d "$src" ]; then
         mkdir -p "$dst"
-        cp -r "$src"/* "$dst"/ 2>/dev/null
+        rsync -a --delete "$src"/ "$dst"/
         rm -rf "$dst/.git" 2>/dev/null
     fi
 }
