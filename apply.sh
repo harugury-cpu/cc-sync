@@ -52,6 +52,12 @@ if [ -d "$SCRIPT_DIR/memory-bank-sync" ]; then
     cp "$SCRIPT_DIR/memory-bank-sync"/* "$SYNC_TARGET/" 2>/dev/null
 fi
 
+# settings.json 경로 치환 ($HOME 기준으로 자동 보정)
+if [ -f "$TARGET_DIR/settings.json" ]; then
+    echo "✓ settings.json 경로 치환 중 ($HOME)..."
+    sed -i '' "s|/Users/[^/\"']*/|$HOME/|g" "$TARGET_DIR/settings.json"
+fi
+
 # hooks, scripts 실행 권한 부여
 echo "✓ 실행 권한 설정 중..."
 chmod +x "$TARGET_DIR/hooks"/*.sh 2>/dev/null
