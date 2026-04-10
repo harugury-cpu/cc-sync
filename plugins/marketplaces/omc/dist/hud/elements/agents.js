@@ -30,8 +30,10 @@ const AGENT_TYPE_CODES = {
     architect: 'A', // opus
     // Debugger - 'g' for debuGger (d taken by designer)
     debugger: 'g', // sonnet
-    // Executor - 'x' for eXecutor (sonnet default, opus for complex tasks)
-    executor: 'x', // sonnet/opus
+    // Executor - 'X' for eXecutor
+    executor: 'x', // sonnet
+    // Deep Executor - 'X' (same family as executor, opus tier)
+    'deep-executor': 'X', // opus
     // Verifier - 'V' for Verifier (but vision uses 'v'... use uppercase 'V' for governance role)
     verifier: 'V', // sonnet
     // ============================================================
@@ -39,6 +41,8 @@ const AGENT_TYPE_CODES = {
     // ============================================================
     // Style Reviewer - 'Y' for stYle
     'style-reviewer': 'y', // haiku
+    // Quality Reviewer - 'Qr' for Quality Reviewer (disambiguated from quality-strategist)
+    'quality-reviewer': 'Qr', // sonnet
     // API Reviewer - 'I' for Interface/API
     'api-reviewer': 'i', // sonnet
     // Security Reviewer - 'K' for Security (S taken by Scientist)
@@ -56,6 +60,8 @@ const AGENT_TYPE_CODES = {
     'test-engineer': 't', // sonnet
     // Quality Strategist - 'Qs' for Quality Strategist (disambiguated from quality-reviewer)
     'quality-strategist': 'Qs', // sonnet
+    // Build Fixer - 'B' for Build
+    'build-fixer': 'b', // sonnet
     // Designer - 'd' for Designer
     designer: 'd', // sonnet
     // Writer - 'W' for Writer
@@ -237,7 +243,7 @@ export function renderAgentsDetailed(agents) {
         if (name === 'executor')
             name = 'exec';
         if (name === 'deep-executor')
-            name = 'exec'; // deprecated alias
+            name = 'deep-x';
         if (name === 'designer')
             name = 'design';
         if (name === 'qa-tester')
@@ -247,7 +253,7 @@ export function renderAgentsDetailed(agents) {
         if (name === 'security-reviewer')
             name = 'sec';
         if (name === 'build-fixer')
-            name = 'debug'; // deprecated alias
+            name = 'build';
         if (name === 'code-reviewer')
             name = 'review';
         if (name === 'git-master')
@@ -255,7 +261,7 @@ export function renderAgentsDetailed(agents) {
         if (name === 'style-reviewer')
             name = 'style';
         if (name === 'quality-reviewer')
-            name = 'review'; // deprecated alias
+            name = 'quality';
         if (name === 'api-reviewer')
             name = 'api-rev';
         if (name === 'performance-reviewer')
@@ -307,12 +313,12 @@ function getShortAgentName(agentType) {
     const abbrevs = {
         // Build/Analysis Lane
         'executor': 'exec',
-        'deep-executor': 'exec', // deprecated alias
+        'deep-executor': 'deep-x',
         'debugger': 'debug',
         'verifier': 'verify',
         // Review Lane
         'style-reviewer': 'style',
-        'quality-reviewer': 'review', // deprecated alias
+        'quality-reviewer': 'quality',
         'api-reviewer': 'api-rev',
         'security-reviewer': 'sec',
         'performance-reviewer': 'perf',
@@ -322,7 +328,7 @@ function getShortAgentName(agentType) {
         'document-specialist': 'doc-spec',
         'test-engineer': 'test-eng',
         'quality-strategist': 'qs',
-        'build-fixer': 'debug', // deprecated alias
+        'build-fixer': 'build',
         'designer': 'design',
         'qa-tester': 'qa',
         'scientist': 'sci',

@@ -18,12 +18,7 @@ import { fileURLToPath } from 'url';
 import { homedir } from 'os';
 import { spawn } from 'child_process';
 import { resolveDaemonModulePath } from '../../utils/daemon-module-path.js';
-import {
-  checkRateLimitStatus,
-  formatRateLimitStatus,
-  isRateLimitStatusDegraded,
-  shouldMonitorBlockedPanes,
-} from './rate-limit-monitor.js';
+import { checkRateLimitStatus, formatRateLimitStatus } from './rate-limit-monitor.js';
 import {
   isTmuxAvailable,
   scanForBlockedPanes,
@@ -360,8 +355,8 @@ async function pollLoop(config: Required<DaemonConfig>): Promise<void> {
           setTimeout(() => reject(new Error('checkRateLimitStatus timed out after 30s')), 30_000)
         ),
       ]);
-      const wasLimited = shouldMonitorBlockedPanes(state.rateLimitStatus);
-      const isNowLimited = shouldMonitorBlockedPanes(rateLimitStatus);
+      const wasLimited = state.rateLimitStatus?.isLimited ?? false;
+      const isNowLimited = rateLimitStatus?.isLimited ?? false;
 
       state.rateLimitStatus = rateLimitStatus;
 
@@ -373,10 +368,7 @@ async function pollLoop(config: Required<DaemonConfig>): Promise<void> {
 
       // If currently rate limited, scan for blocked panes
       if (isNowLimited && isTmuxAvailable()) {
-        const scanReason = rateLimitStatus?.isLimited
-          ? 'Rate limited - scanning for blocked panes'
-          : 'Usage API degraded (429/stale cache) - scanning for blocked panes';
-        log(scanReason, config);
+        log('Rate limited - scanning for blocked panes', config);
 
         const blockedPanes = scanForBlockedPanes(config.paneLinesToCapture);
 
@@ -702,7 +694,7 @@ export function formatDaemonState(state: DaemonState): string {
   // Rate limit status
   lines.push('');
   if (state.rateLimitStatus) {
-    if (state.rateLimitStatus.isLimited || isRateLimitStatusDegraded(state.rateLimitStatus)) {
+    if (state.rateLimitStatus.isLimited) {
       lines.push(`⚠ ${formatRateLimitStatus(state.rateLimitStatus)}`);
     } else {
       lines.push('✓ Not rate limited');

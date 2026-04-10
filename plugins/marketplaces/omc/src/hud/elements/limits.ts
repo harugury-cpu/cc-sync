@@ -61,19 +61,16 @@ function formatResetTime(date: Date | null | undefined): string | null {
  *
  * Format: 5h:45%(3h42m) wk:12%(2d5h) mo:8%(15d3h)
  */
-export function renderRateLimits(limits: RateLimits | null, stale?: boolean): string | null {
+export function renderRateLimits(limits: RateLimits | null): string | null {
   if (!limits) return null;
-
-  const staleMarker = stale ? `${DIM}*${RESET}` : '';
-  const resetPrefix = stale ? '~' : '';
 
   const fiveHour = Math.min(100, Math.max(0, Math.round(limits.fiveHourPercent)));
   const fiveHourColor = getColor(fiveHour);
   const fiveHourReset = formatResetTime(limits.fiveHourResetsAt);
 
   const fiveHourPart = fiveHourReset
-    ? `5h:${fiveHourColor}${fiveHour}%${RESET}${staleMarker}${DIM}(${resetPrefix}${fiveHourReset})${RESET}`
-    : `5h:${fiveHourColor}${fiveHour}%${RESET}${staleMarker}`;
+    ? `5h:${fiveHourColor}${fiveHour}%${RESET}${DIM}(${fiveHourReset})${RESET}`
+    : `5h:${fiveHourColor}${fiveHour}%${RESET}`;
 
   const parts = [fiveHourPart];
 
@@ -83,8 +80,8 @@ export function renderRateLimits(limits: RateLimits | null, stale?: boolean): st
     const weeklyReset = formatResetTime(limits.weeklyResetsAt);
 
     const weeklyPart = weeklyReset
-      ? `${DIM}wk:${RESET}${weeklyColor}${weekly}%${RESET}${staleMarker}${DIM}(${resetPrefix}${weeklyReset})${RESET}`
-      : `${DIM}wk:${RESET}${weeklyColor}${weekly}%${RESET}${staleMarker}`;
+      ? `${DIM}wk:${RESET}${weeklyColor}${weekly}%${RESET}${DIM}(${weeklyReset})${RESET}`
+      : `${DIM}wk:${RESET}${weeklyColor}${weekly}%${RESET}`;
 
     parts.push(weeklyPart);
   }
@@ -95,8 +92,8 @@ export function renderRateLimits(limits: RateLimits | null, stale?: boolean): st
     const monthlyReset = formatResetTime(limits.monthlyResetsAt);
 
     const monthlyPart = monthlyReset
-      ? `${DIM}mo:${RESET}${monthlyColor}${monthly}%${RESET}${staleMarker}${DIM}(${resetPrefix}${monthlyReset})${RESET}`
-      : `${DIM}mo:${RESET}${monthlyColor}${monthly}%${RESET}${staleMarker}`;
+      ? `${DIM}mo:${RESET}${monthlyColor}${monthly}%${RESET}${DIM}(${monthlyReset})${RESET}`
+      : `${DIM}mo:${RESET}${monthlyColor}${monthly}%${RESET}`;
 
     parts.push(monthlyPart);
   }
@@ -109,7 +106,7 @@ export function renderRateLimits(limits: RateLimits | null, stale?: boolean): st
  *
  * Format: 45%/12% or 45%/12%/8% (with monthly)
  */
-export function renderRateLimitsCompact(limits: RateLimits | null, stale?: boolean): string | null {
+export function renderRateLimitsCompact(limits: RateLimits | null): string | null {
   if (!limits) return null;
 
   const fiveHour = Math.min(100, Math.max(0, Math.round(limits.fiveHourPercent)));
@@ -129,8 +126,7 @@ export function renderRateLimitsCompact(limits: RateLimits | null, stale?: boole
     parts.push(`${monthlyColor}${monthly}%${RESET}`);
   }
 
-  const result = parts.join('/');
-  return stale ? `${result}${DIM}*${RESET}` : result;
+  return parts.join('/');
 }
 
 /**
@@ -140,13 +136,9 @@ export function renderRateLimitsCompact(limits: RateLimits | null, stale?: boole
  */
 export function renderRateLimitsWithBar(
   limits: RateLimits | null,
-  barWidth: number = 8,
-  stale?: boolean,
+  barWidth: number = 8
 ): string | null {
   if (!limits) return null;
-
-  const staleMarker = stale ? `${DIM}*${RESET}` : '';
-  const resetPrefix = stale ? '~' : '';
 
   const fiveHour = Math.min(100, Math.max(0, Math.round(limits.fiveHourPercent)));
   const fiveHourColor = getColor(fiveHour);
@@ -156,8 +148,8 @@ export function renderRateLimitsWithBar(
   const fiveHourReset = formatResetTime(limits.fiveHourResetsAt);
 
   const fiveHourPart = fiveHourReset
-    ? `5h:[${fiveHourBar}]${fiveHourColor}${fiveHour}%${RESET}${staleMarker}${DIM}(${resetPrefix}${fiveHourReset})${RESET}`
-    : `5h:[${fiveHourBar}]${fiveHourColor}${fiveHour}%${RESET}${staleMarker}`;
+    ? `5h:[${fiveHourBar}]${fiveHourColor}${fiveHour}%${RESET}${DIM}(${fiveHourReset})${RESET}`
+    : `5h:[${fiveHourBar}]${fiveHourColor}${fiveHour}%${RESET}`;
 
   const parts = [fiveHourPart];
 
@@ -170,8 +162,8 @@ export function renderRateLimitsWithBar(
     const weeklyReset = formatResetTime(limits.weeklyResetsAt);
 
     const weeklyPart = weeklyReset
-      ? `${DIM}wk:${RESET}[${weeklyBar}]${weeklyColor}${weekly}%${RESET}${staleMarker}${DIM}(${resetPrefix}${weeklyReset})${RESET}`
-      : `${DIM}wk:${RESET}[${weeklyBar}]${weeklyColor}${weekly}%${RESET}${staleMarker}`;
+      ? `${DIM}wk:${RESET}[${weeklyBar}]${weeklyColor}${weekly}%${RESET}${DIM}(${weeklyReset})${RESET}`
+      : `${DIM}wk:${RESET}[${weeklyBar}]${weeklyColor}${weekly}%${RESET}`;
 
     parts.push(weeklyPart);
   }
@@ -185,8 +177,8 @@ export function renderRateLimitsWithBar(
     const monthlyReset = formatResetTime(limits.monthlyResetsAt);
 
     const monthlyPart = monthlyReset
-      ? `${DIM}mo:${RESET}[${monthlyBar}]${monthlyColor}${monthly}%${RESET}${staleMarker}${DIM}(${resetPrefix}${monthlyReset})${RESET}`
-      : `${DIM}mo:${RESET}[${monthlyBar}]${monthlyColor}${monthly}%${RESET}${staleMarker}`;
+      ? `${DIM}mo:${RESET}[${monthlyBar}]${monthlyColor}${monthly}%${RESET}${DIM}(${monthlyReset})${RESET}`
+      : `${DIM}mo:${RESET}[${monthlyBar}]${monthlyColor}${monthly}%${RESET}`;
 
     parts.push(monthlyPart);
   }
@@ -204,11 +196,7 @@ export function renderRateLimitsWithBar(
 export function renderRateLimitsError(result: UsageResult | null): string | null {
   if (!result?.error) return null;
   if (result.error === 'no_credentials') return null;
-  if (result.error === 'rate_limited') {
-    // Prefer rendering stale usage percentages when available; only show the 429 badge
-    // when there is no cached rate limit data to display.
-    return result.rateLimits ? null : `${DIM}[API 429]${RESET}`;
-  }
+  if (result.error === 'rate_limited') return `${DIM}[API 429]${RESET}`;
   if (result.error === 'auth') return `${YELLOW}[API auth]${RESET}`;
   return `${YELLOW}[API err]${RESET}`;
 }

@@ -150,24 +150,14 @@ function buildWorkerStartCommand(config) {
       return `${key}=${shellEscape(value)}`;
     });
     const shellName2 = shellNameFromPath(shell) || "bash";
-    const isFish2 = shellName2 === "fish";
-    const execArgsCommand = isFish2 ? "exec $argv" : 'exec "$@"';
-    let rcFile2 = "";
-    if (process.env.HOME) {
-      rcFile2 = isFish2 ? `${process.env.HOME}/.config/fish/config.fish` : `${process.env.HOME}/.${shellName2}rc`;
-    }
-    let script;
-    if (isFish2) {
-      script = shouldSourceRc && rcFile2 ? `test -f ${shellEscape(rcFile2)}; and source ${shellEscape(rcFile2)}; ${execArgsCommand}` : execArgsCommand;
-    } else {
-      script = shouldSourceRc && rcFile2 ? `[ -f ${shellEscape(rcFile2)} ] && . ${shellEscape(rcFile2)}; ${execArgsCommand}` : execArgsCommand;
-    }
-    const shellFlags = isFish2 ? ["-l", "-c"] : ["-lc"];
+    const execArgsCommand = shellName2 === "fish" ? "exec $argv" : 'exec "$@"';
+    const rcFile2 = process.env.HOME ? `${process.env.HOME}/.${shellName2}rc` : "";
+    const script = shouldSourceRc && rcFile2 ? `[ -f ${shellEscape(rcFile2)} ] && . ${shellEscape(rcFile2)}; ${execArgsCommand}` : execArgsCommand;
     return [
       "env",
       ...envAssignments,
       shell,
-      ...shellFlags,
+      "-lc",
       script,
       "--",
       ...launchWords
@@ -178,15 +168,8 @@ function buildWorkerStartCommand(config) {
     return `${k}=${shellEscape(v)}`;
   }).join(" ");
   const shellName = shellNameFromPath(shell) || "bash";
-  const isFish = shellName === "fish";
-  let rcFile = "";
-  if (process.env.HOME) {
-    rcFile = isFish ? `${process.env.HOME}/.config/fish/config.fish` : `${process.env.HOME}/.${shellName}rc`;
-  }
-  let sourceCmd = "";
-  if (shouldSourceRc && rcFile) {
-    sourceCmd = isFish ? `test -f "${rcFile}"; and source "${rcFile}"; ` : `[ -f "${rcFile}" ] && source "${rcFile}"; `;
-  }
+  const rcFile = process.env.HOME ? `${process.env.HOME}/.${shellName}rc` : "";
+  const sourceCmd = shouldSourceRc && rcFile ? `[ -f "${rcFile}" ] && source "${rcFile}"; ` : "";
   return `env ${envString} ${shell} -c "${sourceCmd}exec ${launchWords[0]}"`;
 }
 function validateTmux() {
@@ -194,7 +177,7 @@ function validateTmux() {
     (0, import_child_process2.execSync)("tmux -V", { encoding: "utf-8", timeout: 5e3, stdio: "pipe" });
   } catch {
     throw new Error(
-      "tmux is not available. Install it:\n  macOS: brew install tmux\n  Ubuntu/Debian: sudo apt-get install tmux\n  Fedora: sudo dnf install tmux\n  Arch: sudo pacman -S tmux\n  Windows: winget install psmux"
+      "tmux is not available. Install it:\n  macOS: brew install tmux\n  Ubuntu/Debian: sudo apt-get install tmux\n  Fedora: sudo dnf install tmux\n  Arch: sudo pacman -S tmux"
     );
   }
 }
@@ -259,17 +242,15 @@ function spawnBridgeInSession(tmuxSession, bridgeScriptPath, configFilePath) {
   const cmd = `node "${bridgeScriptPath}" --config "${configFilePath}"`;
   (0, import_child_process2.execFileSync)("tmux", ["send-keys", "-t", tmuxSession, cmd, "Enter"], { stdio: "pipe", timeout: 5e3 });
 }
-async function createTeamSession(teamName, workerCount, cwd, options = {}) {
+async function createTeamSession(teamName, workerCount, cwd) {
   const { execFile: execFile2 } = await import("child_process");
   const { promisify: promisify2 } = await import("util");
   const execFileAsync = promisify2(execFile2);
   const inTmux = Boolean(process.env.TMUX);
-  const useDedicatedWindow = Boolean(options.newWindow && inTmux);
   const envPaneIdRaw = (process.env.TMUX_PANE ?? "").trim();
   const envPaneId = /^%\d+$/.test(envPaneIdRaw) ? envPaneIdRaw : "";
   let sessionAndWindow = "";
   let leaderPaneId = envPaneId;
-  let sessionMode = inTmux ? "split-pane" : "detached-session";
   if (!inTmux) {
     const detachedSessionName = `${TMUX_SESSION_PREFIX}-${sanitizeName(teamName)}-${Date.now().toString(36)}`;
     const detachedResult = await execFileAsync("tmux", [
@@ -320,31 +301,6 @@ async function createTeamSession(teamName, workerCount, cwd, options = {}) {
     sessionAndWindow = contextMatch[1];
     leaderPaneId = contextMatch[2];
   }
-  if (useDedicatedWindow) {
-    const targetSession = sessionAndWindow.split(":")[0] ?? sessionAndWindow;
-    const windowName = `omc-${sanitizeName(teamName)}`.slice(0, 32);
-    const newWindowResult = await execFileAsync("tmux", [
-      "new-window",
-      "-d",
-      "-P",
-      "-F",
-      "#S:#I #{pane_id}",
-      "-t",
-      targetSession,
-      "-n",
-      windowName,
-      "-c",
-      cwd
-    ]);
-    const newWindowLine = newWindowResult.stdout.trim();
-    const newWindowMatch = newWindowLine.match(/^(\S+)\s+(%\d+)$/);
-    if (!newWindowMatch) {
-      throw new Error(`Failed to create team tmux window: "${newWindowLine}"`);
-    }
-    sessionAndWindow = newWindowMatch[1];
-    leaderPaneId = newWindowMatch[2];
-    sessionMode = "dedicated-window";
-  }
   const teamTarget = sessionAndWindow;
   const resolvedSessionName = teamTarget.split(":")[0];
   const workerPaneIds = [];
@@ -353,14 +309,12 @@ async function createTeamSession(teamName, workerCount, cwd, options = {}) {
       await execFileAsync("tmux", ["set-option", "-t", resolvedSessionName, "mouse", "on"]);
     } catch {
     }
-    if (sessionMode !== "dedicated-window") {
-      try {
-        await execFileAsync("tmux", ["select-pane", "-t", leaderPaneId]);
-      } catch {
-      }
+    try {
+      await execFileAsync("tmux", ["select-pane", "-t", leaderPaneId]);
+    } catch {
     }
     await new Promise((r) => setTimeout(r, 300));
-    return { sessionName: teamTarget, leaderPaneId, workerPaneIds, sessionMode };
+    return { sessionName: teamTarget, leaderPaneId, workerPaneIds };
   }
   for (let i = 0; i < workerCount; i++) {
     const splitTarget = i === 0 ? leaderPaneId : workerPaneIds[i - 1];
@@ -406,14 +360,12 @@ async function createTeamSession(teamName, workerCount, cwd, options = {}) {
     await execFileAsync("tmux", ["set-option", "-t", resolvedSessionName, "mouse", "on"]);
   } catch {
   }
-  if (sessionMode !== "dedicated-window") {
-    try {
-      await execFileAsync("tmux", ["select-pane", "-t", leaderPaneId]);
-    } catch {
-    }
+  try {
+    await execFileAsync("tmux", ["select-pane", "-t", leaderPaneId]);
+  } catch {
   }
   await new Promise((r) => setTimeout(r, 300));
-  return { sessionName: teamTarget, leaderPaneId, workerPaneIds, sessionMode };
+  return { sessionName: teamTarget, leaderPaneId, workerPaneIds };
 }
 async function spawnWorkerInPane(sessionName2, paneId, config) {
   const { execFile: execFile2 } = await import("child_process");
@@ -645,12 +597,11 @@ async function killWorkerPanes(opts) {
     }
   }
 }
-async function killTeamSession(sessionName2, workerPaneIds, leaderPaneId, options = {}) {
+async function killTeamSession(sessionName2, workerPaneIds, leaderPaneId) {
   const { execFile: execFile2 } = await import("child_process");
   const { promisify: promisify2 } = await import("util");
   const execFileAsync = promisify2(execFile2);
-  const sessionMode = options.sessionMode ?? (sessionName2.includes(":") ? "split-pane" : "detached-session");
-  if (sessionMode === "split-pane") {
+  if (sessionName2.includes(":")) {
     if (!workerPaneIds?.length) return;
     for (const id of workerPaneIds) {
       if (id === leaderPaneId) continue;
@@ -661,26 +612,18 @@ async function killTeamSession(sessionName2, workerPaneIds, leaderPaneId, option
     }
     return;
   }
-  if (sessionMode === "dedicated-window") {
-    try {
-      await execFileAsync("tmux", ["kill-window", "-t", sessionName2]);
-    } catch {
-    }
-    return;
-  }
-  const sessionTarget = sessionName2.split(":")[0] ?? sessionName2;
   if (process.env.OMC_TEAM_ALLOW_KILL_CURRENT_SESSION !== "1" && process.env.TMUX) {
     try {
       const current = await tmuxAsync(["display-message", "-p", "#S"]);
       const currentSessionName = current.stdout.trim();
-      if (currentSessionName && currentSessionName === sessionTarget) {
+      if (currentSessionName && currentSessionName === sessionName2) {
         return;
       }
     } catch {
     }
   }
   try {
-    await execFileAsync("tmux", ["kill-session", "-t", sessionTarget]);
+    await execFileAsync("tmux", ["kill-session", "-t", sessionName2]);
   } catch {
   }
 }
@@ -709,9 +652,9 @@ __export(runtime_cli_exports, {
   writeResultArtifact: () => writeResultArtifact
 });
 module.exports = __toCommonJS(runtime_cli_exports);
-var import_fs14 = require("fs");
-var import_promises8 = require("fs/promises");
-var import_path17 = require("path");
+var import_fs13 = require("fs");
+var import_promises7 = require("fs/promises");
+var import_path16 = require("path");
 
 // src/team/runtime.ts
 var import_promises3 = require("fs/promises");
@@ -886,40 +829,13 @@ function buildWorkerArgv(agentType, config) {
   const args = buildLaunchArgs(agentType, config);
   return [binary, ...args];
 }
-var WORKER_MODEL_ENV_ALLOWLIST = [
-  "ANTHROPIC_MODEL",
-  "CLAUDE_MODEL",
-  "ANTHROPIC_BASE_URL",
-  "CLAUDE_CODE_USE_BEDROCK",
-  "CLAUDE_CODE_USE_VERTEX",
-  "CLAUDE_CODE_BEDROCK_OPUS_MODEL",
-  "CLAUDE_CODE_BEDROCK_SONNET_MODEL",
-  "CLAUDE_CODE_BEDROCK_HAIKU_MODEL",
-  "ANTHROPIC_DEFAULT_OPUS_MODEL",
-  "ANTHROPIC_DEFAULT_SONNET_MODEL",
-  "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-  "OMC_MODEL_HIGH",
-  "OMC_MODEL_MEDIUM",
-  "OMC_MODEL_LOW",
-  "OMC_EXTERNAL_MODELS_DEFAULT_CODEX_MODEL",
-  "OMC_CODEX_DEFAULT_MODEL",
-  "OMC_EXTERNAL_MODELS_DEFAULT_GEMINI_MODEL",
-  "OMC_GEMINI_DEFAULT_MODEL"
-];
-function getWorkerEnv(teamName, workerName2, agentType, env = process.env) {
+function getWorkerEnv(teamName, workerName2, agentType) {
   validateTeamName(teamName);
-  const workerEnv = {
+  return {
     OMC_TEAM_WORKER: `${teamName}/${workerName2}`,
     OMC_TEAM_NAME: teamName,
     OMC_WORKER_AGENT_TYPE: agentType
   };
-  for (const key of WORKER_MODEL_ENV_ALLOWLIST) {
-    const value = env[key];
-    if (typeof value === "string" && value.length > 0) {
-      workerEnv[key] = value;
-    }
-  }
-  return workerEnv;
 }
 function isPromptModeAgent(agentType) {
   const contract = getContract(agentType);
@@ -1014,24 +930,19 @@ function sanitizePromptContent(content, maxLength = 4e3) {
 }
 
 // src/team/worker-bootstrap.ts
-function generateTriggerMessage(teamName, workerName2) {
-  return `Read and follow the instructions in .omc/state/team/${teamName}/workers/${workerName2}/inbox.md`;
-}
 function agentTypeGuidance(agentType) {
   switch (agentType) {
     case "codex":
       return [
         "### Agent-Type Guidance (codex)",
         "- Prefer short, explicit `omc team api ... --json` commands and parse outputs before next step.",
-        "- If a command fails, report the exact stderr to leader-fixed before retrying.",
-        "- You MUST run `omc team api claim-task` before starting work and `omc team api transition-task-status` when done."
+        "- If a command fails, report the exact stderr to leader-fixed before retrying."
       ].join("\n");
     case "gemini":
       return [
         "### Agent-Type Guidance (gemini)",
         "- Execute task work in small, verifiable increments and report each milestone to leader-fixed.",
-        "- Keep commit-sized changes scoped to assigned files only; no broad refactors.",
-        "- CRITICAL: You MUST run `omc team api claim-task` before starting work and `omc team api transition-task-status` when done. Do not exit without transitioning the task status."
+        "- Keep commit-sized changes scoped to assigned files only; no broad refactors."
       ].join("\n");
     case "claude":
     default:
@@ -1067,20 +978,6 @@ Before doing anything else, write your ready sentinel file:
 mkdir -p $(dirname ${sentinelPath}) && touch ${sentinelPath}
 \`\`\`
 
-## MANDATORY WORKFLOW \u2014 Follow These Steps In Order
-You MUST complete ALL of these steps. Do NOT skip any step. Do NOT exit without step 4.
-
-1. **Claim** your task (run this command first):
-   \`omc team api claim-task --input "{"team_name":"${teamName}","task_id":"<id>","worker":"${workerName2}"}" --json\`
-   Save the \`claim_token\` from the response \u2014 you need it for step 4.
-2. **Do the work** described in your task assignment below.
-3. **Send ACK** to the leader:
-   \`omc team api send-message --input "{"team_name":"${teamName}","from_worker":"${workerName2}","to_worker":"leader-fixed","body":"ACK: ${workerName2} initialized"}" --json\`
-4. **Transition** the task status (REQUIRED before exit):
-   - On success: \`omc team api transition-task-status --input "{"team_name":"${teamName}","task_id":"<id>","from":"in_progress","to":"completed","claim_token":"<claim_token>"}" --json\`
-   - On failure: \`omc team api transition-task-status --input "{"team_name":"${teamName}","task_id":"<id>","from":"in_progress","to":"failed","claim_token":"<claim_token>"}" --json\`
-5. **Exit** immediately after transitioning.
-
 ## Identity
 - **Team**: ${teamName}
 - **Worker**: ${workerName2}
@@ -1090,15 +987,19 @@ You MUST complete ALL of these steps. Do NOT skip any step. Do NOT exit without 
 ## Your Tasks
 ${taskList}
 
-## Task Lifecycle Reference (CLI API)
+## Task Lifecycle Protocol (CLI API)
 Use the CLI API for all task lifecycle operations. Do NOT directly edit task files.
 
-- Inspect task state: \`omc team api read-task --input "{"team_name":"${teamName}","task_id":"<id>"}" --json\`
-- Task id format: State/CLI APIs use task_id: "<id>" (example: "1"), not "task-1"
-- Claim task: \`omc team api claim-task --input "{"team_name":"${teamName}","task_id":"<id>","worker":"${workerName2}"}" --json\`
-- Complete task: \`omc team api transition-task-status --input "{"team_name":"${teamName}","task_id":"<id>","from":"in_progress","to":"completed","claim_token":"<claim_token>"}" --json\`
-- Fail task: \`omc team api transition-task-status --input "{"team_name":"${teamName}","task_id":"<id>","from":"in_progress","to":"failed","claim_token":"<claim_token>"}" --json\`
-- Release claim (rollback): \`omc team api release-task-claim --input "{"team_name":"${teamName}","task_id":"<id>","claim_token":"<claim_token>","worker":"${workerName2}"}" --json\`
+1. Read your task file at \`${taskDir}/task-{taskId}.json\`
+2. Task id format: State/CLI APIs use task_id: "<id>" (example: "1"), not "task-1"
+3. Claim a task via CLI interop:
+   \`omc team api claim-task --input "{\\"team_name\\":\\"${teamName}\\",\\"task_id\\":\\"<id>\\",\\"worker\\":\\"${workerName2}\\"}" --json\`
+4. Do the work described in the task
+5. On completion, transition via CLI interop (use the claim_token from step 3):
+   \`omc team api transition-task-status --input "{\\"team_name\\":\\"${teamName}\\",\\"task_id\\":\\"<id>\\",\\"from\\":\\"in_progress\\",\\"to\\":\\"completed\\",\\"claim_token\\":\\"<claim_token from step 3>\\"}" --json\`
+6. On failure, transition to "failed" with error (use the claim_token from step 3):
+   \`omc team api transition-task-status --input "{\\"team_name\\":\\"${teamName}\\",\\"task_id\\":\\"<id>\\",\\"from\\":\\"in_progress\\",\\"to\\":\\"failed\\",\\"claim_token\\":\\"<claim_token from step 3>\\"}" --json\`
+7. Use \`omc team api release-task-claim --json\` only for rollback to pending
 
 ## Communication Protocol
 - **Inbox**: Read ${inboxPath} for new instructions
@@ -1142,11 +1043,7 @@ When you see a shutdown request in your inbox:
 
 ${agentTypeGuidance(agentType)}
 
-## BEFORE YOU EXIT
-You MUST call \`omc team api transition-task-status\` to mark your task as "completed" or "failed" before exiting.
-If you skip this step, the leader cannot track your work and the task will appear stuck.
-
-${bootstrapInstructions ? `## Role Context
+${bootstrapInstructions ? `## Additional Instructions
 ${bootstrapInstructions}
 ` : ""}`;
 }
@@ -1343,8 +1240,8 @@ async function withTaskLock(teamName, taskId, fn, opts) {
 }
 function isLockStale(lockPath, staleLockMs) {
   try {
-    const stat2 = (0, import_fs5.statSync)(lockPath);
-    const ageMs = Date.now() - stat2.mtimeMs;
+    const stat = (0, import_fs5.statSync)(lockPath);
+    const ageMs = Date.now() - stat.mtimeMs;
     if (ageMs < staleLockMs) return false;
     try {
       const raw = (0, import_fs5.readFileSync)(lockPath, "utf-8");
@@ -1451,12 +1348,7 @@ async function writePanesTrackingFileIfPresent(runtime) {
   const tempPath = `${panesPath}.tmp`;
   await (0, import_promises3.writeFile)(
     tempPath,
-    JSON.stringify({
-      paneIds: [...runtime.workerPaneIds],
-      leaderPaneId: runtime.leaderPaneId,
-      sessionName: runtime.sessionName,
-      ownsWindow: Boolean(runtime.ownsWindow)
-    }),
+    JSON.stringify({ paneIds: [...runtime.workerPaneIds], leaderPaneId: runtime.leaderPaneId }),
     "utf-8"
   );
   await (0, import_promises3.rename)(tempPath, panesPath);
@@ -1630,28 +1522,19 @@ async function startTeam(config) {
       cwd
     });
   }
-  const session = await createTeamSession(teamName, 0, cwd, {
-    newWindow: Boolean(config.newWindow)
-  });
+  const session = await createTeamSession(teamName, 0, cwd);
   const runtime = {
     teamName,
     sessionName: session.sessionName,
     leaderPaneId: session.leaderPaneId,
-    config: {
-      ...config,
-      tmuxSession: session.sessionName,
-      leaderPaneId: session.leaderPaneId,
-      tmuxOwnsWindow: session.sessionMode !== "split-pane"
-    },
+    config,
     workerNames,
     workerPaneIds: session.workerPaneIds,
     // initially empty []
     activeWorkers: /* @__PURE__ */ new Map(),
     cwd,
-    resolvedBinaryPaths,
-    ownsWindow: session.sessionMode !== "split-pane"
+    resolvedBinaryPaths
   };
-  await writeJson((0, import_path10.join)(root, "config.json"), runtime.config);
   const maxConcurrentWorkers = agentTypes.length;
   for (let i = 0; i < maxConcurrentWorkers; i++) {
     const taskIndex = await nextPendingTaskIndex(runtime);
@@ -1962,7 +1845,7 @@ async function killWorkerPane(runtime, workerNameValue, paneId) {
   } catch {
   }
 }
-async function shutdownTeam(teamName, sessionName2, cwd, timeoutMs = 3e4, workerPaneIds, leaderPaneId, ownsWindow) {
+async function shutdownTeam(teamName, sessionName2, cwd, timeoutMs = 3e4, workerPaneIds, leaderPaneId) {
   const root = stateRoot(cwd, teamName);
   await writeJson((0, import_path10.join)(root, "shutdown.json"), {
     requestedAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -1988,8 +1871,7 @@ async function shutdownTeam(teamName, sessionName2, cwd, timeoutMs = 3e4, worker
       }
     }
   }
-  const sessionMode = ownsWindow ?? Boolean(configData?.tmuxOwnsWindow) ? sessionName2.includes(":") ? "dedicated-window" : "detached-session" : "split-pane";
-  await killTeamSession(sessionName2, workerPaneIds, leaderPaneId, { sessionMode });
+  await killTeamSession(sessionName2, workerPaneIds, leaderPaneId);
   try {
     await (0, import_promises3.rm)(root, { recursive: true, force: true });
   } catch {
@@ -2257,23 +2139,6 @@ function validateAnthropicBaseUrl(urlString) {
 }
 
 // src/config/models.ts
-var TIER_ENV_KEYS = {
-  LOW: [
-    "OMC_MODEL_LOW",
-    "CLAUDE_CODE_BEDROCK_HAIKU_MODEL",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL"
-  ],
-  MEDIUM: [
-    "OMC_MODEL_MEDIUM",
-    "CLAUDE_CODE_BEDROCK_SONNET_MODEL",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL"
-  ],
-  HIGH: [
-    "OMC_MODEL_HIGH",
-    "CLAUDE_CODE_BEDROCK_OPUS_MODEL",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL"
-  ]
-};
 var CLAUDE_FAMILY_DEFAULTS = {
   HAIKU: "claude-haiku-4-5",
   SONNET: "claude-sonnet-4-6",
@@ -2293,23 +2158,14 @@ var BUILTIN_EXTERNAL_MODEL_DEFAULTS = {
   codexModel: "gpt-5.3-codex",
   geminiModel: "gemini-3.1-pro-preview"
 };
-function resolveTierModelFromEnv(tier) {
-  for (const key of TIER_ENV_KEYS[tier]) {
-    const value = process.env[key]?.trim();
-    if (value) {
-      return value;
-    }
-  }
-  return void 0;
-}
 function getDefaultModelHigh() {
-  return resolveTierModelFromEnv("HIGH") || BUILTIN_TIER_MODEL_DEFAULTS.HIGH;
+  return process.env.OMC_MODEL_HIGH || BUILTIN_TIER_MODEL_DEFAULTS.HIGH;
 }
 function getDefaultModelMedium() {
-  return resolveTierModelFromEnv("MEDIUM") || BUILTIN_TIER_MODEL_DEFAULTS.MEDIUM;
+  return process.env.OMC_MODEL_MEDIUM || BUILTIN_TIER_MODEL_DEFAULTS.MEDIUM;
 }
 function getDefaultModelLow() {
-  return resolveTierModelFromEnv("LOW") || BUILTIN_TIER_MODEL_DEFAULTS.LOW;
+  return process.env.OMC_MODEL_LOW || BUILTIN_TIER_MODEL_DEFAULTS.LOW;
 }
 function getDefaultTierModels() {
   return {
@@ -2367,125 +2223,128 @@ function isNonClaudeProvider() {
 }
 
 // src/config/loader.ts
-function buildDefaultConfig() {
-  const defaultTierModels = getDefaultTierModels();
-  return {
-    agents: {
-      omc: { model: defaultTierModels.HIGH },
-      explore: { model: defaultTierModels.LOW },
-      analyst: { model: defaultTierModels.HIGH },
-      planner: { model: defaultTierModels.HIGH },
-      architect: { model: defaultTierModels.HIGH },
-      debugger: { model: defaultTierModels.MEDIUM },
-      executor: { model: defaultTierModels.MEDIUM },
-      verifier: { model: defaultTierModels.MEDIUM },
-      securityReviewer: { model: defaultTierModels.MEDIUM },
-      codeReviewer: { model: defaultTierModels.HIGH },
-      testEngineer: { model: defaultTierModels.MEDIUM },
-      designer: { model: defaultTierModels.MEDIUM },
-      writer: { model: defaultTierModels.LOW },
-      qaTester: { model: defaultTierModels.MEDIUM },
-      scientist: { model: defaultTierModels.MEDIUM },
-      gitMaster: { model: defaultTierModels.MEDIUM },
-      codeSimplifier: { model: defaultTierModels.HIGH },
-      critic: { model: defaultTierModels.HIGH },
-      documentSpecialist: { model: defaultTierModels.MEDIUM }
+var DEFAULT_TIER_MODELS = getDefaultTierModels();
+var DEFAULT_CONFIG = {
+  agents: {
+    omc: { model: DEFAULT_TIER_MODELS.HIGH },
+    explore: { model: DEFAULT_TIER_MODELS.LOW },
+    analyst: { model: DEFAULT_TIER_MODELS.HIGH },
+    planner: { model: DEFAULT_TIER_MODELS.HIGH },
+    architect: { model: DEFAULT_TIER_MODELS.HIGH },
+    debugger: { model: DEFAULT_TIER_MODELS.MEDIUM },
+    executor: { model: DEFAULT_TIER_MODELS.MEDIUM },
+    verifier: { model: DEFAULT_TIER_MODELS.MEDIUM },
+    qualityReviewer: { model: DEFAULT_TIER_MODELS.MEDIUM },
+    securityReviewer: { model: DEFAULT_TIER_MODELS.MEDIUM },
+    codeReviewer: { model: DEFAULT_TIER_MODELS.HIGH },
+    deepExecutor: { model: DEFAULT_TIER_MODELS.HIGH },
+    testEngineer: { model: DEFAULT_TIER_MODELS.MEDIUM },
+    buildFixer: { model: DEFAULT_TIER_MODELS.MEDIUM },
+    designer: { model: DEFAULT_TIER_MODELS.MEDIUM },
+    writer: { model: DEFAULT_TIER_MODELS.LOW },
+    qaTester: { model: DEFAULT_TIER_MODELS.MEDIUM },
+    scientist: { model: DEFAULT_TIER_MODELS.MEDIUM },
+    gitMaster: { model: DEFAULT_TIER_MODELS.MEDIUM },
+    codeSimplifier: { model: DEFAULT_TIER_MODELS.HIGH },
+    critic: { model: DEFAULT_TIER_MODELS.HIGH },
+    documentSpecialist: { model: DEFAULT_TIER_MODELS.MEDIUM }
+  },
+  features: {
+    parallelExecution: true,
+    lspTools: true,
+    // Real LSP integration with language servers
+    astTools: true,
+    // Real AST tools using ast-grep
+    continuationEnforcement: true,
+    autoContextInjection: true
+  },
+  mcpServers: {
+    exa: { enabled: true },
+    context7: { enabled: true }
+  },
+  permissions: {
+    allowBash: true,
+    allowEdit: true,
+    allowWrite: true,
+    maxBackgroundTasks: 5
+  },
+  magicKeywords: {
+    ultrawork: ["ultrawork", "ulw", "uw"],
+    search: ["search", "find", "locate"],
+    analyze: ["analyze", "investigate", "examine"],
+    ultrathink: ["ultrathink", "think", "reason", "ponder"]
+  },
+  // Intelligent model routing configuration
+  routing: {
+    enabled: true,
+    defaultTier: "MEDIUM",
+    forceInherit: false,
+    escalationEnabled: true,
+    maxEscalations: 2,
+    tierModels: { ...DEFAULT_TIER_MODELS },
+    agentOverrides: {
+      architect: { tier: "HIGH", reason: "Advisory agent requires deep reasoning" },
+      planner: { tier: "HIGH", reason: "Strategic planning requires deep reasoning" },
+      critic: { tier: "HIGH", reason: "Critical review requires deep reasoning" },
+      analyst: { tier: "HIGH", reason: "Pre-planning analysis requires deep reasoning" },
+      explore: { tier: "LOW", reason: "Exploration is search-focused" },
+      "writer": { tier: "LOW", reason: "Documentation is straightforward" }
     },
-    features: {
-      parallelExecution: true,
-      lspTools: true,
-      // Real LSP integration with language servers
-      astTools: true,
-      // Real AST tools using ast-grep
-      continuationEnforcement: true,
-      autoContextInjection: true
+    escalationKeywords: [
+      "critical",
+      "production",
+      "urgent",
+      "security",
+      "breaking",
+      "architecture",
+      "refactor",
+      "redesign",
+      "root cause"
+    ],
+    simplificationKeywords: [
+      "find",
+      "list",
+      "show",
+      "where",
+      "search",
+      "locate",
+      "grep"
+    ]
+  },
+  // External models configuration (Codex, Gemini)
+  // Static defaults only — env var overrides applied in loadEnvConfig()
+  externalModels: {
+    defaults: {
+      codexModel: BUILTIN_EXTERNAL_MODEL_DEFAULTS.codexModel,
+      geminiModel: BUILTIN_EXTERNAL_MODEL_DEFAULTS.geminiModel
     },
-    mcpServers: {
-      exa: { enabled: true },
-      context7: { enabled: true }
-    },
-    permissions: {
-      allowBash: true,
-      allowEdit: true,
-      allowWrite: true,
-      maxBackgroundTasks: 5
-    },
-    magicKeywords: {
-      ultrawork: ["ultrawork", "ulw", "uw"],
-      search: ["search", "find", "locate"],
-      analyze: ["analyze", "investigate", "examine"],
-      ultrathink: ["ultrathink", "think", "reason", "ponder"]
-    },
-    // Intelligent model routing configuration
-    routing: {
-      enabled: true,
-      defaultTier: "MEDIUM",
-      forceInherit: false,
-      escalationEnabled: true,
-      maxEscalations: 2,
-      tierModels: { ...defaultTierModels },
-      agentOverrides: {
-        architect: { tier: "HIGH", reason: "Advisory agent requires deep reasoning" },
-        planner: { tier: "HIGH", reason: "Strategic planning requires deep reasoning" },
-        critic: { tier: "HIGH", reason: "Critical review requires deep reasoning" },
-        analyst: { tier: "HIGH", reason: "Pre-planning analysis requires deep reasoning" },
-        explore: { tier: "LOW", reason: "Exploration is search-focused" },
-        "writer": { tier: "LOW", reason: "Documentation is straightforward" }
-      },
-      escalationKeywords: [
-        "critical",
-        "production",
-        "urgent",
-        "security",
-        "breaking",
-        "architecture",
-        "refactor",
-        "redesign",
-        "root cause"
-      ],
-      simplificationKeywords: [
-        "find",
-        "list",
-        "show",
-        "where",
-        "search",
-        "locate",
-        "grep"
-      ]
-    },
-    // External models configuration (Codex, Gemini)
-    // Static defaults only — env var overrides applied in loadEnvConfig()
-    externalModels: {
-      defaults: {
-        codexModel: BUILTIN_EXTERNAL_MODEL_DEFAULTS.codexModel,
-        geminiModel: BUILTIN_EXTERNAL_MODEL_DEFAULTS.geminiModel
-      },
-      fallbackPolicy: {
-        onModelFailure: "provider_chain",
-        allowCrossProvider: false,
-        crossProviderOrder: ["codex", "gemini"]
-      }
-    },
-    // Delegation routing configuration (opt-in feature for external model routing)
-    delegationRouting: {
-      enabled: false,
-      defaultProvider: "claude",
-      roles: {}
-    },
-    startupCodebaseMap: {
-      enabled: true,
-      maxFiles: 200,
-      maxDepth: 4
-    },
-    taskSizeDetection: {
-      enabled: true,
-      smallWordLimit: 50,
-      largeWordLimit: 200,
-      suppressHeavyModesForSmallTasks: true
+    fallbackPolicy: {
+      onModelFailure: "provider_chain",
+      allowCrossProvider: false,
+      crossProviderOrder: ["codex", "gemini"]
     }
-  };
-}
-var DEFAULT_CONFIG = buildDefaultConfig();
+  },
+  // Delegation routing configuration (opt-in feature for external model routing)
+  delegationRouting: {
+    enabled: false,
+    // Opt-in feature
+    defaultProvider: "claude",
+    roles: {}
+  },
+  // Startup codebase map injection (issue #804)
+  startupCodebaseMap: {
+    enabled: true,
+    maxFiles: 200,
+    maxDepth: 4
+  },
+  // Task size detection (issue #790): prevent over-orchestration for small tasks
+  taskSizeDetection: {
+    enabled: true,
+    smallWordLimit: 50,
+    largeWordLimit: 200,
+    suppressHeavyModesForSmallTasks: true
+  }
+};
 function getConfigPaths() {
   const userConfigDir = getConfigDir2();
   return {
@@ -2508,17 +2367,16 @@ function loadJsoncFile(path) {
 }
 function deepMerge(target, source) {
   const result = { ...target };
-  const mutableResult = result;
   for (const key of Object.keys(source)) {
     const sourceValue = source[key];
-    const targetValue = mutableResult[key];
+    const targetValue = result[key];
     if (sourceValue !== void 0 && typeof sourceValue === "object" && sourceValue !== null && !Array.isArray(sourceValue) && typeof targetValue === "object" && targetValue !== null && !Array.isArray(targetValue)) {
-      mutableResult[key] = deepMerge(
+      result[key] = deepMerge(
         targetValue,
         sourceValue
       );
     } else if (sourceValue !== void 0) {
-      mutableResult[key] = sourceValue;
+      result[key] = sourceValue;
     }
   }
   return result;
@@ -2645,7 +2503,7 @@ function loadEnvConfig() {
 }
 function loadConfig() {
   const paths = getConfigPaths();
-  let config = buildDefaultConfig();
+  let config = { ...DEFAULT_CONFIG };
   const userConfig = loadJsoncFile(paths.user);
   if (userConfig) {
     config = deepMerge(config, userConfig);
@@ -3057,9 +2915,9 @@ async function waitForSentinelReadiness(options = {}) {
 }
 
 // src/team/runtime-v2.ts
-var import_path16 = require("path");
-var import_fs13 = require("fs");
-var import_promises7 = require("fs/promises");
+var import_path15 = require("path");
+var import_fs12 = require("fs");
+var import_promises6 = require("fs/promises");
 var import_perf_hooks = require("perf_hooks");
 
 // src/team/monitor.ts
@@ -3076,10 +2934,10 @@ async function readJsonSafe2(filePath) {
   }
 }
 async function writeAtomic(filePath, data) {
-  const { writeFile: writeFile6 } = await import("fs/promises");
+  const { writeFile: writeFile5 } = await import("fs/promises");
   await (0, import_promises4.mkdir)((0, import_path13.dirname)(filePath), { recursive: true });
   const tmpPath = `${filePath}.tmp.${process.pid}.${Date.now()}`;
-  await writeFile6(tmpPath, data, "utf-8");
+  await writeFile5(tmpPath, data, "utf-8");
   const { rename: rename3 } = await import("fs/promises");
   await rename3(tmpPath, filePath);
 }
@@ -3166,9 +3024,9 @@ async function saveTeamConfig(config, cwd) {
 }
 async function cleanupTeamState(teamName, cwd) {
   const root = absPath(cwd, TeamPaths.root(teamName));
-  const { rm: rm4 } = await import("fs/promises");
+  const { rm: rm3 } = await import("fs/promises");
   try {
-    await rm4(root, { recursive: true, force: true });
+    await rm3(root, { recursive: true, force: true });
   } catch {
   }
 }
@@ -3278,313 +3136,6 @@ function inferPhase(tasks) {
 // src/team/runtime-v2.ts
 init_team_name();
 init_tmux_session();
-
-// src/team/dispatch-queue.ts
-var import_crypto2 = require("crypto");
-var import_fs12 = require("fs");
-var import_promises6 = require("fs/promises");
-var import_path15 = require("path");
-
-// src/team/contracts.ts
-var WORKER_NAME_SAFE_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
-
-// src/team/dispatch-queue.ts
-var OMC_DISPATCH_LOCK_TIMEOUT_ENV = "OMC_TEAM_DISPATCH_LOCK_TIMEOUT_MS";
-var DEFAULT_DISPATCH_LOCK_TIMEOUT_MS = 15e3;
-var MIN_DISPATCH_LOCK_TIMEOUT_MS = 1e3;
-var MAX_DISPATCH_LOCK_TIMEOUT_MS = 12e4;
-var DISPATCH_LOCK_INITIAL_POLL_MS = 25;
-var DISPATCH_LOCK_MAX_POLL_MS = 500;
-var LOCK_STALE_MS = 5 * 60 * 1e3;
-function validateWorkerName(name) {
-  if (!WORKER_NAME_SAFE_PATTERN.test(name)) {
-    throw new Error(`Invalid worker name: "${name}"`);
-  }
-}
-function isDispatchKind(value) {
-  return value === "inbox" || value === "mailbox" || value === "nudge";
-}
-function isDispatchStatus(value) {
-  return value === "pending" || value === "notified" || value === "delivered" || value === "failed";
-}
-function resolveDispatchLockTimeoutMs(env = process.env) {
-  const raw = env[OMC_DISPATCH_LOCK_TIMEOUT_ENV];
-  if (raw === void 0 || raw === "") return DEFAULT_DISPATCH_LOCK_TIMEOUT_MS;
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed)) return DEFAULT_DISPATCH_LOCK_TIMEOUT_MS;
-  return Math.max(MIN_DISPATCH_LOCK_TIMEOUT_MS, Math.min(MAX_DISPATCH_LOCK_TIMEOUT_MS, Math.floor(parsed)));
-}
-async function withDispatchLock(teamName, cwd, fn) {
-  const root = absPath(cwd, TeamPaths.root(teamName));
-  if (!(0, import_fs12.existsSync)(root)) throw new Error(`Team ${teamName} not found`);
-  const lockDir = absPath(cwd, TeamPaths.dispatchLockDir(teamName));
-  const ownerPath = (0, import_path15.join)(lockDir, "owner");
-  const ownerToken = `${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}`;
-  const timeoutMs = resolveDispatchLockTimeoutMs(process.env);
-  const deadline = Date.now() + timeoutMs;
-  let pollMs = DISPATCH_LOCK_INITIAL_POLL_MS;
-  await (0, import_promises6.mkdir)((0, import_path15.dirname)(lockDir), { recursive: true });
-  while (true) {
-    try {
-      await (0, import_promises6.mkdir)(lockDir, { recursive: false });
-      try {
-        await (0, import_promises6.writeFile)(ownerPath, ownerToken, "utf8");
-      } catch (error) {
-        await (0, import_promises6.rm)(lockDir, { recursive: true, force: true });
-        throw error;
-      }
-      break;
-    } catch (error) {
-      const err = error;
-      if (err.code !== "EEXIST") throw error;
-      try {
-        const info = await (0, import_promises6.stat)(lockDir);
-        if (Date.now() - info.mtimeMs > LOCK_STALE_MS) {
-          await (0, import_promises6.rm)(lockDir, { recursive: true, force: true });
-          continue;
-        }
-      } catch {
-      }
-      if (Date.now() > deadline) {
-        throw new Error(
-          `Timed out acquiring dispatch lock for ${teamName} after ${timeoutMs}ms. Set ${OMC_DISPATCH_LOCK_TIMEOUT_ENV} to increase (current: ${timeoutMs}ms, max: ${MAX_DISPATCH_LOCK_TIMEOUT_MS}ms).`
-        );
-      }
-      const jitter = 0.5 + Math.random() * 0.5;
-      await new Promise((resolve5) => setTimeout(resolve5, Math.floor(pollMs * jitter)));
-      pollMs = Math.min(pollMs * 2, DISPATCH_LOCK_MAX_POLL_MS);
-    }
-  }
-  try {
-    return await fn();
-  } finally {
-    try {
-      const currentOwner = await (0, import_promises6.readFile)(ownerPath, "utf8");
-      if (currentOwner.trim() === ownerToken) {
-        await (0, import_promises6.rm)(lockDir, { recursive: true, force: true });
-      }
-    } catch {
-    }
-  }
-}
-async function readDispatchRequestsFromFile(teamName, cwd) {
-  const path = absPath(cwd, TeamPaths.dispatchRequests(teamName));
-  try {
-    if (!(0, import_fs12.existsSync)(path)) return [];
-    const raw = await (0, import_promises6.readFile)(path, "utf8");
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.map((entry) => normalizeDispatchRequest(teamName, entry)).filter((req) => req !== null);
-  } catch {
-    return [];
-  }
-}
-async function writeDispatchRequestsToFile(teamName, requests, cwd) {
-  const path = absPath(cwd, TeamPaths.dispatchRequests(teamName));
-  const dir = (0, import_path15.dirname)(path);
-  ensureDirWithMode(dir);
-  atomicWriteJson(path, requests);
-}
-function normalizeDispatchRequest(teamName, raw, nowIso = (/* @__PURE__ */ new Date()).toISOString()) {
-  if (!isDispatchKind(raw.kind)) return null;
-  if (typeof raw.to_worker !== "string" || raw.to_worker.trim() === "") return null;
-  if (typeof raw.trigger_message !== "string" || raw.trigger_message.trim() === "") return null;
-  const status = isDispatchStatus(raw.status) ? raw.status : "pending";
-  return {
-    request_id: typeof raw.request_id === "string" && raw.request_id.trim() !== "" ? raw.request_id : (0, import_crypto2.randomUUID)(),
-    kind: raw.kind,
-    team_name: teamName,
-    to_worker: raw.to_worker,
-    worker_index: typeof raw.worker_index === "number" ? raw.worker_index : void 0,
-    pane_id: typeof raw.pane_id === "string" && raw.pane_id !== "" ? raw.pane_id : void 0,
-    trigger_message: raw.trigger_message,
-    message_id: typeof raw.message_id === "string" && raw.message_id !== "" ? raw.message_id : void 0,
-    inbox_correlation_key: typeof raw.inbox_correlation_key === "string" && raw.inbox_correlation_key !== "" ? raw.inbox_correlation_key : void 0,
-    transport_preference: raw.transport_preference === "transport_direct" || raw.transport_preference === "prompt_stdin" ? raw.transport_preference : "hook_preferred_with_fallback",
-    fallback_allowed: raw.fallback_allowed !== false,
-    status,
-    attempt_count: Number.isFinite(raw.attempt_count) ? Math.max(0, Math.floor(raw.attempt_count)) : 0,
-    created_at: typeof raw.created_at === "string" && raw.created_at !== "" ? raw.created_at : nowIso,
-    updated_at: typeof raw.updated_at === "string" && raw.updated_at !== "" ? raw.updated_at : nowIso,
-    notified_at: typeof raw.notified_at === "string" && raw.notified_at !== "" ? raw.notified_at : void 0,
-    delivered_at: typeof raw.delivered_at === "string" && raw.delivered_at !== "" ? raw.delivered_at : void 0,
-    failed_at: typeof raw.failed_at === "string" && raw.failed_at !== "" ? raw.failed_at : void 0,
-    last_reason: typeof raw.last_reason === "string" && raw.last_reason !== "" ? raw.last_reason : void 0
-  };
-}
-function equivalentPendingDispatch(existing, input) {
-  if (existing.status !== "pending") return false;
-  if (existing.kind !== input.kind) return false;
-  if (existing.to_worker !== input.to_worker) return false;
-  if (input.kind === "mailbox") {
-    return Boolean(input.message_id) && existing.message_id === input.message_id;
-  }
-  if (input.kind === "inbox" && input.inbox_correlation_key) {
-    return existing.inbox_correlation_key === input.inbox_correlation_key;
-  }
-  return existing.trigger_message === input.trigger_message;
-}
-function canTransitionDispatchStatus(from, to) {
-  if (from === to) return true;
-  if (from === "pending" && (to === "notified" || to === "failed")) return true;
-  if (from === "notified" && (to === "delivered" || to === "failed")) return true;
-  return false;
-}
-async function enqueueDispatchRequest(teamName, requestInput, cwd) {
-  if (!isDispatchKind(requestInput.kind)) throw new Error(`Invalid dispatch request kind: ${String(requestInput.kind)}`);
-  if (requestInput.kind === "mailbox" && (!requestInput.message_id || requestInput.message_id.trim() === "")) {
-    throw new Error("mailbox dispatch requests require message_id");
-  }
-  validateWorkerName(requestInput.to_worker);
-  return await withDispatchLock(teamName, cwd, async () => {
-    const requests = await readDispatchRequestsFromFile(teamName, cwd);
-    const existing = requests.find((req) => equivalentPendingDispatch(req, requestInput));
-    if (existing) return { request: existing, deduped: true };
-    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-    const request = normalizeDispatchRequest(
-      teamName,
-      {
-        request_id: (0, import_crypto2.randomUUID)(),
-        ...requestInput,
-        status: "pending",
-        attempt_count: 0,
-        created_at: nowIso,
-        updated_at: nowIso
-      },
-      nowIso
-    );
-    if (!request) throw new Error("failed_to_normalize_dispatch_request");
-    requests.push(request);
-    await writeDispatchRequestsToFile(teamName, requests, cwd);
-    return { request, deduped: false };
-  });
-}
-async function readDispatchRequest(teamName, requestId, cwd) {
-  const requests = await readDispatchRequestsFromFile(teamName, cwd);
-  return requests.find((req) => req.request_id === requestId) ?? null;
-}
-async function transitionDispatchRequest(teamName, requestId, from, to, patch = {}, cwd) {
-  return await withDispatchLock(teamName, cwd, async () => {
-    const requests = await readDispatchRequestsFromFile(teamName, cwd);
-    const index = requests.findIndex((req) => req.request_id === requestId);
-    if (index < 0) return null;
-    const existing = requests[index];
-    if (existing.status !== from && existing.status !== to) return null;
-    if (!canTransitionDispatchStatus(existing.status, to)) return null;
-    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-    const nextAttemptCount = Math.max(
-      existing.attempt_count,
-      Number.isFinite(patch.attempt_count) ? Math.floor(patch.attempt_count) : existing.status === to ? existing.attempt_count : existing.attempt_count + 1
-    );
-    const next = {
-      ...existing,
-      ...patch,
-      status: to,
-      attempt_count: Math.max(0, nextAttemptCount),
-      updated_at: nowIso
-    };
-    if (to === "notified") next.notified_at = patch.notified_at ?? nowIso;
-    if (to === "delivered") next.delivered_at = patch.delivered_at ?? nowIso;
-    if (to === "failed") next.failed_at = patch.failed_at ?? nowIso;
-    requests[index] = next;
-    await writeDispatchRequestsToFile(teamName, requests, cwd);
-    return next;
-  });
-}
-async function markDispatchRequestNotified(teamName, requestId, patch = {}, cwd) {
-  const current = await readDispatchRequest(teamName, requestId, cwd);
-  if (!current) return null;
-  if (current.status === "notified" || current.status === "delivered") return current;
-  return await transitionDispatchRequest(teamName, requestId, current.status, "notified", patch, cwd);
-}
-
-// src/team/mcp-comm.ts
-function isConfirmedNotification(outcome) {
-  if (!outcome.ok) return false;
-  if (outcome.transport !== "hook") return true;
-  return outcome.reason !== "queued_for_hook_dispatch";
-}
-function fallbackTransportForPreference(preference) {
-  if (preference === "prompt_stdin") return "prompt_stdin";
-  if (preference === "transport_direct") return "tmux_send_keys";
-  return "hook";
-}
-function notifyExceptionReason(error) {
-  const message = error instanceof Error ? error.message : String(error);
-  return `notify_exception:${message}`;
-}
-async function markImmediateDispatchFailure(params) {
-  const { teamName, request, reason, messageId, cwd } = params;
-  if (request.transport_preference === "hook_preferred_with_fallback") return;
-  const current = await readDispatchRequest(teamName, request.request_id, cwd);
-  if (!current) return;
-  if (current.status === "failed" || current.status === "notified" || current.status === "delivered") return;
-  await transitionDispatchRequest(
-    teamName,
-    request.request_id,
-    current.status,
-    "failed",
-    {
-      message_id: messageId ?? current.message_id,
-      last_reason: reason
-    },
-    cwd
-  ).catch(() => {
-  });
-}
-async function queueInboxInstruction(params) {
-  await params.deps.writeWorkerInbox(params.teamName, params.workerName, params.inbox, params.cwd);
-  const queued = await enqueueDispatchRequest(
-    params.teamName,
-    {
-      kind: "inbox",
-      to_worker: params.workerName,
-      worker_index: params.workerIndex,
-      pane_id: params.paneId,
-      trigger_message: params.triggerMessage,
-      transport_preference: params.transportPreference,
-      fallback_allowed: params.fallbackAllowed,
-      inbox_correlation_key: params.inboxCorrelationKey
-    },
-    params.cwd
-  );
-  if (queued.deduped) {
-    return {
-      ok: false,
-      transport: "none",
-      reason: "duplicate_pending_dispatch_request",
-      request_id: queued.request.request_id
-    };
-  }
-  const notifyOutcome = await Promise.resolve(params.notify(
-    { workerName: params.workerName, workerIndex: params.workerIndex, paneId: params.paneId },
-    params.triggerMessage,
-    { request: queued.request }
-  )).catch((error) => ({
-    ok: false,
-    transport: fallbackTransportForPreference(params.transportPreference),
-    reason: notifyExceptionReason(error)
-  }));
-  const outcome = { ...notifyOutcome, request_id: queued.request.request_id };
-  if (isConfirmedNotification(outcome)) {
-    await markDispatchRequestNotified(
-      params.teamName,
-      queued.request.request_id,
-      { last_reason: outcome.reason },
-      params.cwd
-    );
-  } else {
-    await markImmediateDispatchFailure({
-      teamName: params.teamName,
-      request: queued.request,
-      reason: outcome.reason,
-      cwd: params.cwd
-    });
-  }
-  return outcome;
-}
-
-// src/team/runtime-v2.ts
 function isRuntimeV2Enabled(env = process.env) {
   const raw = env.OMC_RUNTIME_V2;
   if (!raw) return true;
@@ -3605,32 +3156,26 @@ async function isWorkerPaneAlive(paneId) {
 }
 function buildV2TaskInstruction(teamName, workerName2, task, taskId) {
   return [
-    `## REQUIRED: Task Lifecycle Commands`,
-    `You MUST run these commands. Do NOT skip any step.`,
-    ``,
-    `1. Claim your task:`,
-    `   omc team api claim-task --input '{"team_name":"${teamName}","task_id":"${taskId}","worker":"${workerName2}"}' --json`,
-    `   Save the claim_token from the response.`,
-    `2. Do the work described below.`,
-    `3. On completion (use claim_token from step 1):`,
-    `   omc team api transition-task-status --input '{"team_name":"${teamName}","task_id":"${taskId}","from":"in_progress","to":"completed","claim_token":"<claim_token>"}' --json`,
-    `4. On failure (use claim_token from step 1):`,
-    `   omc team api transition-task-status --input '{"team_name":"${teamName}","task_id":"${taskId}","from":"in_progress","to":"failed","claim_token":"<claim_token>"}' --json`,
-    `5. Exit immediately after transitioning.`,
-    ``,
-    `## Task Assignment`,
+    `## Initial Task Assignment`,
     `Task ID: ${taskId}`,
     `Worker: ${workerName2}`,
     `Subject: ${task.subject}`,
     ``,
     task.description,
     ``,
-    `REMINDER: You MUST run transition-task-status before exiting. Do NOT write done.json or edit task files directly.`
+    `## Task Lifecycle (CLI API)`,
+    `1. Claim your task:`,
+    `   omc team api claim-task --input '{"team_name":"${teamName}","task_id":"${taskId}","worker":"${workerName2}"}' --json`,
+    `2. Do the work described above`,
+    `3. On completion (use the claim_token from step 1):`,
+    `   omc team api transition-task-status --input '{"team_name":"${teamName}","task_id":"${taskId}","from":"in_progress","to":"completed","claim_token":"<claim_token>"}' --json`,
+    `4. On failure (use the claim_token from step 1):`,
+    `   omc team api transition-task-status --input '{"team_name":"${teamName}","task_id":"${taskId}","from":"in_progress","to":"failed","claim_token":"<claim_token>"}' --json`,
+    ``,
+    `IMPORTANT: Use the CLI API commands above for all task state transitions.`,
+    `Do NOT write done.json or edit task files directly.`,
+    `After completing or failing the task, exit immediately.`
   ].join("\n");
-}
-async function notifyStartupInbox(sessionName2, paneId, message) {
-  const notified = await notifyPaneWithRetry2(sessionName2, paneId, message);
-  return notified ? { ok: true, transport: "tmux_send_keys", reason: "worker_pane_notified" } : { ok: false, transport: "tmux_send_keys", reason: "worker_notify_failed" };
 }
 async function notifyPaneWithRetry2(sessionName2, paneId, message, maxAttempts = 6, retryDelayMs = 350) {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -3662,9 +3207,7 @@ async function spawnV2Worker(opts) {
     opts.cwd
   ]);
   const paneId = splitResult.stdout.split("\n")[0]?.trim();
-  if (!paneId) {
-    return { paneId: null, startupAssigned: false, startupFailureReason: "pane_id_missing" };
-  }
+  if (!paneId) return null;
   const usePromptMode = isPromptModeAgent(opts.agentType);
   const instruction = buildV2TaskInstruction(
     opts.teamName,
@@ -3672,16 +3215,9 @@ async function spawnV2Worker(opts) {
     opts.task,
     opts.taskId
   );
+  await composeInitialInbox(opts.teamName, opts.workerName, instruction, opts.cwd);
   const relInboxPath = `.omc/state/team/${opts.teamName}/workers/${opts.workerName}/inbox.md`;
-  const inboxTriggerMessage = generateTriggerMessage(opts.teamName, opts.workerName);
-  if (usePromptMode) {
-    await composeInitialInbox(opts.teamName, opts.workerName, instruction, opts.cwd);
-  }
-  const envVars = {
-    ...getWorkerEnv(opts.teamName, opts.workerName, opts.agentType),
-    OMC_TEAM_STATE_ROOT: teamStateRoot(opts.cwd, opts.teamName),
-    OMC_TEAM_LEADER_CWD: opts.cwd
-  };
+  const envVars = getWorkerEnv(opts.teamName, opts.workerName, opts.agentType);
   const resolvedBinaryPath = opts.resolvedBinaryPaths[opts.agentType] ?? resolveValidatedBinaryPath(opts.agentType);
   const modelForAgent = (() => {
     if (opts.agentType === "codex") {
@@ -3727,70 +3263,55 @@ async function spawnV2Worker(opts) {
   if (!usePromptMode) {
     const paneReady = await waitForPaneReady(paneId);
     if (!paneReady) {
-      return {
-        paneId,
-        startupAssigned: false,
-        startupFailureReason: "worker_pane_not_ready"
-      };
-    }
-  }
-  const dispatchOutcome = await queueInboxInstruction({
-    teamName: opts.teamName,
-    workerName: opts.workerName,
-    workerIndex: opts.workerIndex + 1,
-    paneId,
-    inbox: instruction,
-    triggerMessage: inboxTriggerMessage,
-    cwd: opts.cwd,
-    transportPreference: usePromptMode ? "prompt_stdin" : "transport_direct",
-    fallbackAllowed: false,
-    inboxCorrelationKey: `startup:${opts.workerName}:${opts.taskId}`,
-    notify: async (_target, triggerMessage) => {
-      if (usePromptMode) {
-        return { ok: true, transport: "prompt_stdin", reason: "prompt_mode_launch_args" };
+      try {
+        await execFileAsync("tmux", ["kill-pane", "-t", paneId]);
+      } catch {
       }
-      if (opts.agentType === "gemini") {
-        const confirmed = await notifyPaneWithRetry2(opts.sessionName, paneId, "1");
-        if (!confirmed) {
-          return { ok: false, transport: "tmux_send_keys", reason: "worker_notify_failed:trust-confirm" };
+      return null;
+    }
+    if (opts.agentType === "gemini") {
+      const confirmed = await notifyPaneWithRetry2(opts.sessionName, paneId, "1");
+      if (!confirmed) {
+        try {
+          await execFileAsync("tmux", ["kill-pane", "-t", paneId]);
+        } catch {
         }
-        await new Promise((r) => setTimeout(r, 800));
+        return null;
       }
-      return notifyStartupInbox(opts.sessionName, paneId, triggerMessage);
-    },
-    deps: {
-      writeWorkerInbox
+      await new Promise((r) => setTimeout(r, 800));
     }
-  });
-  if (!dispatchOutcome.ok) {
-    return {
+    const notified = await notifyPaneWithRetry2(
+      opts.sessionName,
       paneId,
-      startupAssigned: false,
-      startupFailureReason: dispatchOutcome.reason
-    };
+      `Read and execute your task from: ${relInboxPath}`
+    );
+    if (!notified) {
+      try {
+        await execFileAsync("tmux", ["kill-pane", "-t", paneId]);
+      } catch {
+      }
+      return null;
+    }
   }
-  return {
-    paneId,
-    startupAssigned: true
-  };
+  return paneId;
 }
 async function startTeamV2(config) {
   const sanitized = sanitizeTeamName(config.teamName);
-  const leaderCwd = (0, import_path16.resolve)(config.cwd);
+  const leaderCwd = (0, import_path15.resolve)(config.cwd);
   validateTeamName(sanitized);
   const agentTypes = config.agentTypes;
   const resolvedBinaryPaths = {};
   for (const agentType of [...new Set(agentTypes)]) {
     resolvedBinaryPaths[agentType] = resolveValidatedBinaryPath(agentType);
   }
-  await (0, import_promises7.mkdir)(absPath(leaderCwd, TeamPaths.tasks(sanitized)), { recursive: true });
-  await (0, import_promises7.mkdir)(absPath(leaderCwd, TeamPaths.workers(sanitized)), { recursive: true });
-  await (0, import_promises7.mkdir)((0, import_path16.join)(leaderCwd, ".omc", "state", "team", sanitized, "mailbox"), { recursive: true });
+  await (0, import_promises6.mkdir)(absPath(leaderCwd, TeamPaths.tasks(sanitized)), { recursive: true });
+  await (0, import_promises6.mkdir)(absPath(leaderCwd, TeamPaths.workers(sanitized)), { recursive: true });
+  await (0, import_promises6.mkdir)((0, import_path15.join)(leaderCwd, ".omc", "state", "team", sanitized, "mailbox"), { recursive: true });
   for (let i = 0; i < config.tasks.length; i++) {
     const taskId = String(i + 1);
     const taskFilePath = absPath(leaderCwd, TeamPaths.taskFile(sanitized, taskId));
-    await (0, import_promises7.mkdir)((0, import_path16.join)(taskFilePath, ".."), { recursive: true });
-    await (0, import_promises7.writeFile)(taskFilePath, JSON.stringify({
+    await (0, import_promises6.mkdir)((0, import_path15.join)(taskFilePath, ".."), { recursive: true });
+    await (0, import_promises6.writeFile)(taskFilePath, JSON.stringify({
       id: taskId,
       subject: config.tasks[i].subject,
       description: config.tasks[i].description,
@@ -3815,16 +3336,12 @@ async function startTeamV2(config) {
         subject: t.subject,
         description: t.description
       })),
-      cwd: leaderCwd,
-      ...config.rolePrompt ? { bootstrapInstructions: config.rolePrompt } : {}
+      cwd: leaderCwd
     });
   }
-  const session = await createTeamSession(sanitized, 0, leaderCwd, {
-    newWindow: Boolean(config.newWindow)
-  });
+  const session = await createTeamSession(sanitized, 0, leaderCwd);
   const sessionName2 = session.sessionName;
   const leaderPaneId = session.leaderPaneId;
-  const ownsWindow = session.sessionMode !== "split-pane";
   const workerPaneIds = [];
   const workersInfo = workerNames.map((wName, i) => ({
     name: wName,
@@ -3843,15 +3360,13 @@ async function startTeamV2(config) {
     workers: workersInfo,
     created_at: (/* @__PURE__ */ new Date()).toISOString(),
     tmux_session: sessionName2,
-    tmux_window_owned: ownsWindow,
     next_task_id: config.tasks.length + 1,
     leader_cwd: leaderCwd,
     team_state_root: teamStateRoot(leaderCwd, sanitized),
     leader_pane_id: leaderPaneId,
     hud_pane_id: null,
     resize_hook_name: null,
-    resize_hook_target: null,
-    ...ownsWindow ? { workspace_mode: "single" } : {}
+    resize_hook_target: null
   };
   await saveTeamConfig(teamConfig, leaderCwd);
   const maxConcurrent = Math.min(agentTypes.length, config.tasks.length);
@@ -3860,7 +3375,7 @@ async function startTeamV2(config) {
     const taskId = String(i + 1);
     const task = config.tasks[i];
     if (!task) break;
-    const workerLaunch = await spawnV2Worker({
+    const paneId = await spawnV2Worker({
       sessionName: sessionName2,
       leaderPaneId,
       existingWorkerPaneIds: workerPaneIds,
@@ -3873,20 +3388,13 @@ async function startTeamV2(config) {
       cwd: leaderCwd,
       resolvedBinaryPaths
     });
-    if (workerLaunch.paneId) {
-      workerPaneIds.push(workerLaunch.paneId);
+    if (paneId) {
+      workerPaneIds.push(paneId);
       const workerInfo = workersInfo[i];
       if (workerInfo) {
-        workerInfo.pane_id = workerLaunch.paneId;
-        workerInfo.assigned_tasks = workerLaunch.startupAssigned ? [taskId] : [];
+        workerInfo.pane_id = paneId;
+        workerInfo.assigned_tasks = [taskId];
       }
-    }
-    if (workerLaunch.startupFailureReason) {
-      await appendTeamEvent(sanitized, {
-        type: "team_leader_nudge",
-        worker: "leader-fixed",
-        reason: `startup_manual_intervention_required:${wName}:${workerLaunch.startupFailureReason}`
-      }, leaderCwd);
     }
   }
   teamConfig.workers = workersInfo;
@@ -3901,8 +3409,7 @@ async function startTeamV2(config) {
     sanitizedName: sanitized,
     sessionName: sessionName2,
     config: teamConfig,
-    cwd: leaderCwd,
-    ownsWindow
+    cwd: leaderCwd
   };
 }
 async function monitorTeamV2(teamName, cwd) {
@@ -4126,21 +3633,14 @@ Then exit your session.
   try {
     const { killWorkerPanes: killWorkerPanes2, killTeamSession: killTeamSession2 } = await Promise.resolve().then(() => (init_tmux_session(), tmux_session_exports));
     const workerPaneIds = config.workers.map((w) => w.pane_id).filter((p) => typeof p === "string" && p.trim().length > 0);
-    const ownsWindow = config.tmux_window_owned === true;
     await killWorkerPanes2({
       paneIds: workerPaneIds,
       leaderPaneId: config.leader_pane_id ?? void 0,
       teamName: sanitized,
       cwd
     });
-    if (config.tmux_session && (ownsWindow || !config.tmux_session.includes(":"))) {
-      const sessionMode = ownsWindow ? config.tmux_session.includes(":") ? "dedicated-window" : "detached-session" : "detached-session";
-      await killTeamSession2(
-        config.tmux_session,
-        workerPaneIds,
-        config.leader_pane_id ?? void 0,
-        { sessionMode }
-      );
+    if (config.tmux_session && !config.tmux_session.includes(":")) {
+      await killTeamSession2(config.tmux_session, [], void 0);
     }
   } catch (err) {
     process.stderr.write(`[team/runtime-v2] tmux cleanup: ${err}
@@ -4179,10 +3679,10 @@ function parseWatchdogFailedAt(marker) {
   throw new Error("watchdog marker missing valid failedAt");
 }
 async function checkWatchdogFailedMarker(stateRoot2, startTime) {
-  const markerPath = (0, import_path17.join)(stateRoot2, "watchdog-failed.json");
+  const markerPath = (0, import_path16.join)(stateRoot2, "watchdog-failed.json");
   let raw;
   try {
-    raw = await (0, import_promises8.readFile)(markerPath, "utf-8");
+    raw = await (0, import_promises7.readFile)(markerPath, "utf-8");
   } catch (err) {
     const code = err.code;
     if (code === "ENOENT") return { failed: false };
@@ -4204,39 +3704,39 @@ async function checkWatchdogFailedMarker(stateRoot2, startTime) {
     return { failed: true, reason: `Watchdog marked team failed at ${new Date(failedAt).toISOString()}` };
   }
   try {
-    await (0, import_promises8.unlink)(markerPath);
+    await (0, import_promises7.unlink)(markerPath);
   } catch {
   }
   return { failed: false };
 }
 async function writeResultArtifact(output, finishedAt, jobId = process.env.OMC_JOB_ID, omcJobsDir = process.env.OMC_JOBS_DIR) {
   if (!jobId || !omcJobsDir) return;
-  const resultPath = (0, import_path17.join)(omcJobsDir, `${jobId}-result.json`);
+  const resultPath = (0, import_path16.join)(omcJobsDir, `${jobId}-result.json`);
   const tmpPath = `${resultPath}.tmp`;
-  await (0, import_promises8.writeFile)(
+  await (0, import_promises7.writeFile)(
     tmpPath,
     JSON.stringify({ ...output, finishedAt }),
     "utf-8"
   );
-  await (0, import_promises8.rename)(tmpPath, resultPath);
+  await (0, import_promises7.rename)(tmpPath, resultPath);
 }
-async function writePanesFile(jobId, paneIds, leaderPaneId, sessionName2, ownsWindow) {
+async function writePanesFile(jobId, paneIds, leaderPaneId) {
   const omcJobsDir = process.env.OMC_JOBS_DIR;
   if (!jobId || !omcJobsDir) return;
-  const panesPath = (0, import_path17.join)(omcJobsDir, `${jobId}-panes.json`);
-  await (0, import_promises8.writeFile)(
+  const panesPath = (0, import_path16.join)(omcJobsDir, `${jobId}-panes.json`);
+  await (0, import_promises7.writeFile)(
     panesPath + ".tmp",
-    JSON.stringify({ paneIds: [...paneIds], leaderPaneId, sessionName: sessionName2, ownsWindow })
+    JSON.stringify({ paneIds: [...paneIds], leaderPaneId })
   );
-  await (0, import_promises8.rename)(panesPath + ".tmp", panesPath);
+  await (0, import_promises7.rename)(panesPath + ".tmp", panesPath);
 }
 function collectTaskResults(stateRoot2) {
-  const tasksDir = (0, import_path17.join)(stateRoot2, "tasks");
+  const tasksDir = (0, import_path16.join)(stateRoot2, "tasks");
   try {
-    const files = (0, import_fs14.readdirSync)(tasksDir).filter((f) => f.endsWith(".json"));
+    const files = (0, import_fs13.readdirSync)(tasksDir).filter((f) => f.endsWith(".json"));
     return files.map((f) => {
       try {
-        const raw = (0, import_fs14.readFileSync)((0, import_path17.join)(tasksDir, f), "utf-8");
+        const raw = (0, import_fs13.readFileSync)((0, import_path16.join)(tasksDir, f), "utf-8");
         const task = JSON.parse(raw);
         return {
           taskId: task.id ?? f.replace(".json", ""),
@@ -4281,20 +3781,18 @@ async function main() {
     agentTypes,
     tasks,
     cwd,
-    newWindow = false,
     pollIntervalMs = 5e3,
     sentinelGateTimeoutMs = 3e4,
     sentinelGatePollIntervalMs = 250
   } = input;
   const workerCount = input.workerCount ?? agentTypes.length;
-  const stateRoot2 = (0, import_path17.join)(cwd, `.omc/state/team/${teamName}`);
+  const stateRoot2 = (0, import_path16.join)(cwd, `.omc/state/team/${teamName}`);
   const config = {
     teamName,
     workerCount,
     agentTypes,
     tasks,
-    cwd,
-    newWindow
+    cwd
   };
   const useV2 = isRuntimeV2Enabled();
   let runtime = null;
@@ -4321,8 +3819,7 @@ async function main() {
             runtime.cwd,
             2e3,
             runtime.workerPaneIds,
-            runtime.leaderPaneId,
-            runtime.ownsWindow
+            runtime.leaderPaneId
           );
         }
       } catch (err) {
@@ -4363,15 +3860,13 @@ async function main() {
         workerCount,
         agentTypes,
         tasks,
-        cwd,
-        newWindow
+        cwd
       });
       const v2PaneIds = v2Runtime.config.workers.map((w) => w.pane_id).filter((p) => typeof p === "string");
       runtime = {
         teamName: v2Runtime.teamName,
         sessionName: v2Runtime.sessionName,
         leaderPaneId: v2Runtime.config.leader_pane_id || "",
-        ownsWindow: v2Runtime.ownsWindow,
         config,
         workerNames: v2Runtime.config.workers.map((w) => w.name),
         workerPaneIds: v2PaneIds,
@@ -4390,7 +3885,7 @@ async function main() {
   const expectedTaskCount = tasks.length;
   let mismatchStreak = 0;
   try {
-    await writePanesFile(jobId, runtime.workerPaneIds, runtime.leaderPaneId, runtime.sessionName, Boolean(runtime.ownsWindow));
+    await writePanesFile(jobId, runtime.workerPaneIds, runtime.leaderPaneId);
   } catch (err) {
     process.stderr.write(`[runtime-cli] Failed to persist pane IDs: ${err}
 `);
@@ -4414,7 +3909,7 @@ async function main() {
         return;
       }
       try {
-        await writePanesFile(jobId, runtime.workerPaneIds, runtime.leaderPaneId, runtime.sessionName, Boolean(runtime.ownsWindow));
+        await writePanesFile(jobId, runtime.workerPaneIds, runtime.leaderPaneId);
       } catch {
       }
       process.stderr.write(
@@ -4439,7 +3934,7 @@ async function main() {
       if (snap.allTasksTerminal) {
         const hasFailures = snap.tasks.failed > 0;
         if (!hasFailures) {
-          const sentinelLogPath = (0, import_path17.join)(cwd, "sentinel_stop.jsonl");
+          const sentinelLogPath = (0, import_path16.join)(cwd, "sentinel_stop.jsonl");
           const gateResult = await waitForSentinelReadiness({
             workspace: cwd,
             logPath: sentinelLogPath,
@@ -4490,7 +3985,7 @@ async function main() {
       continue;
     }
     try {
-      await writePanesFile(jobId, runtime.workerPaneIds, runtime.leaderPaneId, runtime.sessionName, Boolean(runtime.ownsWindow));
+      await writePanesFile(jobId, runtime.workerPaneIds, runtime.leaderPaneId);
     } catch (err) {
       process.stderr.write(`[runtime-cli] Failed to persist pane IDs: ${err}
 `);
@@ -4516,7 +4011,7 @@ async function main() {
     mismatchStreak = 0;
     const terminalStatus = getTerminalStatus(snap.taskCounts, expectedTaskCount);
     if (terminalStatus === "completed") {
-      const sentinelLogPath = (0, import_path17.join)(cwd, "sentinel_stop.jsonl");
+      const sentinelLogPath = (0, import_path16.join)(cwd, "sentinel_stop.jsonl");
       const gateResult = await waitForSentinelReadiness({
         workspace: cwd,
         logPath: sentinelLogPath,

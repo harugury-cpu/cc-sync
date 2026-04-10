@@ -11,7 +11,7 @@ Complete reference for oh-my-claudecode. For quick start, see the main [README.m
 - [CLI Commands: ask/team](#cli-commands-askteam)
 - [Legacy MCP Team Runtime Tools (Deprecated)](#legacy-mcp-team-runtime-tools-deprecated)
 - [Agents (28 Total)](#agents-28-total)
-- [Skills (34 Total)](#skills-34-total)
+- [Skills (38 Total)](#skills-38-total)
 - [Slash Commands](#slash-commands)
 - [Hooks System](#hooks-system)
 - [Magic Keywords](#magic-keywords)
@@ -81,7 +81,7 @@ Configure omc for all Claude Code sessions:
 | Feature           | Without     | With omc Config            |
 | ----------------- | ----------- | -------------------------- |
 | Agent delegation  | Manual only | Automatic based on task    |
-| Keyword detection | Disabled    | ultrawork, search |
+| Keyword detection | Disabled    | ultrawork, search, analyze |
 | Todo continuation | Basic       | Enforced completion        |
 | Model routing     | Default     | Smart tier selection       |
 | Skill composition | None        | Auto-combines skills       |
@@ -279,7 +279,7 @@ Always use `oh-my-claudecode:` prefix when calling via Task tool.
 | **Pre-Planning** | -                       | -                     | `analyst`           |
 | **Testing**      | -                       | `qa-tester`           | -                   |
 | **Security**     | `security-reviewer-low` | -                     | `security-reviewer` |
-| **Build**        | -                       | `debugger`            | -                   |
+| **Build**        | -                       | `build-fixer`         | -                   |
 | **TDD**          | -                       | `test-engineer`       | -                   |
 | **Code Review**  | -                       | -                     | `code-reviewer`     |
 | **Data Science** | -                       | `scientist`           | `scientist-high`    |
@@ -307,8 +307,8 @@ Always use `oh-my-claudecode:` prefix when calling via Task tool.
 | Test CLI interactively       | `qa-tester`                   | sonnet |
 | Security review              | `security-reviewer`           | opus   |
 | Quick security scan          | `security-reviewer-low`       | haiku  |
-| Fix build errors             | `debugger`                    | sonnet |
-| Simple build fix             | `debugger` (model=haiku)      | haiku  |
+| Fix build errors             | `build-fixer`                 | sonnet |
+| Simple build fix             | `build-fixer` (model=haiku)   | haiku  |
 | TDD workflow                 | `test-engineer`               | sonnet |
 | Quick test suggestions       | `test-engineer` (model=haiku) | haiku  |
 | Code review                  | `code-reviewer`               | opus   |
@@ -319,20 +319,22 @@ Always use `oh-my-claudecode:` prefix when calling via Task tool.
 
 ---
 
-## Skills (34 Total)
+## Skills (38 Total)
 
-Includes **33 canonical skills + 1 deprecated alias** (`psm`).
+Includes **37 canonical skills + 1 deprecated alias** (`psm`).
 
 | Skill                     | Description                                                      | Manual Command                              |
 | ------------------------- | ---------------------------------------------------------------- | ------------------------------------------- |
+| `analyze`                 | Deep analysis and investigation                                  | `/oh-my-claudecode:analyze`                 |
 | `ask-codex`               | Ask Codex via `omc ask codex` and store an ask artifact          | `/oh-my-claudecode:ask-codex`               |
-| `ai-slop-cleaner`         | Anti-slop cleanup workflow with optional reviewer-only `--review` pass | `/oh-my-claudecode:ai-slop-cleaner`         |
 | `ask-gemini`              | Ask Gemini via `omc ask gemini` and store an ask artifact        | `/oh-my-claudecode:ask-gemini`              |
 | `autopilot`               | Full autonomous execution from idea to working code              | `/oh-my-claudecode:autopilot`               |
+| `build-fix`               | Fix build and TypeScript errors                                  | `/oh-my-claudecode:build-fix`               |
 | `cancel`                  | Unified cancellation for active modes                            | `/oh-my-claudecode:cancel`                  |
 | `ccg`                     | Tri-model workflow via `ask-codex` + `ask-gemini`, then Claude synthesis | `/oh-my-claudecode:ccg`                     |
+| `code-review`             | Comprehensive code review                                        | `/oh-my-claudecode:code-review`             |
 | `configure-notifications` | Configure notifications (Discord/Telegram/Slack/OpenClaw)        | `/oh-my-claudecode:configure-notifications` |
-| `configure-openclaw`      | Configure OpenClaw gateway (deprecated, use configure-notifications) | `/oh-my-claudecode:configure-openclaw`      |
+| `configure-openclaw`      | Configure OpenClaw notification bridge                           | `/oh-my-claudecode:configure-openclaw`      |
 | `deep-interview`          | Socratic deep interview with ambiguity gating                    | `/oh-my-claudecode:deep-interview`          |
 | `deepinit`                | Generate hierarchical AGENTS.md docs                             | `/oh-my-claudecode:deepinit`                |
 | `external-context`        | Parallel document-specialist research                            | `/oh-my-claudecode:external-context`        |
@@ -344,6 +346,7 @@ Includes **33 canonical skills + 1 deprecated alias** (`psm`).
 | `omc-doctor`              | Diagnose and fix installation issues                             | `/oh-my-claudecode:omc-doctor`              |
 | `omc-help`                | Show OMC usage guide                                             | `/oh-my-claudecode:omc-help`                |
 | `omc-plan`                | Planning workflow (`/plan` safe alias)                           | `/oh-my-claudecode:omc-plan`                |
+| `omc-security-review`     | Security review workflow (`/security-review` safe alias)         | `/oh-my-claudecode:omc-security-review`     |
 | `omc-setup`               | One-time setup wizard                                            | `/oh-my-claudecode:omc-setup`               |
 | `omc-teams`               | Legacy compatibility wrapper for `omc team` CLI                  | `/oh-my-claudecode:omc-teams`               |
 | `project-session-manager` | Manage isolated dev environments (git worktrees + tmux)          | `/oh-my-claudecode:project-session-manager` |
@@ -352,9 +355,9 @@ Includes **33 canonical skills + 1 deprecated alias** (`psm`).
 | `ralph-init`              | Initialize PRD for structured ralph execution                    | `/oh-my-claudecode:ralph-init`              |
 | `ralplan`                 | Consensus planning alias for `/omc-plan --consensus`             | `/oh-my-claudecode:ralplan`                 |
 | `release`                 | Automated release workflow                                       | `/oh-my-claudecode:release`                 |
-| `setup`                   | Unified setup entrypoint for install, diagnostics, and MCP configuration | `/oh-my-claudecode:setup`              |
 | `sciomc`                  | Parallel scientist orchestration                                 | `/oh-my-claudecode:sciomc`                  |
 | `skill`                   | Manage local skills (list/add/remove/search/edit)                | `/oh-my-claudecode:skill`                   |
+| `tdd`                     | Test-first workflow enforcement                                  | `/oh-my-claudecode:tdd`                     |
 | `team`                    | Coordinated multi-agent workflow                                 | `/oh-my-claudecode:team`                    |
 | `trace`                   | Show orchestration trace timeline                                | `/oh-my-claudecode:trace`                   |
 | `ultraqa`                 | QA cycle until goal is met                                       | `/oh-my-claudecode:ultraqa`                 |
@@ -367,11 +370,10 @@ Includes **33 canonical skills + 1 deprecated alias** (`psm`).
 
 ## Slash Commands
 
-All installed skills are available as slash commands with the prefix `/oh-my-claudecode:`. Compatibility keyword modes like `deep-analyze` and `tdd` are prompt-triggered behaviors, not standalone slash commands.
+All skills are available as slash commands with the prefix `/oh-my-claudecode:`.
 
 | Command                                     | Description                                                                                   |
 | ------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `/oh-my-claudecode:ai-slop-cleaner <target>`  | Run the anti-slop cleanup workflow (`--review` for reviewer-only pass)                       |
 | `/oh-my-claudecode:autopilot <task>`        | Full autonomous execution                                                                     |
 | `/oh-my-claudecode:ultrawork <task>`        | Maximum performance mode with parallel agents                                                 |
 | `/oh-my-claudecode:team <N>:<agent> <task>` | Coordinated native team workflow                                                              |
@@ -382,11 +384,12 @@ All installed skills are available as slash commands with the prefix `/oh-my-cla
 | `/oh-my-claudecode:ralplan <description>`   | Iterative planning with consensus structured deliberation (`--deliberate` for high-risk mode) |
 | `/oh-my-claudecode:deep-interview <idea>`   | Socratic interview with ambiguity scoring before execution                                    |
 | `/oh-my-claudecode:deepinit [path]`         | Index codebase with hierarchical AGENTS.md files                                              |
+| `/oh-my-claudecode:analyze <target>`        | Deep analysis and investigation                                                               |
 | `/oh-my-claudecode:sciomc <topic>`          | Parallel research orchestration                                                               |
+| `/oh-my-claudecode:tdd <feature>`           | TDD workflow enforcement                                                                      |
 | `/oh-my-claudecode:learner`                 | Extract reusable skill from session                                                           |
 | `/oh-my-claudecode:note <content>`          | Save notes to notepad.md                                                                      |
 | `/oh-my-claudecode:cancel`                  | Unified cancellation                                                                          |
-| `/oh-my-claudecode:setup`                   | Unified setup entrypoint (`setup`, `setup doctor`, `setup mcp`)                              |
 | `/oh-my-claudecode:omc-setup`               | One-time setup wizard                                                                         |
 | `/oh-my-claudecode:omc-doctor`              | Diagnose and fix installation issues                                                          |
 | `/oh-my-claudecode:omc-help`                | Show OMC usage guide                                                                          |
@@ -509,9 +512,8 @@ Use these trigger phrases in natural language prompts to activate enhanced modes
 | ------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `ultrawork`, `ulw`                                      | Activates parallel agent orchestration                                                        |
 | `autopilot`, `build me`, `I want a`                     | Full autonomous execution                                                                     |
-| `deslop`, `anti-slop`, cleanup/refactor + slop smells         | Anti-slop cleanup workflow (`ai-slop-cleaner`)                                               |
 | `ralph`, `don't stop`, `must complete`                  | Persistence until verified complete                                                           |
-| `ccg`, `claude-codex-gemini`                            | Claude-Codex-Gemini orchestration                                                             |
+| `team`, `coordinated team`                              | Team pipeline orchestration                                                                   |
 | `ralplan`                                               | Iterative planning consensus with structured deliberation (`--deliberate` for high-risk mode) |
 | `deep interview`, `ouroboros`                           | Deep Socratic interview with mathematical clarity gating                                      |
 | `deepsearch`, `search the codebase`, `find in codebase` | Codebase-focused search mode                                                                  |

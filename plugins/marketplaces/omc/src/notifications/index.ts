@@ -62,7 +62,6 @@ export {
   isEventEnabled,
   getEnabledPlatforms,
   getVerbosity,
-  getTmuxTailLines,
   isEventAllowedByVerbosity,
   shouldIncludeTmuxTail,
 } from "./config.js";
@@ -102,7 +101,6 @@ import {
   getNotificationConfig,
   isEventEnabled,
   getVerbosity,
-  getTmuxTailLines,
   isEventAllowedByVerbosity,
   shouldIncludeTmuxTail,
 } from "./config.js";
@@ -187,11 +185,9 @@ export async function notify(
         const { capturePaneContent } = await import(
           "../features/rate-limit-wait/tmux-detector.js"
         );
-        const tailLines = getTmuxTailLines(config);
-        const tail = capturePaneContent(payload.tmuxPaneId, tailLines);
+        const tail = capturePaneContent(payload.tmuxPaneId, 15);
         if (tail) {
           payload.tmuxTail = tail;
-          payload.maxTailLines = tailLines;
         }
       } catch {
         // Non-blocking: tmux capture is best-effort

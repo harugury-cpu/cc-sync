@@ -44,12 +44,12 @@ describe('worker-bootstrap', () => {
 
     it('does not include bootstrap instructions when not provided', () => {
       const overlay = generateWorkerOverlay(baseParams);
-      expect(overlay).not.toContain('Role Context');
+      expect(overlay).not.toContain('Additional Instructions');
     });
 
     it('includes bootstrap instructions when provided', () => {
       const overlay = generateWorkerOverlay({ ...baseParams, bootstrapInstructions: 'Focus on TypeScript' });
-      expect(overlay).toContain('Role Context');
+      expect(overlay).toContain('Additional Instructions');
       expect(overlay).toContain('Focus on TypeScript');
     });
 
@@ -65,16 +65,6 @@ describe('worker-bootstrap', () => {
       expect(geminiOverlay).toContain('Agent-Type Guidance (gemini)');
       expect(geminiOverlay).toContain('milestone');
     });
-    it('documents CLI lifecycle examples that match the active team api contract', () => {
-      const overlay = generateWorkerOverlay(baseParams);
-      expect(overlay).toContain('omc team api read-task');
-      expect(overlay).toContain('omc team api claim-task');
-      expect(overlay).toContain('omc team api transition-task-status');
-      expect(overlay).toContain('omc team api release-task-claim --input');
-      expect(overlay).toContain('claim_token');
-      expect(overlay).not.toContain('Read your task file at');
-    });
-
   });
 
   describe('getWorkerEnv', () => {

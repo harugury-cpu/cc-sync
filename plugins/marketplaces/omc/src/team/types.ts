@@ -264,7 +264,6 @@ export interface TeamConfig {
   workers: WorkerInfo[];
   created_at: string;
   tmux_session: string;
-  tmux_window_owned?: boolean;
   next_task_id: number;
   leader_cwd?: string;
   team_state_root?: string;

@@ -203,10 +203,7 @@ export function isCliAvailable(agentType) {
             const result = spawnSync(comspec, ['/d', '/s', '/c', `"${resolvedBinary}" --version`], { timeout: 5000 });
             return result.status === 0;
         }
-        const result = spawnSync(resolvedBinary, ['--version'], {
-            timeout: 5000,
-            shell: process.platform === 'win32',
-        });
+        const result = spawnSync(resolvedBinary, ['--version'], { timeout: 5000 });
         return result.status === 0;
     }
     catch {
@@ -243,40 +240,13 @@ export function buildWorkerCommand(agentType, config) {
         .map((part) => `'${part.replace(/'/g, `'\"'\"'`)}'`)
         .join(' ');
 }
-const WORKER_MODEL_ENV_ALLOWLIST = [
-    'ANTHROPIC_MODEL',
-    'CLAUDE_MODEL',
-    'ANTHROPIC_BASE_URL',
-    'CLAUDE_CODE_USE_BEDROCK',
-    'CLAUDE_CODE_USE_VERTEX',
-    'CLAUDE_CODE_BEDROCK_OPUS_MODEL',
-    'CLAUDE_CODE_BEDROCK_SONNET_MODEL',
-    'CLAUDE_CODE_BEDROCK_HAIKU_MODEL',
-    'ANTHROPIC_DEFAULT_OPUS_MODEL',
-    'ANTHROPIC_DEFAULT_SONNET_MODEL',
-    'ANTHROPIC_DEFAULT_HAIKU_MODEL',
-    'OMC_MODEL_HIGH',
-    'OMC_MODEL_MEDIUM',
-    'OMC_MODEL_LOW',
-    'OMC_EXTERNAL_MODELS_DEFAULT_CODEX_MODEL',
-    'OMC_CODEX_DEFAULT_MODEL',
-    'OMC_EXTERNAL_MODELS_DEFAULT_GEMINI_MODEL',
-    'OMC_GEMINI_DEFAULT_MODEL',
-];
-export function getWorkerEnv(teamName, workerName, agentType, env = process.env) {
+export function getWorkerEnv(teamName, workerName, agentType) {
     validateTeamName(teamName);
-    const workerEnv = {
+    return {
         OMC_TEAM_WORKER: `${teamName}/${workerName}`,
         OMC_TEAM_NAME: teamName,
         OMC_WORKER_AGENT_TYPE: agentType,
     };
-    for (const key of WORKER_MODEL_ENV_ALLOWLIST) {
-        const value = env[key];
-        if (typeof value === 'string' && value.length > 0) {
-            workerEnv[key] = value;
-        }
-    }
-    return workerEnv;
 }
 export function parseCliOutput(agentType, rawOutput) {
     return getContract(agentType).parseOutput(rawOutput);

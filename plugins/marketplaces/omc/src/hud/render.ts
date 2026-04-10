@@ -27,7 +27,6 @@ import { renderModel } from './elements/model.js';
 import { renderApiKeySource } from './elements/api-key-source.js';
 import { renderCallCounts } from './elements/call-counts.js';
 import { renderContextLimitWarning } from './elements/context-warning.js';
-import { renderMissionBoard } from './mission-board.js';
 
 /**
  * ANSI escape sequence regex (matches SGR and other CSI sequences).
@@ -239,19 +238,16 @@ export async function render(context: HudRenderContext, config: HudConfig): Prom
     }
   }
 
-  // Rate limits (5h and weekly) - data takes priority over error indicator
+  // Rate limits (5h and weekly) - show error indicator or data
   if (enabledElements.rateLimits && context.rateLimitsResult) {
-    if (context.rateLimitsResult.rateLimits) {
-      // Data available (possibly stale from 429) → always show data
-      const stale = context.rateLimitsResult.stale;
+    const errorIndicator = renderRateLimitsError(context.rateLimitsResult);
+    if (errorIndicator) {
+      elements.push(errorIndicator);
+    } else if (context.rateLimitsResult.rateLimits) {
       const limits = enabledElements.useBars
-        ? renderRateLimitsWithBar(context.rateLimitsResult.rateLimits, undefined, stale)
-        : renderRateLimits(context.rateLimitsResult.rateLimits, stale);
+        ? renderRateLimitsWithBar(context.rateLimitsResult.rateLimits)
+        : renderRateLimits(context.rateLimitsResult.rateLimits);
       if (limits) elements.push(limits);
-    } else {
-      // No data → show error indicator
-      const errorIndicator = renderRateLimitsError(context.rateLimitsResult);
-      if (errorIndicator) elements.push(errorIndicator);
     }
   }
 
@@ -378,6 +374,7 @@ export async function render(context: HudRenderContext, config: HudConfig): Prom
 
   // Compose output
   const outputLines: string[] = [];
+
   const gitInfoLine = gitElements.length > 0 ? gitElements.join(dim(PLAIN_SEPARATOR)) : null;
   const headerLine = elements.join(dim(PLAIN_SEPARATOR));
 
@@ -402,10 +399,6 @@ export async function render(context: HudRenderContext, config: HudConfig): Prom
   if (enabledElements.todos) {
     const todos = renderTodosWithCurrent(context.todos);
     if (todos) detailLines.push(todos);
-  }
-
-  if (context.missionBoard && (config.missionBoard?.enabled ?? config.elements.missionBoard ?? false)) {
-    detailLines.unshift(...renderMissionBoard(context.missionBoard, config.missionBoard));
   }
 
   const widthAdjustedLines = applyMaxWidthByMode(

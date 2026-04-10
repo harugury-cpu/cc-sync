@@ -68,17 +68,18 @@ const WAITING_PATTERNS = [
 ];
 
 /**
- * Check if tmux is installed and available.
- * On Windows, a tmux-compatible binary such as psmux may provide tmux.
+ * Check if tmux is installed and available
  */
 export function isTmuxAvailable(): boolean {
+  if (process.platform === 'win32') {
+    return false; // tmux is not available on native Windows
+  }
   try {
-    const result = spawnSync('tmux', ['-V'], {
+    const result = spawnSync('which', ['tmux'], {
       encoding: 'utf-8',
-      timeout: 3000,
-      stdio: 'pipe',
+      timeout: 2000,
     });
-    return result.status === 0;
+    return result.status === 0 && result.stdout.trim().length > 0;
   } catch {
     return false;
   }
@@ -102,7 +103,7 @@ export function listTmuxPanes(): TmuxPane[] {
   try {
     // Format: session_name:window_index.pane_index pane_id pane_active window_name pane_title
     const format = '#{session_name}:#{window_index}.#{pane_index} #{pane_id} #{pane_active} #{window_name} #{pane_title}';
-    const result = execSync(`tmux list-panes -a -F "${format}"`, {
+    const result = execSync(`tmux list-panes -a -F '${format}'`, {
       encoding: 'utf-8',
       timeout: 5000,
     });
@@ -159,7 +160,7 @@ export function capturePaneContent(paneId: string, lines = 15): string {
 
   try {
     // Capture the last N lines from the pane
-    const result = execSync(`tmux capture-pane -t "${paneId}" -p -S -${safeLines}`, {
+    const result = execSync(`tmux capture-pane -t '${paneId}' -p -S -${safeLines}`, {
       encoding: 'utf-8',
       timeout: 5000,
     });

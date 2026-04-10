@@ -8,6 +8,7 @@ This is the single source of truth for all agent tier information. All skill fil
 |--------|-------------|-----------------|-------------|
 | **Analysis** | architect-low | architect-medium | architect |
 | **Execution** | executor-low | executor | executor-high |
+| **Deep Work** | - | - | deep-executor |
 | **Search** | explore | - | explore-high |
 | **Research** | - | document-specialist | - |
 | **Frontend** | designer-low | designer | designer-high |
@@ -18,7 +19,8 @@ This is the single source of truth for all agent tier information. All skill fil
 | **Pre-Planning** | - | - | analyst |
 | **Testing** | - | qa-tester | - |
 | **Security** | security-reviewer-low | - | security-reviewer |
-| **TDD** | test-engineer (model=haiku) | test-engineer | - |
+| **Build** | - | build-fixer | - |
+| **TDD** | tdd-guide-low | tdd-guide | - |
 | **Code Review** | - | - | code-reviewer |
 | **Data Science** | - | scientist | scientist-high |
 
@@ -53,10 +55,10 @@ This is the single source of truth for all agent tier information. All skill fil
 | Interactive CLI testing | qa-tester | MEDIUM |
 | Security review | security-reviewer | HIGH |
 | Quick security scan | security-reviewer-low | LOW |
-| Fix build errors | debugger | MEDIUM |
-| Simple build fix | debugger (model=haiku) | LOW |
-| TDD workflow | test-engineer | MEDIUM |
-| Quick test suggestions | test-engineer (model=haiku) | LOW |
+| Fix build errors | build-fixer | MEDIUM |
+| Simple build fix | build-fixer (model=haiku) | LOW |
+| TDD workflow | tdd-guide | MEDIUM |
+| Quick test suggestions | tdd-guide-low | LOW |
 | Code review | code-reviewer | HIGH |
 | Quick code check | code-reviewer (model=haiku) | LOW |
 | Data analysis/stats | scientist | MEDIUM |
@@ -66,11 +68,11 @@ This is the single source of truth for all agent tier information. All skill fil
 | Get file/workspace symbol outline | explore | LOW |
 | Structural code pattern search | explore | LOW |
 | Structural code transformation | executor-high | HIGH |
-| Project-wide type checking | debugger | MEDIUM |
+| Project-wide type checking | build-fixer | MEDIUM |
 | Check single file for errors | executor-low | LOW |
 | Data analysis / computation | scientist | MEDIUM |
-| Complex autonomous work | executor-high | HIGH |
-| Deep goal-oriented execution | executor-high | HIGH |
+| Complex autonomous work | deep-executor | HIGH |
+| Deep goal-oriented execution | deep-executor | HIGH |
 
 ## Usage
 
@@ -121,8 +123,10 @@ For token savings, prefer lower tiers when the task allows:
 | `executor-low` | yes | - | - | - | - | - | - |
 | `executor` | yes | yes | - | - | - | - | - |
 | `executor-high` | yes | yes | - | - | yes | yes | - |
-| `debugger` | yes | yes | - | - | - | - | - |
-| `test-engineer` | yes | - | - | - | - | - | - |
+| `deep-executor` | yes | yes | - | - | yes | yes | - |
+| `build-fixer` | yes | yes | - | - | - | - | - |
+| `tdd-guide` | yes | - | - | - | - | - | - |
+| `tdd-guide-low` | yes | - | - | - | - | - | - |
 | `code-reviewer` | yes | - | - | - | yes | - | - |
 | `qa-tester` | yes | - | - | - | - | - | - |
 | `scientist` | - | - | - | - | - | - | yes |
@@ -150,7 +154,7 @@ For complex rename or refactoring tasks requiring implementation, delegate to `e
 - **Need to find all usages of a symbol?** Use `lsp_find_references` via `explore-high` (only agent with it)
 - **Need structural code patterns?** (e.g., "find all functions matching X shape") Use `ast_grep_search` via `explore` family, `architect`/`architect-medium`, or `code-reviewer`
 - **Need to transform code structurally?** Use `ast_grep_replace` via `executor-high` (only agent with it)
-- **Need project-wide type checking?** Use `lsp_diagnostics_directory` via `architect`/`architect-medium`, `executor`/`executor-high`, or `debugger`
+- **Need project-wide type checking?** Use `lsp_diagnostics_directory` via `architect`/`architect-medium`, `executor`/`executor-high`, or `build-fixer`
 - **Need single-file error checking?** Use `lsp_diagnostics` via many agents (see matrix)
 - **Need data analysis / computation?** Use `python_repl` via `scientist` or `scientist-high`
 - **Need quick type info or definition lookup?** Use `lsp_hover`/`lsp_goto_definition` directly (orchestrator-direct tools)

@@ -24,7 +24,6 @@ export interface TeamRuntimeV2 {
     sessionName: string;
     config: TeamConfig;
     cwd: string;
-    ownsWindow: boolean;
 }
 export interface TeamSnapshotV2 {
     teamName: string;
@@ -73,9 +72,6 @@ export interface StartTeamV2Config {
         blocked_by?: string[];
     }>;
     cwd: string;
-    newWindow?: boolean;
-    roleName?: string;
-    rolePrompt?: string;
 }
 /**
  * Start a team with the v2 event-driven runtime.

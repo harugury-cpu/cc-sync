@@ -25,14 +25,12 @@ check_auto_rules() {
 
     [ "$matched" -eq 1 ] || continue
 
-    # hit_count 증가
     hit_count=$((hit_count + 1))
     jq --arg rid "$id" --argjson hc "$hit_count" \
       '(.auto_rules[] | select(.id == $rid) | .hit_count) |= $hc' \
       "$TRIGGERS_FILE" > /tmp/harsh_triggers_update.json \
       && mv /tmp/harsh_triggers_update.json "$TRIGGERS_FILE"
 
-    # 2회 이상 재발 시 HARD 승격
     if [ "$hit_count" -ge 2 ] && [ "$level" = "SOFT" ]; then
       jq --arg rid "$id" \
         '(.auto_rules[] | select(.id == $rid) | .level) |= "HARD"' \
@@ -60,32 +58,43 @@ check_triggers() {
   local level="$1"
   local matches
 
-  matches="$(jq -c --arg level "$level" '.triggers[]? | select(.level == $level)' "$TRIGGERS_FILE" 2>/dev/null || true)"
+  # 수정: .triggers[$level][]? — 올바른 객체 구조 접근
+  matches="$(jq -c --arg level "$level" '.triggers[$level][]?' "$TRIGGERS_FILE" 2>/dev/null || true)"
   [ -n "$matches" ] || return 0
 
   while IFS= read -r trigger; do
     [ -n "$trigger" ] || continue
 
-    local id description
+    local id description matched
     id="$(printf '%s\n' "$trigger" | jq -r '.id // empty')"
     [ -n "$id" ] || continue
+    matched=0
 
-    if grep -Fq -- "$id" "$TMP_FILE"; then
-      description="$(printf '%s\n' "$trigger" | jq -r '.description // .id // "trigger matched"')"
+    # 수정: id grep → keywords[] 매칭
+    while IFS= read -r kw; do
+      [ -n "$kw" ] || continue
+      if grep -qiF "$kw" "$TMP_FILE" 2>/dev/null; then
+        matched=1
+        break
+      fi
+    done < <(printf '%s\n' "$trigger" | jq -r '.keywords[]? // empty')
 
-      case "$level" in
-        EXTREME)
-          echo "🚫 [EXTREME] ${description} — 응답 차단" >&2
-          return 2
-          ;;
-        HIGH)
-          echo "⚠️ [HIGH] ${description}" >&2
-          ;;
-        MEDIUM)
-          echo "💡 [MEDIUM] ${description}" >&2
-          ;;
-      esac
-    fi
+    [ "$matched" -eq 1 ] || continue
+
+    description="$(printf '%s\n' "$trigger" | jq -r '.description // .id // "trigger matched"')"
+
+    case "$level" in
+      EXTREME)
+        echo "🚫 [EXTREME] ${description} — 응답 차단" >&2
+        return 2
+        ;;
+      HIGH)
+        echo "⚠️ [HIGH] ${description}" >&2
+        ;;
+      MEDIUM)
+        echo "💡 [MEDIUM] ${description}" >&2
+        ;;
+    esac
   done <<< "$matches"
 }
 

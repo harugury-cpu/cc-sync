@@ -76,12 +76,12 @@ export async function writeResultArtifact(output, finishedAt, jobId = process.en
     await writeFile(tmpPath, JSON.stringify({ ...output, finishedAt }), 'utf-8');
     await rename(tmpPath, resultPath);
 }
-async function writePanesFile(jobId, paneIds, leaderPaneId, sessionName, ownsWindow) {
+async function writePanesFile(jobId, paneIds, leaderPaneId) {
     const omcJobsDir = process.env.OMC_JOBS_DIR;
     if (!jobId || !omcJobsDir)
         return;
     const panesPath = join(omcJobsDir, `${jobId}-panes.json`);
-    await writeFile(panesPath + '.tmp', JSON.stringify({ paneIds: [...paneIds], leaderPaneId, sessionName, ownsWindow }));
+    await writeFile(panesPath + '.tmp', JSON.stringify({ paneIds: [...paneIds], leaderPaneId }));
     await rename(panesPath + '.tmp', panesPath);
 }
 function collectTaskResults(stateRoot) {
@@ -137,7 +137,7 @@ async function main() {
         process.stderr.write(`[runtime-cli] Missing required fields: ${missing.join(', ')}\n`);
         process.exit(1);
     }
-    const { teamName, agentTypes, tasks, cwd, newWindow = false, pollIntervalMs = 5000, sentinelGateTimeoutMs = 30_000, sentinelGatePollIntervalMs = 250, } = input;
+    const { teamName, agentTypes, tasks, cwd, pollIntervalMs = 5000, sentinelGateTimeoutMs = 30_000, sentinelGatePollIntervalMs = 250, } = input;
     const workerCount = input.workerCount ?? agentTypes.length;
     const stateRoot = join(cwd, `.omc/state/team/${teamName}`);
     const config = {
@@ -146,7 +146,6 @@ async function main() {
         agentTypes: agentTypes,
         tasks,
         cwd,
-        newWindow,
     };
     const useV2 = isRuntimeV2Enabled();
     let runtime = null;
@@ -171,7 +170,7 @@ async function main() {
                     await shutdownTeamV2(runtime.teamName, runtime.cwd, { force: true });
                 }
                 else {
-                    await shutdownTeam(runtime.teamName, runtime.sessionName, runtime.cwd, 2_000, runtime.workerPaneIds, runtime.leaderPaneId, runtime.ownsWindow);
+                    await shutdownTeam(runtime.teamName, runtime.sessionName, runtime.cwd, 2_000, runtime.workerPaneIds, runtime.leaderPaneId);
                 }
             }
             catch (err) {
@@ -216,7 +215,6 @@ async function main() {
                 agentTypes,
                 tasks,
                 cwd,
-                newWindow,
             });
             const v2PaneIds = v2Runtime.config.workers
                 .map(w => w.pane_id)
@@ -225,7 +223,6 @@ async function main() {
                 teamName: v2Runtime.teamName,
                 sessionName: v2Runtime.sessionName,
                 leaderPaneId: v2Runtime.config.leader_pane_id || '',
-                ownsWindow: v2Runtime.ownsWindow,
                 config,
                 workerNames: v2Runtime.config.workers.map(w => w.name),
                 workerPaneIds: v2PaneIds,
@@ -246,7 +243,7 @@ async function main() {
     const expectedTaskCount = tasks.length;
     let mismatchStreak = 0;
     try {
-        await writePanesFile(jobId, runtime.workerPaneIds, runtime.leaderPaneId, runtime.sessionName, Boolean(runtime.ownsWindow));
+        await writePanesFile(jobId, runtime.workerPaneIds, runtime.leaderPaneId);
     }
     catch (err) {
         process.stderr.write(`[runtime-cli] Failed to persist pane IDs: ${err}\n`);
@@ -272,7 +269,7 @@ async function main() {
                 return;
             }
             try {
-                await writePanesFile(jobId, runtime.workerPaneIds, runtime.leaderPaneId, runtime.sessionName, Boolean(runtime.ownsWindow));
+                await writePanesFile(jobId, runtime.workerPaneIds, runtime.leaderPaneId);
             }
             catch { /* best-effort panes file write */ }
             process.stderr.write(`[runtime-cli/v2] phase=${snap.phase} pending=${snap.tasks.pending} in_progress=${snap.tasks.in_progress} completed=${snap.tasks.completed} failed=${snap.tasks.failed} dead=${snap.deadWorkers.length} totalMs=${snap.performance.total_ms}\n`);
@@ -344,7 +341,7 @@ async function main() {
             continue;
         }
         try {
-            await writePanesFile(jobId, runtime.workerPaneIds, runtime.leaderPaneId, runtime.sessionName, Boolean(runtime.ownsWindow));
+            await writePanesFile(jobId, runtime.workerPaneIds, runtime.leaderPaneId);
         }
         catch (err) {
             process.stderr.write(`[runtime-cli] Failed to persist pane IDs: ${err}\n`);

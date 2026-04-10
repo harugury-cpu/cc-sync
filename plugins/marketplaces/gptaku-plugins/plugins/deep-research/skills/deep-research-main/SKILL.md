@@ -197,7 +197,7 @@ Before generating ANY search query, determine today's date from the system conte
 ### Phase 3: Iterative Querying
 - Execute searches systematically with parallel agents
 - Navigate and extract relevant information
-  - WebFetch 실패 시 → `tool_strategy.md` Tier 2.5 Fallback 순서대로 시도
+  - WebFetch 실패 시 → `tool_strategy.md`의 플랫폼별 접근 전략 또는 Fallback 순서대로 시도
   - 우회 성공 시 소스 신뢰도에 `via_fallback` 태그 추가
   - 실패한 URL과 우회 시도 결과를 `sources/failed_urls.txt`에 함께 기록
 - Formulate new queries based on findings
@@ -242,7 +242,7 @@ Deploy 3-5 parallel agents to maximize coverage:
 | Academic/Technical | 1-2 | Papers, specs, methodology | Technical analysis with citations |
 | Cross-Reference | 1 | Fact-checking, verification | Confidence ratings for key findings |
 
-Launch multiple Task calls in a single response for parallel execution. Each agent receives a focused prompt with specific subtopic and citation requirements.
+Launch multiple Task calls in a single response for parallel execution with `mode: "bypassPermissions"`. Each agent receives a focused prompt with specific subtopic and citation requirements.
 
 For detailed agent prompt templates and Graph of Thoughts integration:
 `${CLAUDE_PLUGIN_ROOT}/skills/deep-research-main/references/agent_prompts.md`
@@ -251,9 +251,10 @@ For detailed agent prompt templates and Graph of Thoughts integration:
 
 ## Tool Usage
 
-Use whichever search and extraction tools are available. Prioritize: MCP tools (Firecrawl, Google Search, Exa) > Built-in tools (WebSearch, WebFetch) > Specialized tools (GitHub search, library docs).
+기본 도구(WebSearch, WebFetch, Bash/curl)로 리서치를 수행한다. 플랫폼별 최적 접근법은 tool_strategy.md를 참조한다.
+환경에 MCP 도구(Perplexity, Firecrawl, Exa 등)가 설치되어 있으면 우선 활용하되, 없어도 기본 도구만으로 충분한 리서치가 가능하다.
 
-Deploy parallel research agents using the Task tool with `run_in_background=True` for concurrent subtopic investigation.
+Deploy parallel research agents using the Task tool with `run_in_background=True` and `mode: "bypassPermissions"` for concurrent subtopic investigation.
 
 For detailed tool strategy and code examples:
 `${CLAUDE_PLUGIN_ROOT}/skills/deep-research-main/references/tool_strategy.md`
@@ -472,8 +473,9 @@ for phase_num in range(1, 8):
 
 ### Network Failures
 - Retry up to 3 times with backoff
-- If still failing → Execute Tier 2.5 Fallback Strategy (`tool_strategy.md` 참조)
-  - 모바일 UA curl → RSS 피드 → OGP 메타태그 → Google 캐시/Wayback → curl_cffi → Playwright MCP
+- If still failing → tool_strategy.md의 "접근 불가 시 우회 전략 (Fallback)" 참조
+  - 모바일 UA curl → OGP 메타태그 → Google 캐시/Wayback → curl_cffi → Playwright MCP
+- 응답 검증 규칙으로 성공/실패 판정 (로그인 페이지, CAPTCHA, 빈 SPA 감지)
 - Log failed URLs + fallback attempt results to `sources/failed_urls.txt`
 - Continue with available sources (including fallback-retrieved content)
 

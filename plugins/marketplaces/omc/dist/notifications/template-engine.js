@@ -70,7 +70,7 @@ function buildFooterText(payload) {
 function buildTmuxTailBlock(payload) {
     if (!payload.tmuxTail)
         return "";
-    const parsed = parseTmuxTail(payload.tmuxTail, payload.maxTailLines);
+    const parsed = parseTmuxTail(payload.tmuxTail);
     if (!parsed)
         return "";
     return `\n\n**Recent output:**\n\`\`\`\n${parsed}\n\`\`\``;

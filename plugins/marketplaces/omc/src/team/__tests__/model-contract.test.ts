@@ -4,6 +4,7 @@ import {
   getContract,
   buildLaunchArgs,
   buildWorkerArgv,
+  buildWorkerCommand,
   getWorkerEnv,
   parseCliOutput,
   isPromptModeAgent,
@@ -23,14 +24,6 @@ vi.mock('child_process', async (importOriginal) => {
     spawnSync: vi.fn(actual.spawnSync),
   };
 });
-
-function setProcessPlatform(platform: NodeJS.Platform): () => void {
-  const originalPlatform = process.platform;
-  Object.defineProperty(process, 'platform', { value: platform, configurable: true });
-  return () => {
-    Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
-  };
-}
 
 describe('model-contract', () => {
   describe('backward-compat API shims', () => {
@@ -141,44 +134,6 @@ describe('model-contract', () => {
       expect(env.OMC_WORKER_AGENT_TYPE).toBe('codex');
     });
 
-    it('propagates allowlisted model selection env vars into worker startup env', () => {
-      const env = getWorkerEnv('my-team', 'worker-1', 'claude', {
-        ANTHROPIC_MODEL: 'claude-opus-4-1',
-        CLAUDE_MODEL: 'claude-sonnet-4-5',
-        ANTHROPIC_BASE_URL: 'https://example-gateway.invalid',
-        CLAUDE_CODE_USE_BEDROCK: '1',
-        CLAUDE_CODE_BEDROCK_OPUS_MODEL: 'us.anthropic.claude-opus-4-6-v1:0',
-        CLAUDE_CODE_BEDROCK_SONNET_MODEL: 'us.anthropic.claude-sonnet-4-6-v1:0',
-        CLAUDE_CODE_BEDROCK_HAIKU_MODEL: 'us.anthropic.claude-haiku-4-5-v1:0',
-        ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-6-custom',
-        ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-4-6-custom',
-        ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4-5-custom',
-        OMC_MODEL_HIGH: 'claude-opus-4-6-override',
-        OMC_MODEL_MEDIUM: 'claude-sonnet-4-6-override',
-        OMC_MODEL_LOW: 'claude-haiku-4-5-override',
-        OMC_EXTERNAL_MODELS_DEFAULT_CODEX_MODEL: 'gpt-5',
-        OMC_GEMINI_DEFAULT_MODEL: 'gemini-2.5-pro',
-        ANTHROPIC_API_KEY: 'should-not-be-forwarded',
-      });
-
-      expect(env.ANTHROPIC_MODEL).toBe('claude-opus-4-1');
-      expect(env.CLAUDE_MODEL).toBe('claude-sonnet-4-5');
-      expect(env.ANTHROPIC_BASE_URL).toBe('https://example-gateway.invalid');
-      expect(env.CLAUDE_CODE_USE_BEDROCK).toBe('1');
-      expect(env.CLAUDE_CODE_BEDROCK_OPUS_MODEL).toBe('us.anthropic.claude-opus-4-6-v1:0');
-      expect(env.CLAUDE_CODE_BEDROCK_SONNET_MODEL).toBe('us.anthropic.claude-sonnet-4-6-v1:0');
-      expect(env.CLAUDE_CODE_BEDROCK_HAIKU_MODEL).toBe('us.anthropic.claude-haiku-4-5-v1:0');
-      expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('claude-opus-4-6-custom');
-      expect(env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('claude-sonnet-4-6-custom');
-      expect(env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('claude-haiku-4-5-custom');
-      expect(env.OMC_MODEL_HIGH).toBe('claude-opus-4-6-override');
-      expect(env.OMC_MODEL_MEDIUM).toBe('claude-sonnet-4-6-override');
-      expect(env.OMC_MODEL_LOW).toBe('claude-haiku-4-5-override');
-      expect(env.OMC_EXTERNAL_MODELS_DEFAULT_CODEX_MODEL).toBe('gpt-5');
-      expect(env.OMC_GEMINI_DEFAULT_MODEL).toBe('gemini-2.5-pro');
-      expect(env.ANTHROPIC_API_KEY).toBeUndefined();
-    });
-
     it('rejects invalid team names', () => {
       expect(() => getWorkerEnv('Bad-Team', 'worker-1', 'codex')).toThrow('Invalid team name');
     });
@@ -222,7 +177,6 @@ describe('model-contract', () => {
   describe('isCliAvailable', () => {
     it('checks version without shell:true for standard binaries', () => {
       const mockSpawnSync = vi.mocked(spawnSync);
-      clearResolvedPathCache();
       mockSpawnSync
         .mockReturnValueOnce({ status: 1, stdout: '', stderr: '', pid: 0, output: [], signal: null } as any)
         .mockReturnValueOnce({ status: 0, stdout: '', stderr: '', pid: 0, output: [], signal: null } as any);
@@ -230,16 +184,14 @@ describe('model-contract', () => {
       isCliAvailable('codex');
 
       expect(mockSpawnSync).toHaveBeenNthCalledWith(1, 'which', ['codex'], { timeout: 5000, encoding: 'utf8' });
-      expect(mockSpawnSync).toHaveBeenNthCalledWith(2, 'codex', ['--version'], { timeout: 5000, shell: false });
-      clearResolvedPathCache();
+      expect(mockSpawnSync).toHaveBeenNthCalledWith(2, 'codex', ['--version'], { timeout: 5000 });
       mockSpawnSync.mockRestore();
     });
 
     it('uses COMSPEC for .cmd binaries on win32', () => {
       const mockSpawnSync = vi.mocked(spawnSync);
-      const restorePlatform = setProcessPlatform('win32');
+      vi.spyOn(process, 'platform', 'get').mockReturnValue('win32');
       vi.stubEnv('COMSPEC', 'C:\\Windows\\System32\\cmd.exe');
-      clearResolvedPathCache();
 
       mockSpawnSync
         .mockReturnValueOnce({ status: 0, stdout: 'C:\\Tools\\codex.cmd\n', stderr: '', pid: 0, output: [], signal: null } as any)
@@ -254,28 +206,8 @@ describe('model-contract', () => {
         ['/d', '/s', '/c', '"C:\\Tools\\codex.cmd" --version'],
         { timeout: 5000 }
       );
-      restorePlatform();
-      clearResolvedPathCache();
       mockSpawnSync.mockRestore();
       vi.unstubAllEnvs();
-    });
-
-    it('uses shell:true for unresolved binaries on win32', () => {
-      const mockSpawnSync = vi.mocked(spawnSync);
-      const restorePlatform = setProcessPlatform('win32');
-      clearResolvedPathCache();
-
-      mockSpawnSync
-        .mockReturnValueOnce({ status: 1, stdout: '', stderr: '', pid: 0, output: [], signal: null } as any)
-        .mockReturnValueOnce({ status: 0, stdout: '', stderr: '', pid: 0, output: [], signal: null } as any);
-
-      isCliAvailable('gemini');
-
-      expect(mockSpawnSync).toHaveBeenNthCalledWith(1, 'where', ['gemini'], { timeout: 5000, encoding: 'utf8' });
-      expect(mockSpawnSync).toHaveBeenNthCalledWith(2, 'gemini', ['--version'], { timeout: 5000, shell: true });
-      restorePlatform();
-      clearResolvedPathCache();
-      mockSpawnSync.mockRestore();
     });
   });
 

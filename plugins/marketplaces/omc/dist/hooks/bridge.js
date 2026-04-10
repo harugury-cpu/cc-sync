@@ -24,12 +24,11 @@ import { addBackgroundTask, getRunningTaskCount, } from "../hud/background-tasks
 import { readHudState, writeHudState } from "../hud/state.js";
 import { loadConfig } from "../config/loader.js";
 import { writeSkillActiveState } from "./skill-state/index.js";
-import { ULTRAWORK_MESSAGE, ULTRATHINK_MESSAGE, SEARCH_MESSAGE, ANALYZE_MESSAGE, TDD_MESSAGE, CODE_REVIEW_MESSAGE, SECURITY_REVIEW_MESSAGE, RALPH_MESSAGE, PROMPT_TRANSLATION_MESSAGE, } from "../installer/hooks.js";
+import { ULTRAWORK_MESSAGE, ULTRATHINK_MESSAGE, SEARCH_MESSAGE, ANALYZE_MESSAGE, RALPH_MESSAGE, PROMPT_TRANSLATION_MESSAGE, } from "../installer/hooks.js";
 // Agent dashboard is used in pre/post-tool-use hot path
 import { getAgentDashboard, } from "./subagent-tracker/index.js";
 // Session replay recordFileTouch is used in pre-tool-use hot path
 import { recordFileTouch, } from "./subagent-tracker/session-replay.js";
-import { getBackgroundBashPermissionFallback, getBackgroundTaskPermissionFallback, } from "./permission-handler/index.js";
 // Security: wrap untrusted file content to prevent prompt injection
 import { wrapUntrustedFileContent } from "../agents/prompt-helpers.js";
 const PKILL_F_FLAG_PATTERN = /\bpkill\b.*\s-f\b/;
@@ -405,21 +404,12 @@ async function processKeywordDetector(input) {
             case "analyze":
                 messages.push(ANALYZE_MESSAGE);
                 break;
-            case "tdd":
-                messages.push(TDD_MESSAGE);
-                break;
-            case "code-review":
-                messages.push(CODE_REVIEW_MESSAGE);
-                break;
-            case "security-review":
-                messages.push(SECURITY_REVIEW_MESSAGE);
-                break;
             // For modes without dedicated message constants, return generic activation message
             // These are handled by UserPromptSubmit hook for skill invocation
             case "cancel":
             case "autopilot":
             case "ralplan":
-            case "deep-interview":
+            case "tdd":
                 messages.push(`[MODE: ${keywordType.toUpperCase()}] Skill invocation handled by UserPromptSubmit hook.`);
                 break;
             case "codex":
@@ -485,12 +475,6 @@ async function processPersistentMode(input) {
     };
     const result = await checkPersistentModes(sessionId, directory, stopContext);
     const output = createHookOutput(result);
-    // Skip legacy bridge.ts team enforcement if persistent-mode already
-    // handled this stop event (or intentionally emitted a stop message).
-    // Prevents mixed/double continuation prompts across modes.
-    if (result.mode !== 'none' || Boolean(output.message)) {
-        return output;
-    }
     const teamState = readTeamStagedState(directory, sessionId);
     if (!teamState || teamState.active !== true || isTeamStateTerminal(teamState)) {
         writeTeamStopBreakerCount(directory, sessionId, 0);
@@ -631,7 +615,7 @@ You have an active autopilot session from ${autopilotState.started_at}.
 Original idea: ${autopilotState.originalIdea}
 Current phase: ${autopilotState.phase}
 
-Treat this as prior-session context only. Prioritize the user's newest request, and resume autopilot only if the user explicitly asks to continue it.
+Continue autopilot execution until complete.
 
 </session-restore>
 
@@ -649,7 +633,7 @@ Treat this as prior-session context only. Prioritize the user's newest request, 
 You have an active ultrawork session from ${ultraworkState.started_at}.
 Original task: ${ultraworkState.original_prompt}
 
-Treat this as prior-session context only. Prioritize the user's newest request, and resume ultrawork only if the user explicitly asks to continue it.
+Continue working in ultrawork mode until all tasks are complete.
 
 </session-restore>
 
@@ -684,7 +668,7 @@ You have an active Team staged run for "${teamName}".
 Current stage: ${stage}
 ${getTeamStagePrompt(stage)}
 
-Treat this as prior-session context only. Prioritize the user's newest request, and resume the staged Team workflow only if the user explicitly asks to continue it.
+Resume from this stage and continue the staged Team workflow.
 
 </session-restore>
 
@@ -740,27 +724,6 @@ Please continue working on these tasks.
 ---
 
 `);
-    }
-    // Bedrock/Vertex/proxy override: tell the LLM not to pass model on Task calls.
-    // This prevents the LLM from following the static CLAUDE.md instruction
-    // "Pass model on Task calls: haiku, sonnet, opus" which produces invalid
-    // model IDs on non-standard providers. (issues #1135, #1201)
-    try {
-        const sessionConfig = loadConfig();
-        if (sessionConfig.routing?.forceInherit) {
-            messages.push(`<system-reminder>
-
-[MODEL ROUTING OVERRIDE — NON-STANDARD PROVIDER DETECTED]
-
-This environment uses a non-standard model provider (AWS Bedrock, Google Vertex AI, or a proxy).
-Do NOT pass the \`model\` parameter on Task/Agent calls. Omit it entirely so agents inherit the parent session's model.
-The CLAUDE.md instruction "Pass model on Task calls: haiku, sonnet, opus" does NOT apply here.
-
-</system-reminder>`);
-        }
-    }
-    catch {
-        // Non-blocking: config load failure must never break session start
     }
     if (messages.length > 0) {
         return {
@@ -855,64 +818,16 @@ function processPreToolUse(input) {
             message: enforcementResult.message,
         };
     }
-    const preToolMessages = enforcementResult.message ? [enforcementResult.message] : [];
-    let modifiedToolInput;
-    // Force-inherit: deny Task calls that carry a `model` parameter when
-    // forceInherit is enabled (Bedrock, Vertex, CC Switch, etc.).
-    // Claude Code's hook protocol does not support modifiedInput, so we cannot
-    // silently strip the model. Instead, deny the call so Claude retries without
-    // the model param, letting agents inherit the parent session's model.
-    // (issues #1135, #1201)
+    // Force-inherit: strip `model` parameter from Task calls so agents inherit
+    // the user's Claude Code model setting instead of OMC per-agent routing (issue #1135)
+    let forceInheritInput;
     if (input.toolName === "Task") {
-        const originalTaskInput = input.toolInput;
-        const taskModel = originalTaskInput?.model;
-        if (taskModel) {
+        const taskInput = input.toolInput;
+        if (taskInput?.model) {
             const config = loadConfig();
             if (config.routing?.forceInherit) {
-                // Use permissionDecision:"deny" — the only PreToolUse mechanism
-                // Claude Code supports for blocking a specific tool call with
-                // feedback. modifiedInput is NOT supported by the hook protocol.
-                const denyReason = `[MODEL ROUTING] This environment uses a non-standard provider (Bedrock/Vertex/proxy). Do NOT pass the \`model\` parameter on Task calls — remove \`model\` and retry so agents inherit the parent session's model. The model "${taskModel}" is not valid for this provider.`;
-                return {
-                    continue: true,
-                    hookSpecificOutput: {
-                        hookEventName: "PreToolUse",
-                        permissionDecision: "deny",
-                        permissionDecisionReason: denyReason,
-                    },
-                };
-            }
-        }
-        if (originalTaskInput?.run_in_background === true) {
-            const subagentType = typeof originalTaskInput.subagent_type === "string"
-                ? originalTaskInput.subagent_type
-                : undefined;
-            const permissionFallback = getBackgroundTaskPermissionFallback(directory, subagentType);
-            if (permissionFallback.shouldFallback) {
-                const reason = `[BACKGROUND PERMISSIONS] ${subagentType || "This background agent"} may need ${permissionFallback.missingTools.join(", ")} permissions, but background agents cannot request interactive approval. Re-run without \`run_in_background=true\` or pre-approve ${permissionFallback.missingTools.join(", ")} in Claude Code settings.`;
-                return {
-                    continue: false,
-                    reason,
-                    message: reason,
-                };
-            }
-        }
-    }
-    if (input.toolName === "Bash") {
-        const originalBashInput = input.toolInput;
-        const nextBashInput = originalBashInput ? { ...originalBashInput } : {};
-        if (nextBashInput.run_in_background === true) {
-            const command = typeof nextBashInput.command === "string"
-                ? nextBashInput.command
-                : undefined;
-            const permissionFallback = getBackgroundBashPermissionFallback(directory, command);
-            if (permissionFallback.shouldFallback) {
-                const reason = "[BACKGROUND PERMISSIONS] This Bash command is not auto-approved for background execution. Re-run without `run_in_background=true` or pre-approve the command in Claude Code settings.";
-                return {
-                    continue: false,
-                    reason,
-                    message: reason,
-                };
+                const { model: _stripped, ...rest } = taskInput;
+                forceInheritInput = rest;
             }
         }
     }
@@ -966,8 +881,7 @@ function processPreToolUse(input) {
     // Warn about pkill -f self-termination risk (issue #210)
     // Matches: pkill -f, pkill -9 -f, pkill --full, etc.
     if (input.toolName === "Bash") {
-        const effectiveBashInput = (modifiedToolInput ?? input.toolInput);
-        const command = effectiveBashInput?.command ?? "";
+        const command = input.toolInput?.command ?? "";
         if (PKILL_F_FLAG_PATTERN.test(command) ||
             PKILL_FULL_FLAG_PATTERN.test(command)) {
             return {
@@ -979,14 +893,13 @@ function processPreToolUse(input) {
                     '  - `kill $(pgrep -f "pattern")` (pgrep does not kill itself)',
                     "Proceeding anyway, but the command may kill this shell session.",
                 ].join("\n"),
-                ...(modifiedToolInput ? { modifiedInput: modifiedToolInput } : {}),
             };
         }
     }
     // Background process guard - prevent forkbomb (issue #302)
     // Block new background tasks if limit is exceeded
     if (input.toolName === "Task" || input.toolName === "Bash") {
-        const toolInput = (modifiedToolInput ?? input.toolInput);
+        const toolInput = input.toolInput;
         if (toolInput?.run_in_background) {
             const config = loadConfig();
             const maxBgTasks = config.permissions?.maxBackgroundTasks ?? 5;
@@ -1003,7 +916,7 @@ function processPreToolUse(input) {
     }
     // Track Task tool invocations for HUD background tasks display
     if (input.toolName === "Task") {
-        const toolInput = (modifiedToolInput ?? input.toolInput);
+        const toolInput = input.toolInput;
         if (toolInput?.description) {
             const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
             addBackgroundTask(taskId, toolInput.description, toolInput.subagent_type, directory);
@@ -1022,11 +935,13 @@ function processPreToolUse(input) {
     if (input.toolName === "Task") {
         const dashboard = getAgentDashboard(directory);
         if (dashboard) {
-            const combined = [...preToolMessages, dashboard].filter(Boolean).join("\n\n");
+            const combined = enforcementResult.message
+                ? `${enforcementResult.message}\n\n${dashboard}`
+                : dashboard;
             return {
                 continue: true,
-                ...(combined ? { message: combined } : {}),
-                ...(modifiedToolInput ? { modifiedInput: modifiedToolInput } : {}),
+                message: combined,
+                ...(forceInheritInput ? { modifiedInput: forceInheritInput } : {}),
             };
         }
     }
@@ -1040,8 +955,8 @@ function processPreToolUse(input) {
     }
     return {
         continue: true,
-        ...(preToolMessages.length > 0 ? { message: preToolMessages.join("\n\n") } : {}),
-        ...(modifiedToolInput ? { modifiedInput: modifiedToolInput } : {}),
+        ...(enforcementResult.message ? { message: enforcementResult.message } : {}),
+        ...(forceInheritInput ? { modifiedInput: forceInheritInput } : {}),
     };
 }
 /**
@@ -1101,10 +1016,6 @@ async function processPostToolUse(input) {
             const hook = createRalphLoopHook(directory);
             hook.startLoop(input.sessionId, cleanPrompt);
         }
-        // Clear skill-active state on skill completion to prevent false-blocking.
-        // Without this, every non-'none' skill falsely blocks stops until TTL expires.
-        const { clearSkillActiveState } = await import("./skill-state/index.js");
-        clearSkillActiveState(directory, input.sessionId);
     }
     // Run orchestrator post-tool processing (remember tags, verification reminders, etc.)
     const orchestratorResult = processOrchestratorPostTool({
@@ -1237,13 +1148,7 @@ export async function processHook(hookType, rawInput) {
                     hook_event_name: "SessionEnd",
                     reason: rawSE.reason ?? "other",
                 };
-                const result = await handleSessionEnd(sessionEndInput);
-                _openclaw.wake("session-end", {
-                    sessionId: sessionEndInput.session_id,
-                    projectPath: sessionEndInput.cwd,
-                    reason: sessionEndInput.reason,
-                });
-                return result;
+                return await handleSessionEnd(sessionEndInput);
             }
             case "subagent-start": {
                 if (!validateHookInput(input, requiredKeysForHook("subagent-start"), "subagent-start")) {

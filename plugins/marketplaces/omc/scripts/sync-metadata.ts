@@ -71,7 +71,7 @@ function loadMetadata(): Metadata {
     keywords: packageJson.keywords || [],
     repository: packageJson.repository?.url?.replace(/^git\+/, '').replace(/\.git$/, '') || '',
     homepage: packageJson.homepage || '',
-    npmPackage: packageJson.name || 'oh-my-claude-sisyphus',
+    npmPackage: packageJson.name || 'oh-my-claudecode',
   };
 }
 
@@ -162,16 +162,6 @@ function getFileSyncConfigs(): FileSync[] {
           pattern: /\*\*\d+ slash commands\*\*/g,
           replacement: () => `**${skillCount} slash commands**`,
           description: 'Slash command count',
-        },
-      ],
-    },
-    {
-      path: 'docs/CLAUDE.md',
-      replacements: [
-        {
-          pattern: /<!-- OMC:VERSION:[^\s]*? -->/g,
-          replacement: (m) => `<!-- OMC:VERSION:${m.version} -->`,
-          description: 'CLAUDE.md version marker',
         },
       ],
     },

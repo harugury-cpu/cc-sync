@@ -3,8 +3,6 @@
  *
  * Type definitions for the HUD state, configuration, and rendering.
  */
-import { DEFAULT_MISSION_BOARD_CONFIG } from './mission-board.js';
-export const DEFAULT_HUD_USAGE_POLL_INTERVAL_MS = 90 * 1000;
 export const DEFAULT_HUD_CONFIG = {
     preset: 'focused',
     elements: {
@@ -33,7 +31,6 @@ export const DEFAULT_HUD_CONFIG = {
         thinkingFormat: 'text', // Text format for backward compatibility
         apiKeySource: false, // Disabled by default
         profile: true, // Show profile name when CLAUDE_CONFIG_DIR is set
-        missionBoard: false, // Opt-in mission board for whole-run progress tracking
         promptTime: true, // Show last prompt time by default
         sessionHealth: true,
         useBars: false, // Disabled by default for backwards compatibility
@@ -52,8 +49,6 @@ export const DEFAULT_HUD_CONFIG = {
         threshold: 80,
         autoCompact: false,
     },
-    missionBoard: DEFAULT_MISSION_BOARD_CONFIG,
-    usageApiPollIntervalMs: DEFAULT_HUD_USAGE_POLL_INTERVAL_MS,
     wrapMode: 'truncate',
 };
 export const PRESET_CONFIGS = {
@@ -83,7 +78,6 @@ export const PRESET_CONFIGS = {
         thinkingFormat: 'text',
         apiKeySource: false,
         profile: true,
-        missionBoard: false,
         promptTime: false,
         sessionHealth: false,
         useBars: false,
@@ -117,7 +111,6 @@ export const PRESET_CONFIGS = {
         thinkingFormat: 'text',
         apiKeySource: false,
         profile: true,
-        missionBoard: false,
         promptTime: true,
         sessionHealth: true,
         useBars: true,
@@ -151,7 +144,6 @@ export const PRESET_CONFIGS = {
         thinkingFormat: 'text',
         apiKeySource: true,
         profile: true,
-        missionBoard: false,
         promptTime: true,
         sessionHealth: true,
         useBars: true,
@@ -185,7 +177,6 @@ export const PRESET_CONFIGS = {
         thinkingFormat: 'text',
         apiKeySource: false,
         profile: true,
-        missionBoard: false,
         promptTime: true,
         sessionHealth: true,
         useBars: false,
@@ -219,7 +210,6 @@ export const PRESET_CONFIGS = {
         thinkingFormat: 'text',
         apiKeySource: true,
         profile: true,
-        missionBoard: false,
         promptTime: true,
         sessionHealth: true,
         useBars: true,

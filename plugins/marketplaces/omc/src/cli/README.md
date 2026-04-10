@@ -4,10 +4,10 @@ Command-line interface for Oh-My-ClaudeCode analytics, token tracking, cost repo
 
 ## Installation
 
-Install via npm (note: the repo/command branding is `oh-my-claudecode`, but the published npm package name is `oh-my-claude-sisyphus`):
+Install via npm (note: the npm package name is `oh-my-claudecode`):
 
 ```bash
-npm i -g oh-my-claude-sisyphus@latest
+npm install -g oh-my-claudecode
 ```
 
 The `omc-analytics` command will be available globally.

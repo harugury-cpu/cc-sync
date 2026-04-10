@@ -16,7 +16,6 @@ export interface TeamStartInput {
     agentTypes: string[];
     tasks: TeamTaskInput[];
     cwd: string;
-    newWindow?: boolean;
     workerCount?: number;
     pollIntervalMs?: number;
     sentinelGateTimeoutMs?: number;

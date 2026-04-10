@@ -61,9 +61,9 @@ export interface AgentConfig {
     /** Tools explicitly disallowed for this agent */
     disallowedTools?: string[];
     /** Model to use (defaults to sonnet) */
-    model?: string;
+    model?: ModelType;
     /** Default model for this agent (explicit tier mapping) */
-    defaultModel?: string;
+    defaultModel?: ModelType;
     /** Optional metadata for dynamic prompt generation */
     metadata?: AgentPromptMetadata;
 }

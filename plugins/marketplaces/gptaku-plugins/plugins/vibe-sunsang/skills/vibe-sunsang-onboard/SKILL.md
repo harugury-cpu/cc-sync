@@ -1,6 +1,6 @@
 ---
 name: vibe-sunsang-onboard
-description: 바선생 초기 설정 — 프로젝트 연결, 워크스페이스 유형 분류, 첫 변환까지 안내합니다. "바선생 시작", "온보딩", "초기 설정", "처음이에요", "셋업", "setup" 같은 요청에 사용됩니다.
+description: 바선생 초기 설정 — 워크스페이스 생성, 프로젝트 연결, 유형 분류, 첫 변환까지 안내합니다. "바선생 시작", "온보딩", "초기 설정", "init", "초기화", "셋업", "setup" 같은 요청에 사용됩니다.
 ---
 
 ## 바선생 온보딩
@@ -35,8 +35,56 @@ description: 바선생 초기 설정 — 프로젝트 연결, 워크스페이스
 **존재하지 않는 경우:**
 
 ```bash
-mkdir -p "$HOME/vibe-sunsang/config" "$HOME/vibe-sunsang/conversations" "$HOME/vibe-sunsang/exports"
+mkdir -p "$HOME/vibe-sunsang/config" "$HOME/vibe-sunsang/conversations" "$HOME/vibe-sunsang/exports" "$HOME/vibe-sunsang/growth-log/weekly"
 ```
+
+### Step 0.5: 워크스페이스 환경 구성
+
+**마이그레이션 감지:** `$HOME/vibe-sunsang/` 안에 번호 접두사 디렉토리(`10-`, `20-`, `30-`, `40-`, `90-` 등)가 존재하면 v1.3.x 이전 구조로 판단하고, 사용자에게 안내한다:
+
+> "이전 버전의 폴더 구조가 감지되었습니다. 플러그인이 업데이트되어 더 이상 워크스페이스에 로컬 명령/스킬 파일이 필요하지 않습니다. 기존 데이터는 그대로 유지되며, 새 구조로 자동 전환됩니다."
+
+마이그레이션이 필요한 경우:
+- `40-conversations/` → `conversations/` (기존 conversations/가 비어있으면 이동, 아니면 병합)
+- `90-exports/` → `exports/` (동일)
+- `30-growth-log/` → `growth-log/` (동일)
+- `.claude/`, `10-scripts/`, `20-knowledge-base/`, `00-system/` → 삭제 안내 (사용자 확인 후)
+
+**CLAUDE.md 생성:**
+
+`$HOME/vibe-sunsang/CLAUDE.md`가 없으면:
+1. `${CLAUDE_PLUGIN_ROOT}/references/CLAUDE-MD-TEMPLATE.md`의 내용을 읽는다
+2. `$HOME/vibe-sunsang/CLAUDE.md`에 Write로 저장한다
+
+이미 있으면:
+> "기존 CLAUDE.md를 유지합니다."
+
+**.gitignore 생성:**
+
+`$HOME/vibe-sunsang/.gitignore`가 없으면 생성:
+
+```
+# Large conversation files
+conversations/**/*.md
+!conversations/INDEX.md
+```
+
+이미 있으면 건너뛴다.
+
+**git init:**
+
+`$HOME/vibe-sunsang/.git`이 없으면:
+```bash
+cd "$HOME/vibe-sunsang" && git init
+```
+
+이미 있으면 건너뛴다.
+
+### Gotchas
+
+- CLAUDE-MD-TEMPLATE.md를 인라인으로 하드코딩하지 않는다. 반드시 `${CLAUDE_PLUGIN_ROOT}/references/CLAUDE-MD-TEMPLATE.md`에서 읽는다.
+- 마이그레이션 시 기존 데이터가 있는 디렉토리를 덮어쓰지 않도록 주의한다. 충돌 시 사용자에게 확인받는다.
+- git init은 사용자 워크스페이스에서만 실행한다. 플러그인 디렉토리에서 실행하지 않는다.
 
 ### Step 1: 환영 & 설명
 
@@ -107,6 +155,7 @@ ls "$HOME/.claude/projects/"
 
 **규칙:**
 - 한 번에 5개까지만 질문합니다 (너무 많으면 피로)
+- 프로젝트가 5개를 초과하면 5개씩 나눠서 반복합니다. 각 묶음 후 "더 진행할까요?"를 확인합니다.
 - 세션이 5개 미만인 프로젝트는 자동으로 건너뜁니다 (사용자에게 알림)
 - "건너뛰기"를 선택한 프로젝트는 매핑에서 제외
 - **재온보딩 시**: 이미 매핑된 프로젝트는 건너뛰고 새 프로젝트만 질문
@@ -209,13 +258,28 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/convert_sessions.py --force --names-file "
 | Designer (기획자) | 기획 구체성, 구조화, 실현 가능성 |
 | Operator (운영자) | 자동화 품질, 에러 처리, 재사용성 |
 
+**v2 레벨 시스템:**
+
+바선생은 6가지 기술 차원으로 AI 활용 능력을 분석합니다:
+
+| 기술 차원 | 쉬운 설명 |
+|----------|----------|
+| DECOMP (작업 분해) | 큰 요청을 작은 단계로 나누는 능력 |
+| VERIFY (검증 전략) | AI 결과를 확인하고 검증하는 능력 |
+| ORCH (오케스트레이션) | 여러 도구를 조합하여 활용하는 능력 |
+| FAIL (실패 대응) | 오류가 나면 원인을 파악하고 대처하는 능력 |
+| CTX (맥락 관리) | AI에게 필요한 정보를 잘 전달하는 능력 |
+| META (메타인지) | 내가 AI를 어떻게 쓰는지 돌아보는 능력 |
+
+레벨은 L1.0(입문)부터 L7.0(마스터)까지, 0.5 단위로 세밀하게 측정됩니다. 유형마다 중요한 축이 달라서, 나에게 맞는 맞춤 분석을 받을 수 있어요.
+
 사용할 수 있는 기능:
 
 | 명령 | 설명 |
 |------|------|
 | `/vibe-sunsang 변환` | 새 대화 변환 (매주 실행 권장) |
-| `/vibe-sunsang 멘토링` | AI 활용 능력 코칭 (유형별 맞춤) |
-| `/vibe-sunsang 성장` | 성장 분석 리포트 (유형별 맞춤) |
+| `/vibe-sunsang 멘토링` | AI 활용 능력 코칭 (유형별 6축 맞춤) |
+| `/vibe-sunsang 성장` | 성장 분석 리포트 (6축 레이더 차트 포함) |
 
 **추천 루틴:**
 1. 매주 금요일, `/vibe-sunsang 변환` 으로 이번 주 대화 변환
@@ -234,8 +298,8 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/convert_sessions.py --force --names-file "
     "question": "바로 이번 주 리뷰를 시작해볼까요?",
     "header": "다음 단계",
     "options": [
-      {"label": "멘토링 시작", "description": "AI 활용 능력 코칭 세션을 바로 시작해요"},
-      {"label": "성장 리포트 생성", "description": "성장 분석 리포트를 자동 생성해요"},
+      {"label": "멘토링 시작", "description": "AI 활용 능력 코칭 세션을 바로 시작해요 (6축 분석)"},
+      {"label": "성장 리포트 생성", "description": "성장 분석 리포트를 자동 생성해요 (6축 레이더 차트 포함)"},
       {"label": "나중에 할게요", "description": "여기서 마무리할게요"}
     ],
     "multiSelect": false

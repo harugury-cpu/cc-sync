@@ -17,12 +17,14 @@
       "Bash(unlink *)"
     ],
     "defaultMode": "bypassPermissions",
-    "additionalDirectories": []
+    "additionalDirectories": [
+      "/Users/harugury/Documents/Obsidian Vault"
+    ]
   },
   "model": "opusplan",
   "statusLine": {
     "type": "command",
-    "command": "node /Users/mac/.claude/hud/omc-hud.mjs"
+    "command": "node /Users/harugury/.claude/hud/omc-hud.mjs"
   },
   "enabledPlugins": {
     "oh-my-claudecode@omc": true,

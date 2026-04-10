@@ -12,8 +12,8 @@ export interface AgentConfig {
   tools?: string[];
   /** Tools explicitly disallowed for this agent */
   disallowedTools?: string[];
-  model?: string;
-  defaultModel?: string;
+  model?: ModelType;
+  defaultModel?: ModelType;
 }
 
 export interface PluginConfig {
@@ -27,9 +27,12 @@ export interface PluginConfig {
     debugger?: { model?: string };
     executor?: { model?: string };
     verifier?: { model?: string };
+    qualityReviewer?: { model?: string };
     securityReviewer?: { model?: string };
     codeReviewer?: { model?: string };
+    deepExecutor?: { model?: string };
     testEngineer?: { model?: string };
+    buildFixer?: { model?: string };
     designer?: { model?: string };
     writer?: { model?: string };
     qaTester?: { model?: string };
@@ -47,6 +50,7 @@ export interface PluginConfig {
     astTools?: boolean;
     continuationEnforcement?: boolean;
     autoContextInjection?: boolean;
+    harshCritic?: boolean;
   };
 
   // MCP server configurations

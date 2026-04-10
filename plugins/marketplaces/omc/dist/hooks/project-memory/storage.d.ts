@@ -1,6 +1,6 @@
 /**
  * Project Memory Storage
- * Handles loading and saving project memory to the resolved project-memory.json path.
+ * Handles loading and saving project memory to .omc/project-memory.json
  */
 import { ProjectMemory } from './types.js';
 /**
