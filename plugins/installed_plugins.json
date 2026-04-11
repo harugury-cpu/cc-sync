@@ -115,10 +115,10 @@
     "telegram@claude-plugins-official": [
       {
         "scope": "user",
-        "installPath": "/Users/harugury/.claude/plugins/cache/claude-plugins-official/telegram/0.0.4",
-        "version": "0.0.4",
+        "installPath": "/Users/harugury/.claude/plugins/cache/claude-plugins-official/telegram/0.0.5",
+        "version": "0.0.5",
         "installedAt": "2026-04-09T08:37:13.898Z",
-        "lastUpdated": "2026-04-09T08:37:13.898Z"
+        "lastUpdated": "2026-04-10T23:22:21.572Z"
       }
     ],
     "memory-bank@memory-bank-dev": [
