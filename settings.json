@@ -31,7 +31,8 @@
     "kkirikkiri@gptaku-plugins": true,
     "telegram@claude-plugins-official": false,
     "git-teacher@gptaku-plugins": true,
-    "memory-bank@memory-bank-dev": true
+    "memory-bank@memory-bank-dev": true,
+    "superpowers@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "omc": {
