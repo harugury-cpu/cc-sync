@@ -40,6 +40,12 @@ Claude Code에서:
 /plugin install memory-bank
 ```
 
+## 업데이트
+
+```
+/plugin update memory-bank
+```
+
 ## 빠른 시작
 
 ```bash

@@ -68,6 +68,12 @@ In Claude Code:
 /plugin install memory-bank
 ```
 
+## Update
+
+```
+/plugin update memory-bank
+```
+
 ## Quick Start
 
 ```bash
