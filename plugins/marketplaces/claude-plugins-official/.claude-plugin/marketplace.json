@@ -8,6 +8,16 @@
   },
   "plugins": [
     {
+      "name": "adlc",
+      "description": "Agentforce Agent Development Life Cycle — author, discover, scaffold, deploy, test, and optimize .agent files",
+      "category": "development",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/SalesforceAIResearch/agentforce-adlc.git"
+      },
+      "homepage": "https://github.com/SalesforceAIResearch/agentforce-adlc"
+    },
+    {
       "name": "adspirer-ads-agent",
       "description": "Cross-platform ad management for Google Ads, Meta Ads, TikTok Ads, and LinkedIn Ads. 91 tools for keyword research, campaign creation, performance analysis, and budget optimization.",
       "category": "productivity",
@@ -168,6 +178,17 @@
       "description": "Expert assistant for Azure Cosmos DB — data modeling, query optimization, performance tuning, and best practices.",
       "category": "database",
       "homepage": "https://github.com/AzureCosmosDB/cosmosdb-claude-code-plugin"
+    },
+    {
+      "name": "base44",
+      "description": "Build and deploy Base44 full-stack apps with CLI project management and JavaScript/TypeScript SDK development skills",
+      "category": "development",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/base44/skills.git",
+        "sha": "c7039b37eca0e2916a565a7395040c00055bcf8b"
+      },
+      "homepage": "https://docs.base44.com"
     },
     {
       "name": "box",
