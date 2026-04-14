@@ -4,7 +4,7 @@ set -euo pipefail
 input=$(cat)
 prompt=$(echo "$input" | jq -r '.prompt // empty' 2>/dev/null || true)
 
-if echo "$prompt" | grep -qE '!{3,}|멍청'; then
+if echo "$prompt" | grep -qE '!{3,}|멍청|^[[:space:]]*--[[:space:]]*$'; then
   # 학습용 컨텍스트 저장
   TIMESTAMP=$(date +%s)
   LEARN_FILE="/tmp/harsh_learn_${TIMESTAMP}.json"
