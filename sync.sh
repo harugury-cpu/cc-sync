@@ -21,7 +21,7 @@ echo "Target: $SCRIPT_DIR"
 echo ""
 
 # 디렉토리 동기화
-for dir in agents hooks skills memory plugins commands scripts rules teams; do
+for dir in agents hooks skills memory plugins commands scripts rules teams data; do
     if [ -d "$SOURCE_DIR/$dir" ]; then
         echo "✓ $dir 동기화 중..."
         sync_dir "$SOURCE_DIR/$dir" "$SCRIPT_DIR/$dir"

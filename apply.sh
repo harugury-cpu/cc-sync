@@ -23,7 +23,7 @@ echo ""
 mkdir -p "$TARGET_DIR"
 
 # 디렉토리 복사
-for dir in agents hooks skills memory plugins commands scripts rules teams; do
+for dir in agents hooks skills memory plugins commands scripts rules teams data; do
     if [ -d "$SCRIPT_DIR/$dir" ]; then
         echo "✓ $dir 복사 중..."
         sync_dir "$SCRIPT_DIR/$dir" "$TARGET_DIR/$dir"
