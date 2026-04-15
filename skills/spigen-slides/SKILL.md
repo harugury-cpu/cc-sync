@@ -14,7 +14,7 @@ metadata:
 
 - 담당자: `한원진 담당`
 - 부서: `디자인부문ㅣ패키지디자인팀`
-- 템플릿 ID: `16yCUv6G8QwiqZdRaxktCQROwUD9p-WO2v88BppsUs5M`
+- 템플릿 ID: `1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk`
 
 ## 디자인 시스템
 
@@ -33,14 +33,14 @@ metadata:
 
 슬라이드 배경이 **검정(다크)**이냐 **흰색(라이트)**이냐에 따라 텍스트·카드 색상이 달라진다.
 
-| 토큰 | 다크 테마 (Black 배경) | 라이트 테마 (White 배경) | 용도 |
-|-----|---------------------|----------------------|-----|
-| `SLIDE_BG` | `#000000` | `#FFFFFF` | 슬라이드 배경 |
-| `TITLE_COLOR` | `#F9FAFB` | `#1A1A1A` | 제목 텍스트 |
-| `BODY_COLOR` | `#6B7280` | `#4A4A4A` | 본문·카드 텍스트 |
-| `CARD_BG` | `#0A0A0A` | `#F5F5F5` | 카드·아이템 배경 |
-| `CARD_BORDER` | `#141414` | `#E5E5E5` | 카드 테두리 |
-| `ACCENT` | `#FF6900` | `#FF6900` | 강조·바·화살표 (테마 불문 동일) |
+| 토큰 | 다크 테마 (Black 배경) | 라이트 테마 (White 배경) | 웜 테마 (Beige 배경) | 용도 |
+|-----|---------------------|----------------------|--------------------|-----|
+| `SLIDE_BG` | `#000000` | `#FFFFFF` | `#F5F0E8` | 슬라이드 배경 |
+| `TITLE_COLOR` | `#F9FAFB` | `#1A1A1A` | `#1A1A1A` | 제목 텍스트 |
+| `BODY_COLOR` | `#6B7280` | `#4A4A4A` | `#4A4A4A` | 본문·카드 텍스트 |
+| `CARD_BG` | `#0A0A0A` | `#F5F5F5` | `#FFFFFF` | 카드·아이템 배경 |
+| `CARD_BORDER` | `#141414` | `#E5E5E5` | `#E5E5E5` | 카드 테두리 |
+| `ACCENT` | `#FF6900` | `#FF6900` | `#FF6900` | 강조·바·화살표 (테마 불문 동일) |
 
 **슬라이드 유형별 기본 테마:**
 
@@ -50,6 +50,9 @@ metadata:
 | section-divider | 다크 | 포스터 스타일 |
 | content | 라이트 | 가독성 우선 |
 | statistics / 3-col | 라이트 | 데이터 가독성 |
+| 3col-cards | 라이트 | 카드별 색상 변형 (light·dark·accent) |
+| toc | 웜 | 베이지 배경 + 메타 라벨 |
+| split-cards | 라이트 | 좌측 텍스트 + 우측 카드 스택 |
 | closing | 다크 | 브랜드 마감 |
 
 ## 슬라이드 디자인 사양 (slides-grab × Spigen)
@@ -202,7 +205,7 @@ slides-grab의 내러티브 시퀀스를 따른다:
 | 슬라이드 | 방식 |
 |---------|------|
 | 표지 (slide 1) | Spigen 템플릿 인덱스 0 복사 → 텍스트 삽입 |
-| 마지막 슬라이드 | Spigen 템플릿 인덱스 18 복사 (빈 슬라이드) |
+| 마지막 슬라이드 | Spigen 템플릿 인덱스 1, 2 (마지막 2페이지) |
 | 내용 슬라이드 | `createSlide` (BLANK) → slides-grab-design 스타일 도형 직접 구현 |
 
 **PPTX 변환 없음** — 텍스트·도형 모두 수정 가능한 네이티브 구글 슬라이드.
@@ -220,7 +223,7 @@ echo $TODAY
 
 ```bash
 COPY_RESULT=$(gws drive files copy \
-  --params '{"fileId":"16yCUv6G8QwiqZdRaxktCQROwUD9p-WO2v88BppsUs5M"}' \
+  --params '{"fileId":"1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk"}' \
   --json "{\"name\":\"$TITLE\"}" 2>/dev/null)
 NEW_ID=$(echo "$COPY_RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 echo "복사된 ID: $NEW_ID"
@@ -260,31 +263,7 @@ print(f'총 슬라이드 수: {len(prs["slides"])}')
 python3 /tmp/parse_slides.py
 ```
 
-### 3-4. 표지·마지막(인덱스 0, 18)만 남기고 전부 삭제
-
-```python
-# /tmp/delete_for_cover.py
-import json
-
-with open('/tmp/spigen_map.json') as f:
-    m = json.load(f)
-
-keep = {0, 18}
-reqs = [{"deleteObject": {"objectId": m[str(i)]['slide_id']}}
-        for i in range(len(m)) if i not in keep]
-import sys
-print(json.dumps({"requests": reqs}))
-print(f"삭제: {len(reqs)}개", file=sys.stderr)
-```
-
-```bash
-python3 /tmp/delete_for_cover.py 2>/dev/null > /tmp/del_req.json
-gws slides presentations batchUpdate \
-  --params "{\"presentationId\":\"$NEW_ID\"}" \
-  --json "$(cat /tmp/del_req.json)" 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print('삭제 완료')"
-```
-
-### 3-5. 표지 텍스트 삽입
+### 3-4. 표지 텍스트 삽입
 
 표지 박스 인덱스 (Spigen 템플릿 인덱스 0 기준):
 
@@ -330,7 +309,7 @@ gws slides presentations batchUpdate \
 
 ---
 
-### 3-6. 내용 슬라이드 생성 — 디자인 컴포넌트 라이브러리
+### 3-5. 내용 슬라이드 생성 — 디자인 컴포넌트 라이브러리
 
 내용 슬라이드마다 아래 Python 헬퍼로 구성한다.
 모든 요청을 하나의 `batchUpdate`로 묶어 한 번에 실행한다.
@@ -342,6 +321,8 @@ def pt(v): return int(v * 12700)
 def c255(r, g, b): return {"red": r/255, "green": g/255, "blue": b/255}
 
 ORANGE = c255(255, 105,   0)   # #FF6900 (테마 불문 고정)
+WHITE  = {"red": 1, "green": 1, "blue": 1}
+BLACK  = c255(26, 26, 26)
 
 # 테마별 색상 토큰 — 배경이 검정(dark)이면 텍스트·카드가 밝게, 흰(light)이면 어둡게
 THEMES = {
@@ -358,6 +339,13 @@ THEMES = {
         'BODY_COLOR':  c255( 74,  74,  74),   # #4A4A4A
         'CARD_BG':     c255(245, 245, 245),   # #F5F5F5
         'CARD_BORDER': c255(229, 229, 229),   # #E5E5E5
+    },
+    'warm': {
+        'SLIDE_BG':    c255(245, 240, 232),   # #F5F0E8 베이지
+        'TITLE_COLOR': c255( 26,  26,  26),   # #1A1A1A
+        'BODY_COLOR':  c255( 74,  74,  74),   # #4A4A4A
+        'CARD_BG':     {"red": 1, "green": 1, "blue": 1},  # #FFFFFF
+        'CARD_BORDER': c255(200, 196, 190),   # #C8C4BE
     },
 }
 
@@ -723,9 +711,258 @@ def mk_split(sid, left, right, reqs, theme='light'):
 ```
 
 
+#### 컴포넌트 I: 2색 제목 헬퍼 (title-accent)
+
+```
+오렌지 단어 + 테마 색 나머지 — 단일 텍스트박스 내 textRange 스타일링
+```
+
+```python
+def mk_title_accent(sid, accent_part, rest_part, reqs, theme='light', subtitle="", y=44, font_size=22):
+    """
+    accent_part: 오렌지로 표시할 앞부분 ("What")
+    rest_part:   나머지 텍스트 (" We Can Do")
+    subtitle:    제목 아래 작은 설명 텍스트 (선택)
+    """
+    T = THEMES[theme]
+    full = accent_part + rest_part
+    hid = f"{sid}_hdr"
+    reqs += [shape(hid, sid, "TEXT_BOX", 56, y, 608, font_size * 2),
+             txt(hid, full)]
+    reqs.append({"updateTextStyle": {"objectId": hid,
+        "textRange": {"type": "ALL"},
+        "style": {"foregroundColor": {"opaqueColor": {"rgbColor": T['TITLE_COLOR']}},
+                  "fontSize": {"magnitude": font_size, "unit": "PT"},
+                  "fontFamily": "Proxima Nova", "bold": True},
+        "fields": "foregroundColor,fontSize,fontFamily,bold"}})
+    # accent 부분만 오렌지로 덮어쓰기
+    reqs.append({"updateTextStyle": {"objectId": hid,
+        "textRange": {"type": "FIXED_RANGE",
+                      "startIndex": 0, "endIndex": len(accent_part)},
+        "style": {"foregroundColor": {"opaqueColor": {"rgbColor": ORANGE}}},
+        "fields": "foregroundColor"}})
+    if subtitle:
+        subid = f"{sid}_sub"
+        sub_y = y + font_size * 2 + 4
+        reqs += [shape(subid, sid, "TEXT_BOX", 56, sub_y, 608, 18),
+                 txt(subid, subtitle),
+                 txtstyle(subid, T['BODY_COLOR'], 8)]
+```
+
+#### 컴포넌트 J: 3열 카드 (3col-cards) — 원형 배지 + 카드별 색상
+
+```
+카드 0: light(#F5F5F5)  카드 1: dark(#1A1A1A)  카드 2: accent(#FF6900)
+원형 번호 배지 — 채운 원(ELLIPSE) + 흰 숫자
+```
+
+```python
+def mk_3col_cards(sid, cards, reqs, theme='light'):
+    """
+    cards = [
+        {"num": "1", "title": "H&B Store Management", "body": "설명 텍스트"},
+        {"num": "2", "title": "Marketing & Design",   "body": "설명 텍스트"},
+        {"num": "3", "title": "Logistics",             "body": "설명 텍스트"},
+    ]
+    카드 스타일: 0→light, 1→dark, 2→accent(orange) 고정
+    """
+    CARD_STYLES = [
+        {"bg": c255(245,245,245), "border": c255(229,229,229),
+         "title": c255(26,26,26),   "body": c255(74,74,74),
+         "badge_bg": ORANGE,        "badge_txt": WHITE},
+        {"bg": c255(26,26,26),    "border": c255(26,26,26),
+         "title": c255(249,250,251),"body": c255(156,163,175),
+         "badge_bg": ORANGE,        "badge_txt": WHITE},
+        {"bg": ORANGE,            "border": ORANGE,
+         "title": WHITE,           "body": c255(255,220,190),
+         "badge_bg": WHITE,         "badge_txt": ORANGE},
+    ]
+    PAD_X = 36
+    CARD_W, CARD_H, GAP = 208, 220, 12
+    CARD_Y = 128  # (405 - 70 - 220) / 2 + 70 ≈ 128 → 수직 중앙
+
+    for ci, (card, sty) in enumerate(zip(cards, CARD_STYLES)):
+        cx = PAD_X + ci * (CARD_W + GAP)
+        cid = f"{sid}_card{ci}"
+        reqs += [shape(cid, sid, "ROUND_RECTANGLE", cx, CARD_Y, CARD_W, CARD_H),
+                 fill(cid, sty["bg"], sty["border"], 0)]
+        # 원형 번호 배지
+        bid = f"{sid}_badge{ci}"
+        reqs += [shape(bid, sid, "ELLIPSE", cx+16, CARD_Y+16, 20, 20),
+                 fill(bid, sty["badge_bg"], sty["badge_bg"], 0),
+                 txt(bid, card["num"]),
+                 txtstyle(bid, sty["badge_txt"], 8, bold=True),
+                 {"updateParagraphStyle": {"objectId": bid,
+                     "textRange": {"type": "ALL"},
+                     "style": {"alignment": "CENTER"}, "fields": "alignment"}}]
+        # 카드 제목
+        ttid = f"{sid}_ctitle{ci}"
+        reqs += [shape(ttid, sid, "TEXT_BOX", cx+16, CARD_Y+46, CARD_W-32, 40),
+                 txt(ttid, card["title"]),
+                 txtstyle(ttid, sty["title"], 11, bold=True)]
+        # 카드 본문
+        bdid = f"{sid}_cbody{ci}"
+        reqs += [shape(bdid, sid, "TEXT_BOX", cx+16, CARD_Y+94, CARD_W-32, 112),
+                 txt(bdid, card["body"]),
+                 txtstyle(bdid, sty["body"], 7.5)]
+```
+
+#### 컴포넌트 K: 목차 TOC (toc) — 웜 테마
+
+```
+베이지 배경 / 상단 메타(오렌지 카테고리 라벨 + 연도) / 2색 대형 제목
+2열 TOC 아이템: → 화살표(오렌지) + bold 제목 + 설명 + 구분선
+```
+
+```python
+def mk_toc(slide_oid, items, insert_index, reqs,
+           category="", year="",
+           title_accent="Table Of", title_rest=" Content",
+           description=""):
+    """
+    items = [{"title": "Introduction", "desc": "설명"}, ...]  최대 6개 (2열 3행)
+    category: 상단 왼쪽 오렌지 caps 라벨 (예: "PROJECT MANAGEMENT")
+    year:     상단 오른쪽 텍스트 (예: "2026")
+    title_accent: 오렌지로 표시할 제목 앞부분
+    title_rest:   검정으로 표시할 나머지 제목
+    description:  우측 상단 소형 설명 텍스트 (선택)
+    """
+    T = THEMES['warm']
+    LINE_COLOR = c255(200, 196, 190)
+
+    reqs.append({"createSlide": {"objectId": slide_oid,
+        "insertionIndex": insert_index,
+        "slideLayoutReference": {"predefinedLayout": "BLANK"}}})
+    reqs.append({"updatePageProperties": {"objectId": slide_oid,
+        "fields": "pageBackgroundFill",
+        "pageProperties": {"pageBackgroundFill": {
+            "solidFill": {"color": {"rgbColor": T['SLIDE_BG']}}}}}})
+
+    # 상단 메타 라벨 (좌: 카테고리, 우: 연도)
+    if category:
+        cid = f"{slide_oid}_cat"
+        reqs += [shape(cid, slide_oid, "TEXT_BOX", 36, 20, 300, 12),
+                 txt(cid, category.upper()),
+                 {"updateTextStyle": {"objectId": cid, "textRange": {"type": "ALL"},
+                     "style": {"foregroundColor": {"opaqueColor": {"rgbColor": ORANGE}},
+                               "fontSize": {"magnitude": 7, "unit": "PT"},
+                               "fontFamily": "Proxima Nova", "bold": True},
+                     "fields": "foregroundColor,fontSize,fontFamily,bold"}}]
+    if year:
+        yid = f"{slide_oid}_yr"
+        reqs += [shape(yid, slide_oid, "TEXT_BOX", 600, 20, 84, 12),
+                 txt(yid, str(year)),
+                 {"updateTextStyle": {"objectId": yid, "textRange": {"type": "ALL"},
+                     "style": {"foregroundColor": {"opaqueColor": {"rgbColor": ORANGE}},
+                               "fontSize": {"magnitude": 7, "unit": "PT"},
+                               "fontFamily": "Proxima Nova", "bold": False},
+                     "fields": "foregroundColor,fontSize,fontFamily,bold"}},
+                 {"updateParagraphStyle": {"objectId": yid,
+                     "textRange": {"type": "ALL"},
+                     "style": {"alignment": "END"}, "fields": "alignment"}}]
+
+    # 2색 대형 제목
+    full_title = title_accent + title_rest
+    tid = f"{slide_oid}_ttl"
+    reqs += [shape(tid, slide_oid, "TEXT_BOX", 36, 38, 460, 50), txt(tid, full_title)]
+    reqs.append({"updateTextStyle": {"objectId": tid, "textRange": {"type": "ALL"},
+        "style": {"foregroundColor": {"opaqueColor": {"rgbColor": T['TITLE_COLOR']}},
+                  "fontSize": {"magnitude": 32, "unit": "PT"},
+                  "fontFamily": "Proxima Nova", "bold": True},
+        "fields": "foregroundColor,fontSize,fontFamily,bold"}})
+    reqs.append({"updateTextStyle": {"objectId": tid,
+        "textRange": {"type": "FIXED_RANGE", "startIndex": 0, "endIndex": len(title_accent)},
+        "style": {"foregroundColor": {"opaqueColor": {"rgbColor": ORANGE}}},
+        "fields": "foregroundColor"}})
+
+    # 우측 설명 텍스트
+    if description:
+        did = f"{slide_oid}_desc"
+        reqs += [shape(did, slide_oid, "TEXT_BOX", 510, 38, 174, 50),
+                 txt(did, description),
+                 txtstyle(did, T['BODY_COLOR'], 7.5)]
+
+    # 2열 TOC 아이템
+    COL1_X, COL2_X = 36, 392
+    COL_W = 320
+    ITEM_Y0, ITEM_H = 150, 46  # (405-68-138)/2 + 68+82 ≈ 150 → 수직 중앙
+    mid = (len(items) + 1) // 2
+
+    for col_idx, (col_items, col_x) in enumerate([(items[:mid], COL1_X), (items[mid:], COL2_X)]):
+        for row, item in enumerate(col_items):
+            iy = ITEM_Y0 + row * ITEM_H
+            # 구분선
+            lid = f"{slide_oid}_tl{col_idx}{row}"
+            reqs += [shape(lid, slide_oid, "RECTANGLE", col_x, iy, COL_W, 1),
+                     fill(lid, LINE_COLOR)]
+            # → 화살표
+            aid = f"{slide_oid}_arr{col_idx}{row}"
+            reqs += [shape(aid, slide_oid, "TEXT_BOX", col_x, iy+8, 18, 14),
+                     txt(aid, "→"),
+                     {"updateTextStyle": {"objectId": aid, "textRange": {"type": "ALL"},
+                         "style": {"foregroundColor": {"opaqueColor": {"rgbColor": ORANGE}},
+                                   "fontSize": {"magnitude": 10, "unit": "PT"},
+                                   "fontFamily": "Proxima Nova", "bold": True},
+                         "fields": "foregroundColor,fontSize,fontFamily,bold"}}]
+            # 섹션 제목
+            stid = f"{slide_oid}_st{col_idx}{row}"
+            reqs += [shape(stid, slide_oid, "TEXT_BOX", col_x+22, iy+6, 130, 14),
+                     txt(stid, item["title"]),
+                     txtstyle(stid, T['TITLE_COLOR'], 9, bold=True)]
+            # 설명
+            sdid = f"{slide_oid}_sd{col_idx}{row}"
+            reqs += [shape(sdid, slide_oid, "TEXT_BOX", col_x+22, iy+20, 292, 20),
+                     txt(sdid, item.get("desc", "")),
+                     txtstyle(sdid, T['BODY_COLOR'], 7)]
+```
+
+#### 컴포넌트 L: 분할 카드 (split-cards) — 좌측 텍스트 + 우측 카드 스택
+
+```
+좌측: 텍스트 라인 목록 / 우측: 세로 스택 카드 (accent·dark·light 순)
+```
+
+```python
+def mk_split_cards(sid, text_lines, cards, reqs, theme='light'):
+    """
+    text_lines: ["고객과 함께 성장하는 기업", "함께 꿈을 이룰 수 있는 기업", ...]
+    cards: [{"label": "Professionalism", "style": "accent"},
+            {"label": "Honesty",         "style": "dark"},
+            {"label": "Responsibility",  "style": "light"}, ...]
+    style 값: 'accent'(오렌지) | 'dark'(검정) | 'light'(밝은 회색)
+    """
+    T = THEMES[theme]
+    CARD_STYLES_MAP = {
+        'accent': {'bg': ORANGE,          'txt': WHITE},
+        'dark':   {'bg': c255(26,26,26),  'txt': c255(249,250,251)},
+        'light':  {'bg': c255(245,245,245),'txt': c255(26,26,26)},
+    }
+    # 좌측 텍스트
+    for i, line in enumerate(text_lines):
+        lid = f"{sid}_tl{i}"
+        reqs += [shape(lid, sid, "TEXT_BOX", 36, 143 + i * 24, 300, 20),
+                 txt(lid, line),
+                 txtstyle(lid, T['BODY_COLOR'], 9)]
+
+    # 우측 카드 스택
+    CARD_X, CARD_W, CARD_H, CARD_GAP = 370, 314, 56, 8
+    for i, card in enumerate(cards):
+        cy = 143 + i * (CARD_H + CARD_GAP)
+        sty = CARD_STYLES_MAP.get(card.get('style', 'light'))
+        cid = f"{sid}_sc{i}"
+        reqs += [shape(cid, sid, "ROUND_RECTANGLE", CARD_X, cy, CARD_W, CARD_H),
+                 fill(cid, sty['bg'], sty['bg'], 0),
+                 txt(cid, card['label']),
+                 txtstyle(cid, sty['txt'], 11),
+                 {"updateParagraphStyle": {"objectId": cid,
+                     "textRange": {"type": "ALL"},
+                     "style": {"alignment": "CENTER"}, "fields": "alignment"}}]
+```
+
+
 ---
 
-### 3-7. batchUpdate 실행
+### 3-6. batchUpdate 실행
 
 모든 컴포넌트 요청을 하나의 리스트에 모아 실행:
 
@@ -736,7 +973,7 @@ gws slides presentations batchUpdate \
   python3 -c "import json,sys; d=json.load(sys.stdin); print('완료:', len(d.get('replies',[])), '항목')"
 ```
 
-### 3-8. 결과 출력
+### 3-7. 결과 출력
 
 ```
 프레젠테이션 생성 완료
@@ -760,6 +997,6 @@ URL: https://docs.google.com/presentation/d/$NEW_ID/edit
 - 새 프레젠테이션 URL이 출력됐다.
 - 표지는 Spigen 템플릿 그대로 (제목/부서/담당자/날짜/버전 정확히 입력됨).
 - 내용 슬라이드는 유형별 테마가 올바르게 적용됐다: cover/section-divider → 검정 배경(`dark`), content/statistics → 흰 배경(`light`), 오렌지 상단 바는 테마 불문 공통.
-- 마지막 슬라이드는 Spigen 템플릿 인덱스 18 (빈 슬라이드).
+- 마지막 슬라이드는 Spigen 템플릿 인덱스 1, 2 (마지막 2페이지).
 - 모든 텍스트·도형이 구글 슬라이드에서 직접 수정 가능하다.
 - Step 2에서 계획한 모든 슬라이드에 내용이 입력됐다.
