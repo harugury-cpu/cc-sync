@@ -1,6 +1,20 @@
 # spigen_execution.md — Google Slides API 실행 코드
 > Step 3 (기술 실행). 템플릿 복사, 표지 삽입, batchUpdate 실행.
 
+## 브랜치 선택
+
+| 브랜치 | 유형 | 실행 방식 |
+|-------|-----|---------|
+| **Branch A** | 보고서·분석·회의자료·기타 | 브랜드 템플릿(표지·마감) + spigen_lib 내용 생성 |
+| **Branch B** | 제안서·시안 | 콘텐츠 템플릿 복사 → 슬라이드 선택 → 텍스트 교체 → (선택) lib 추가 |
+
+Branch A → 아래 3-1~3-7 진행  
+Branch B → 파일 하단 "Branch B" 섹션으로 이동
+
+---
+
+## Branch A — All lib
+
 ## Step 3: 기술 실행 (Google Slides API 직접 구현)
 
 ### 핵심 전략
@@ -197,7 +211,117 @@ URL: https://docs.google.com/presentation/d/$NEW_ID/edit
 
 ---
 
-## 오류 처리
+---
+
+## Branch B — Template + lib (제안서·시안)
+
+콘텐츠 템플릿 ID: `1rh_2NNwM2CeZxFaZFfgoK3s1RAU2SyzZd794480hrVo`
+
+### B-1. 날짜 확인
+
+```bash
+TODAY=$(date +%Y.%m.%d)
+echo $TODAY
+```
+
+### B-2. 콘텐츠 템플릿 복사
+
+```bash
+COPY_RESULT=$(gws drive files copy \
+  --params '{"fileId":"1rh_2NNwM2CeZxFaZFfgoK3s1RAU2SyzZd794480hrVo"}' \
+  --json "{\"name\":\"$TITLE\"}" 2>/dev/null)
+NEW_ID=$(echo "$COPY_RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+echo "복사된 ID: $NEW_ID"
+```
+
+### B-3. 슬라이드 구조 조회
+
+Branch A의 3-3과 동일: `parse_slides.py` 실행 → `/tmp/spigen_map.json` 생성.
+
+### B-4. 슬라이드 선택 + 불필요 슬라이드 삭제
+
+`slide_map`을 보고 유지할 슬라이드 인덱스를 결정 후 나머지 삭제:
+
+```python
+# /tmp/delete_slides.py
+import json
+
+with open('/tmp/spigen_map.json') as f:
+    m = json.load(f)
+
+KEEP = {0, 2, 5}  # 유지할 슬라이드 인덱스 — AI가 slide_map 보고 결정
+
+reqs = []
+for idx in sorted(m.keys(), key=int, reverse=True):
+    if int(idx) not in KEEP:
+        reqs.append({"deleteObject": {"objectId": m[idx]['slide_id']}})
+
+with open('/tmp/delete_req.json', 'w') as f:
+    json.dump({"requests": reqs}, f)
+print(f"삭제 대상: {len(reqs)}장")
+```
+
+```bash
+python3 /tmp/delete_slides.py
+gws slides presentations batchUpdate \
+  --params "{\"presentationId\":\"$NEW_ID\"}" \
+  --json "$(cat /tmp/delete_req.json)" 2>/dev/null | \
+  python3 -c "import json,sys; d=json.load(sys.stdin); print('슬라이드 삭제 완료')"
+```
+
+### B-5. 텍스트 교체
+
+남은 슬라이드의 placeholder를 실제 내용으로 교체:
+
+```python
+# /tmp/fill_template.py
+import json
+
+with open('/tmp/spigen_map.json') as f:
+    m = json.load(f)
+
+# {슬라이드_인덱스: {박스_위치: "교체할 텍스트"}} — AI가 구성
+FILL = {
+    0: {0: "제안서 제목", 1: "디자인부문ㅣ패키지디자인팀\n한원진 담당", 3: "2026.04.15\nV1.0"},
+}
+
+reqs = []
+for slide_idx, boxes in FILL.items():
+    info = m.get(str(slide_idx))
+    if not info:
+        continue
+    for box_pos, text in boxes.items():
+        if box_pos < len(info['boxes']):
+            oid = info['boxes'][box_pos]['oid']
+            existing = info['boxes'][box_pos].get('text', '')
+            if existing:
+                reqs.append({"deleteText": {"objectId": oid, "textRange": {"type": "ALL"}}})
+            if text:
+                reqs.append({"insertText": {"objectId": oid, "insertionIndex": 0, "text": text}})
+
+with open('/tmp/fill_req.json', 'w') as f:
+    json.dump({"requests": reqs}, f)
+print(f"교체 요청: {len(reqs)}개")
+```
+
+```bash
+python3 /tmp/fill_template.py
+gws slides presentations batchUpdate \
+  --params "{\"presentationId\":\"$NEW_ID\"}" \
+  --json "$(cat /tmp/fill_req.json)" 2>/dev/null | \
+  python3 -c "import json,sys; d=json.load(sys.stdin); print('텍스트 교체 완료')"
+```
+
+### B-6. 추가 슬라이드 생성 (선택)
+
+동적 슬라이드가 필요하면 Branch A의 3-5~3-6과 동일하게 spigen_lib 적용.
+
+### B-7. 결과 출력
+
+Branch A의 3-7과 동일.
+
+## 오류 처리 (공통)
+
 
 - 템플릿 복사 실패 → `gws auth status` 확인
 - `deleteText` 400 오류 → 빈 박스에 deleteText 적용 금지. `existing_text`가 있는 박스에만 실행
