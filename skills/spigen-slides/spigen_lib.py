@@ -44,12 +44,15 @@ def shape(oid, page, stype, x, y, w, h):
 
 def fill(oid, fg, bg=None, wt=0.6):
     bg = bg or fg
+    props = {"shapeBackgroundFill": {"solidFill": {"color": {"rgbColor": fg}}}}
+    fields = "shapeBackgroundFill"
+    if wt > 0:
+        props["outline"] = {
+            "outlineFill": {"solidFill": {"color": {"rgbColor": bg}}},
+            "weight": {"magnitude": pt(wt), "unit": "EMU"}}
+        fields += ",outline"
     return {"updateShapeProperties": {"objectId": oid,
-        "fields": "shapeBackgroundFill,outline",
-        "shapeProperties": {
-            "shapeBackgroundFill": {"solidFill": {"color": {"rgbColor": fg}}},
-            "outline": {"outlineFill": {"solidFill": {"color": {"rgbColor": bg}}},
-                        "weight": {"magnitude": pt(wt), "unit": "EMU"}}}}}
+        "fields": fields, "shapeProperties": props}}
 
 def txtstyle(oid, color, size, bold=False):
     return {"updateTextStyle": {"objectId": oid,
