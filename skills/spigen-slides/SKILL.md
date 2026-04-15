@@ -547,6 +547,182 @@ def mk_text_block(sid, body_text, reqs, y_start=83, font_size=8.5, theme='light'
              txtstyle(bid, T['BODY_COLOR'], font_size)]
 ```
 
+
+#### 컴포넌트 E: 섹션 구분 (section-divider) — 다크 테마
+
+```
+대형 번호(120pt, 오렌지) + 섹션 제목(36pt, 흰색) — 포스터 스타일
+```
+
+```python
+def mk_section_divider(slide_oid, num, title, insert_index, reqs):
+    """num='01', title='디자인 원칙' — 다크 테마 고정"""
+    T = THEMES['dark']
+    reqs.append({"createSlide": {"objectId": slide_oid,
+        "insertionIndex": insert_index,
+        "slideLayoutReference": {"predefinedLayout": "BLANK"}}})
+    reqs.append({"updatePageProperties": {"objectId": slide_oid,
+        "fields": "pageBackgroundFill",
+        "pageProperties": {"pageBackgroundFill": {
+            "solidFill": {"color": {"rgbColor": T['SLIDE_BG']}}}}}})
+    bar = f"{slide_oid}_bar"
+    reqs += [shape(bar, slide_oid, "RECTANGLE", 0, 0, 720, 3), fill(bar, ORANGE)]
+    # 대형 번호 (120pt, 오렌지, 좌측)
+    nid = f"{slide_oid}_num"
+    reqs += [shape(nid, slide_oid, "TEXT_BOX", 56, 120, 300, 140),
+             txt(nid, num),
+             {"updateTextStyle": {"objectId": nid,
+                 "textRange": {"type": "ALL"},
+                 "style": {"foregroundColor": {"opaqueColor": {"rgbColor": ORANGE}},
+                           "fontSize": {"magnitude": 120, "unit": "PT"},
+                           "fontFamily": "Proxima Nova", "bold": True},
+                 "fields": "foregroundColor,fontSize,fontFamily,bold"}}]
+    # 섹션 제목 (36pt, 흰색)
+    tid = f"{slide_oid}_ttl"
+    reqs += [shape(tid, slide_oid, "TEXT_BOX", 56, 280, 600, 50),
+             txt(tid, title),
+             {"updateTextStyle": {"objectId": tid,
+                 "textRange": {"type": "ALL"},
+                 "style": {"foregroundColor": {"opaqueColor": {"rgbColor": T['TITLE_COLOR']}},
+                           "fontSize": {"magnitude": 36, "unit": "PT"},
+                           "fontFamily": "Noto Sans", "bold": False},
+                 "fields": "foregroundColor,fontSize,fontFamily,bold"}}]
+```
+
+#### 컴포넌트 F: 목차 (contents) — 다크 테마
+
+```
+"CONTENTS" 타이틀 + 섹션 번호·제목 리스트 (오렌지 번호 + 흰색 제목)
+```
+
+```python
+def mk_contents(slide_oid, sections, insert_index, reqs):
+    """sections = [("01","디자인 원칙"), ("02","소재 규정"), ("03","적용 사례")]"""
+    T = THEMES['dark']
+    reqs.append({"createSlide": {"objectId": slide_oid,
+        "insertionIndex": insert_index,
+        "slideLayoutReference": {"predefinedLayout": "BLANK"}}})
+    reqs.append({"updatePageProperties": {"objectId": slide_oid,
+        "fields": "pageBackgroundFill",
+        "pageProperties": {"pageBackgroundFill": {
+            "solidFill": {"color": {"rgbColor": T['SLIDE_BG']}}}}}})
+    bar = f"{slide_oid}_bar"
+    reqs += [shape(bar, slide_oid, "RECTANGLE", 0, 0, 720, 3), fill(bar, ORANGE)]
+    # "CONTENTS" 타이틀
+    cid = f"{slide_oid}_ctl"
+    reqs += [shape(cid, slide_oid, "TEXT_BOX", 56, 44, 300, 30),
+             txt(cid, "CONTENTS"),
+             {"updateTextStyle": {"objectId": cid,
+                 "textRange": {"type": "ALL"},
+                 "style": {"foregroundColor": {"opaqueColor": {"rgbColor": ORANGE}},
+                           "fontSize": {"magnitude": 14, "unit": "PT"},
+                           "fontFamily": "Proxima Nova", "bold": True},
+                 "fields": "foregroundColor,fontSize,fontFamily,bold"}}]
+    Y0 = 120
+    for i, (num, title) in enumerate(sections):
+        y = Y0 + i * 72
+        nid = f"{slide_oid}_n{i}"
+        reqs += [shape(nid, slide_oid, "TEXT_BOX", 56, y, 80, 40),
+                 txt(nid, num),
+                 {"updateTextStyle": {"objectId": nid,
+                     "textRange": {"type": "ALL"},
+                     "style": {"foregroundColor": {"opaqueColor": {"rgbColor": ORANGE}},
+                               "fontSize": {"magnitude": 28, "unit": "PT"},
+                               "fontFamily": "Proxima Nova", "bold": True},
+                     "fields": "foregroundColor,fontSize,fontFamily,bold"}}]
+        tid = f"{slide_oid}_t{i}"
+        reqs += [shape(tid, slide_oid, "TEXT_BOX", 140, y+4, 500, 36),
+                 txt(tid, title),
+                 {"updateTextStyle": {"objectId": tid,
+                     "textRange": {"type": "ALL"},
+                     "style": {"foregroundColor": {"opaqueColor": {"rgbColor": T['TITLE_COLOR']}},
+                               "fontSize": {"magnitude": 20, "unit": "PT"},
+                               "fontFamily": "Noto Sans", "bold": False},
+                     "fields": "foregroundColor,fontSize,fontFamily,bold"}}]
+        if i < len(sections) - 1:
+            lid = f"{slide_oid}_ln{i}"
+            reqs += [shape(lid, slide_oid, "RECTANGLE", 56, y+60, 608, 1),
+                     fill(lid, T['CARD_BORDER'])]
+```
+
+#### 컴포넌트 G: 인용/강조 (quote) — 다크 테마
+
+```
+중앙 정렬 대형 텍스트 — 임팩트 있는 한 줄 메시지
+```
+
+```python
+def mk_quote(slide_oid, quote_text, insert_index, reqs, attribution=""):
+    """quote_text='성능이 30% 향상됐다', attribution='2026 Q1 리포트' (선택)"""
+    T = THEMES['dark']
+    reqs.append({"createSlide": {"objectId": slide_oid,
+        "insertionIndex": insert_index,
+        "slideLayoutReference": {"predefinedLayout": "BLANK"}}})
+    reqs.append({"updatePageProperties": {"objectId": slide_oid,
+        "fields": "pageBackgroundFill",
+        "pageProperties": {"pageBackgroundFill": {
+            "solidFill": {"color": {"rgbColor": T['SLIDE_BG']}}}}}})
+    # 오렌지 악센트 바 (인용 텍스트 위 중앙)
+    bid = f"{slide_oid}_qbar"
+    reqs += [shape(bid, slide_oid, "RECTANGLE", 335, 140, 50, 3), fill(bid, ORANGE)]
+    # 인용 텍스트 (28pt, 중앙)
+    qid = f"{slide_oid}_q"
+    reqs += [shape(qid, slide_oid, "TEXT_BOX", 80, 160, 560, 80),
+             txt(qid, quote_text),
+             {"updateTextStyle": {"objectId": qid,
+                 "textRange": {"type": "ALL"},
+                 "style": {"foregroundColor": {"opaqueColor": {"rgbColor": T['TITLE_COLOR']}},
+                           "fontSize": {"magnitude": 28, "unit": "PT"},
+                           "fontFamily": "Noto Sans", "bold": True},
+                 "fields": "foregroundColor,fontSize,fontFamily,bold"}},
+             {"updateParagraphStyle": {"objectId": qid,
+                 "textRange": {"type": "ALL"},
+                 "style": {"alignment": "CENTER"}, "fields": "alignment"}}]
+    if attribution:
+        aid = f"{slide_oid}_attr"
+        reqs += [shape(aid, slide_oid, "TEXT_BOX", 80, 260, 560, 24),
+                 txt(aid, attribution),
+                 txtstyle(aid, T['BODY_COLOR'], 10),
+                 {"updateParagraphStyle": {"objectId": aid,
+                     "textRange": {"type": "ALL"},
+                     "style": {"alignment": "CENTER"}, "fields": "alignment"}}]
+```
+
+#### 컴포넌트 H: 2열 분할 (split-layout) — 라이트 테마
+
+```
+좌측: 제목+설명 / 우측: 제목+설명 — 비교·병렬 정보 표현
+```
+
+```python
+def mk_split(sid, left, right, reqs, theme='light'):
+    """left={'title':'좌측 제목','body':'설명'}, right={...}
+    theme: 'light' (기본) | 'dark'"""
+    T = THEMES[theme]
+    LX, RX = 56, 380
+    COL_W = 280
+    lt = f"{sid}_lt"
+    reqs += [shape(lt, sid, "TEXT_BOX", LX, 83, COL_W, 24),
+             txt(lt, left['title']),
+             txtstyle(lt, T['TITLE_COLOR'], 14, bold=True)]
+    lb = f"{sid}_lb"
+    reqs += [shape(lb, sid, "TEXT_BOX", LX, 115, COL_W, 240),
+             txt(lb, left['body']),
+             txtstyle(lb, T['BODY_COLOR'], 8.5)]
+    div = f"{sid}_div"
+    reqs += [shape(div, sid, "RECTANGLE", 356, 83, 1, 280),
+             fill(div, T['CARD_BORDER'])]
+    rt = f"{sid}_rt"
+    reqs += [shape(rt, sid, "TEXT_BOX", RX, 83, COL_W, 24),
+             txt(rt, right['title']),
+             txtstyle(rt, T['TITLE_COLOR'], 14, bold=True)]
+    rb = f"{sid}_rb"
+    reqs += [shape(rb, sid, "TEXT_BOX", RX, 115, COL_W, 240),
+             txt(rb, right['body']),
+             txtstyle(rb, T['BODY_COLOR'], 8.5)]
+```
+
+
 ---
 
 ### 3-7. batchUpdate 실행
@@ -576,7 +752,7 @@ URL: https://docs.google.com/presentation/d/$NEW_ID/edit
 
 - 템플릿 복사 실패 → `gws auth status` 확인
 - `deleteText` 400 오류 → 빈 박스에 deleteText 적용 금지. `existing_text`가 있는 박스에만 실행
-- `createShape` 실패 → objectId 중복 확인 (슬라이드마다 고유 prefix 사용)
+- `createShape` 실패 → objectId 중복 확인 (슬라이드마다 고유 prefix 사용). **objectId는 최소 5자 이상** 필요 (예: `slide_01`, `sec_01` — `s01` 같은 4자 이하는 API 거부)
 - Google Drive 인증 오류 → `gws auth status` 확인 후 재인증
 
 ## Done when
