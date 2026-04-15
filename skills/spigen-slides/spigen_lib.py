@@ -212,24 +212,24 @@ def mk_section_divider(slide_oid, num, title, insert_index, reqs):
             "solidFill": {"color": {"rgbColor": T['SLIDE_BG']}}}}}})
     bar = f"{slide_oid}_bar"
     reqs += [shape(bar, slide_oid, "RECTANGLE", 0, 0, 720, 3), fill(bar, ORANGE)]
-    # 대형 번호 (120pt, 오렌지, 좌측)
+    # 대형 번호 (105pt, 오렌지, 좌측)
     nid = f"{slide_oid}_num"
-    reqs += [shape(nid, slide_oid, "TEXT_BOX", 56, 120, 300, 140),
+    reqs += [shape(nid, slide_oid, "TEXT_BOX", 52, 83, 300, 130),
              txt(nid, num),
              {"updateTextStyle": {"objectId": nid,
                  "textRange": {"type": "ALL"},
                  "style": {"foregroundColor": {"opaqueColor": {"rgbColor": ORANGE}},
-                           "fontSize": {"magnitude": 120, "unit": "PT"},
+                           "fontSize": {"magnitude": 105, "unit": "PT"},
                            "fontFamily": "Proxima Nova", "bold": True},
                  "fields": "foregroundColor,fontSize,fontFamily,bold"}}]
-    # 섹션 제목 (36pt, 흰색)
+    # 섹션 제목 (21pt, 흰색)
     tid = f"{slide_oid}_ttl"
-    reqs += [shape(tid, slide_oid, "TEXT_BOX", 56, 280, 600, 50),
+    reqs += [shape(tid, slide_oid, "TEXT_BOX", 56, 212, 600, 40),
              txt(tid, title),
              {"updateTextStyle": {"objectId": tid,
                  "textRange": {"type": "ALL"},
                  "style": {"foregroundColor": {"opaqueColor": {"rgbColor": T['TITLE_COLOR']}},
-                           "fontSize": {"magnitude": 36, "unit": "PT"},
+                           "fontSize": {"magnitude": 21, "unit": "PT"},
                            "fontFamily": "Noto Sans", "bold": False},
                  "fields": "foregroundColor,fontSize,fontFamily,bold"}}]
 
@@ -295,15 +295,15 @@ def mk_quote(slide_oid, quote_text, insert_index, reqs, attribution=""):
             "solidFill": {"color": {"rgbColor": T['SLIDE_BG']}}}}}})
     # 오렌지 악센트 바 (인용 텍스트 위 중앙)
     bid = f"{slide_oid}_qbar"
-    reqs += [shape(bid, slide_oid, "RECTANGLE", 335, 140, 50, 3), fill(bid, ORANGE)]
-    # 인용 텍스트 (28pt, 중앙)
+    reqs += [shape(bid, slide_oid, "RECTANGLE", 335, 138, 50, 3), fill(bid, ORANGE)]
+    # 인용 텍스트 (24pt, 중앙)
     qid = f"{slide_oid}_q"
-    reqs += [shape(qid, slide_oid, "TEXT_BOX", 80, 160, 560, 80),
+    reqs += [shape(qid, slide_oid, "TEXT_BOX", 80, 155, 560, 80),
              txt(qid, quote_text),
              {"updateTextStyle": {"objectId": qid,
                  "textRange": {"type": "ALL"},
                  "style": {"foregroundColor": {"opaqueColor": {"rgbColor": T['TITLE_COLOR']}},
-                           "fontSize": {"magnitude": 28, "unit": "PT"},
+                           "fontSize": {"magnitude": 24, "unit": "PT"},
                            "fontFamily": "Noto Sans", "bold": True},
                  "fields": "foregroundColor,fontSize,fontFamily,bold"}},
              {"updateParagraphStyle": {"objectId": qid,
@@ -311,7 +311,7 @@ def mk_quote(slide_oid, quote_text, insert_index, reqs, attribution=""):
                  "style": {"alignment": "CENTER"}, "fields": "alignment"}}]
     if attribution:
         aid = f"{slide_oid}_attr"
-        reqs += [shape(aid, slide_oid, "TEXT_BOX", 80, 260, 560, 24),
+        reqs += [shape(aid, slide_oid, "TEXT_BOX", 80, 250, 560, 24),
                  txt(aid, attribution),
                  txtstyle(aid, T['BODY_COLOR'], 10),
                  {"updateParagraphStyle": {"objectId": aid,
@@ -487,15 +487,15 @@ def mk_toc(slide_oid, items, insert_index, reqs,
         "style": {"foregroundColor": {"opaqueColor": {"rgbColor": ORANGE}}},
         "fields": "foregroundColor"}})
 
-    # 우측 설명 텍스트
+    # 제목 아래 설명 텍스트
     if description:
         did = f"{slide_oid}_desc"
-        reqs += [shape(did, slide_oid, "TEXT_BOX", 510, 38, 174, 50),
+        reqs += [shape(did, slide_oid, "TEXT_BOX", 36, 88, 500, 14),
                  txt(did, description),
                  txtstyle(did, T['BODY_COLOR'], 7.5)]
 
     # 2열 TOC 아이템
-    COL1_X, COL2_X = 36, 392
+    COL1_X, COL2_X = 36, 375
     COL_W = 320
     ITEM_Y0, ITEM_H = 150, 46  # (405-68-138)/2 + 68+82 ≈ 150 → 수직 중앙
     mid = (len(items) + 1) // 2
