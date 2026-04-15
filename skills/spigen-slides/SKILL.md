@@ -55,6 +55,24 @@ metadata:
 | split-cards | 라이트 | 좌측 텍스트 + 우측 카드 스택 |
 | closing | 다크 | 브랜드 마감 |
 
+### 색상 비율 원칙 (60-30-10)
+
+| 비율 | 역할 | 적용 토큰 |
+|-----|-----|---------|
+| 60% | 슬라이드 배경 | 다크: `#000000` / 라이트: `#FFFFFF` / 웜: `#F5F0E8` |
+| 30% | 중립 텍스트·카드 | `TITLE_COLOR`, `BODY_COLOR`, `CARD_BG` |
+| 10% | 강조 포인트 | `#FF6900` — 상단 바, 번호, 화살표, 배지 |
+
+> `#FF6900`은 한 슬라이드당 **3개 이하** 요소에 사용한다. 과용하면 브랜드 강조 효과가 희석된다.
+
+### 테마 교차 원칙
+
+동일 테마가 3장 이상 연속되면 시각적 단조로움이 생긴다. 다크↔라이트를 교차 배치한다.
+
+```
+cover(dark) → contents(dark) → section-divider(dark) → content(light) → statistics(light) → section-divider(dark) → ...
+```
+
 ## 슬라이드 디자인 사양 (slides-grab × Spigen)
 
 **표지(slide-01.html)만 Spigen 브랜드 커버로 교체한다. 나머지 슬라이드는 slides-grab-design이 HTML로 생성한다.**
@@ -162,6 +180,22 @@ slides-grab의 내러티브 시퀀스를 따른다:
 | 변경이력 | `content` | 변경이력 있을 때만 추가 |
 | 마지막 | `closing` | Spigen 분위기 마감 |
 
+### 컴포넌트 빠른 선택 가이드
+
+| 상황 | 컴포넌트 | 함수 | 기본 테마 |
+|-----|---------|-----|---------|
+| 표지 / 섹션 구분 | slide-base + section-divider | `slide_base()` / `mk_section_divider()` | dark |
+| 목차 (다크 스타일) | contents | `mk_contents()` | dark |
+| 목차 (베이지, 메타 라벨) | toc | `mk_toc()` | warm |
+| 현재→문제→기대효과 3열 비교 | 3-col | `mk_3col()` | light |
+| 핵심 개념 3가지 카드 | 3col-cards | `mk_3col_cards()` | light |
+| 프로세스 / 흐름도 | flow | `mk_flow()` | dark |
+| 텍스트 중심 설명 | text-block | `mk_text_block()` | light |
+| 좌우 비교 / 병렬 | split-layout | `mk_split()` | light |
+| 텍스트 + 우측 카드 스택 | split-cards | `mk_split_cards()` | light |
+| 임팩트 한 줄 메시지 | quote | `mk_quote()` | dark |
+| 오렌지+테마색 2색 제목 | title-accent | `mk_title_accent()` | light |
+
 ### 카피 작성 원칙 (slides-grab 기준)
 
 - **슬라이드당 하나의 메시지**: 경쟁하는 블록 금지
@@ -193,6 +227,10 @@ slides-grab의 내러티브 시퀀스를 따른다:
 - [ ] 각 슬라이드에 경쟁하는 블록 없이 하나의 지배적인 메시지가 있는가?
 - [ ] 제거해도 의미가 손상되지 않는 카피·배지·콜아웃이 없는가?
 - [ ] 섹션 구분 슬라이드가 포스터처럼 간결한가?
+- [ ] `#FF6900`이 한 슬라이드에 3개 이하 요소에만 사용됐는가?
+- [ ] 폰트는 Proxima Nova(영문) / Noto Sans(한글) 두 가지만 사용됐는가?
+- [ ] 동일 테마가 3장 이상 연속 배치되지 않았는가? (다크↔라이트 교차 권장)
+- [ ] 슬라이드 유형에 맞는 기본 테마가 적용됐는가? (cover·section-divider → dark, content·statistics → light)
 
 구성을 사용자에게 보여주고 확인받는다. "수정 사항이 있으면 말씀해 주세요. 없으면 생성하겠습니다."
 
