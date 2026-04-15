@@ -1,19 +1,19 @@
 # spigen_execution.md — Google Slides API 실행 코드
 > Step 3 (기술 실행). 템플릿 복사, 표지 삽입, batchUpdate 실행.
 
-## 브랜치 선택
+## 방식 선택
 
 | 브랜치 | 유형 | 실행 방식 |
 |-------|-----|---------|
-| **Branch A** | 보고서·분석·회의자료·기타 | 브랜드 템플릿(표지·마감) + spigen_lib 내용 생성 |
-| **Branch B** | 제안서·시안 | 콘텐츠 템플릿 복사 → 슬라이드 선택 → 텍스트 교체 → (선택) lib 추가 |
+| **lib 방식** | 보고서·분석·회의자료·기타 | 브랜드 템플릿(표지·마감) + spigen_lib 내용 생성 |
+| **템플릿 방식** | 제안서·시안 | 콘텐츠 템플릿 복사 → 슬라이드 선택 → 텍스트 교체 → (선택) lib 추가 |
 
-Branch A → 아래 3-1~3-7 진행  
-Branch B → 파일 하단 "Branch B" 섹션으로 이동
+lib 방식 → 아래 3-1~3-7 진행  
+템플릿 방식 → 파일 하단 "템플릿 방식" 섹션으로 이동
 
 ---
 
-## Branch A — All lib
+## lib 방식
 
 ## Step 3: 기술 실행 (Google Slides API 직접 구현)
 
@@ -213,7 +213,7 @@ URL: https://docs.google.com/presentation/d/$NEW_ID/edit
 
 ---
 
-## Branch B — Template + lib (제안서·시안)
+## 템플릿 방식 (제안서·시안)
 
 콘텐츠 템플릿 ID: `1rh_2NNwM2CeZxFaZFfgoK3s1RAU2SyzZd794480hrVo`
 
@@ -236,7 +236,7 @@ echo "복사된 ID: $NEW_ID"
 
 ### B-3. 슬라이드 구조 조회
 
-Branch A의 3-3과 동일: `parse_slides.py` 실행 → `/tmp/spigen_map.json` 생성.
+lib 방식 3-3과 동일: `parse_slides.py` 실행 → `/tmp/spigen_map.json` 생성.
 
 ### B-4. 슬라이드 선택 + 불필요 슬라이드 삭제
 
@@ -314,11 +314,11 @@ gws slides presentations batchUpdate \
 
 ### B-6. 추가 슬라이드 생성 (선택)
 
-동적 슬라이드가 필요하면 Branch A의 3-5~3-6과 동일하게 spigen_lib 적용.
+동적 슬라이드가 필요하면 lib 방식 3-5~3-6과 동일하게 spigen_lib 적용.
 
 ### B-7. 결과 출력
 
-Branch A의 3-7과 동일.
+lib 방식 3-7과 동일.
 
 ## 오류 처리 (공통)
 
