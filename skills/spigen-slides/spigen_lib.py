@@ -45,14 +45,22 @@ def shape(oid, page, stype, x, y, w, h):
 def fill(oid, fg, bg=None, wt=0.6):
     bg = bg or fg
     props = {"shapeBackgroundFill": {"solidFill": {"color": {"rgbColor": fg}}}}
-    fields = "shapeBackgroundFill"
     if wt > 0:
         props["outline"] = {
             "outlineFill": {"solidFill": {"color": {"rgbColor": bg}}},
             "weight": {"magnitude": pt(wt), "unit": "EMU"}}
-        fields += ",outline"
+    else:
+        props["outline"] = {"propertyState": "NOT_RENDERED"}
     return {"updateShapeProperties": {"objectId": oid,
-        "fields": fields, "shapeProperties": props}}
+        "fields": "shapeBackgroundFill,outline", "shapeProperties": props}}
+
+def clr(oid):
+    """TEXT_BOX 배경·테두리 완전 제거 (테마 상속 차단)"""
+    return {"updateShapeProperties": {"objectId": oid,
+        "fields": "outline,shapeBackgroundFill",
+        "shapeProperties": {
+            "shapeBackgroundFill": {"propertyState": "NOT_RENDERED"},
+            "outline": {"propertyState": "NOT_RENDERED"}}}}
 
 def txtstyle(oid, color, size, bold=False):
     return {"updateTextStyle": {"objectId": oid,
@@ -82,7 +90,7 @@ def slide_base(slide_oid, title_text, insert_index, reqs, theme='dark'):
     # 제목 (테마에 따라 글자색 결정)
     ttl = f"{slide_oid}_ttl"
     reqs += [shape(ttl, slide_oid, "TEXT_BOX", 56, 44, 500, 22),
-             txt(ttl, title_text), txtstyle(ttl, T['TITLE_COLOR'], 17, bold=True)]
+             txt(ttl, title_text), txtstyle(ttl, T['TITLE_COLOR'], 17, bold=True), clr(ttl)]
 
 
 # 열 색상 설정 — 테마별로 구분 (라벨 색·왼쪽 바 색)
@@ -118,7 +126,7 @@ def mk_3col(sid, cols, reqs, theme='light'):
         lid = f"{sid}_lbl{ci}"
         reqs += [shape(lid, sid, "TEXT_BOX", cx, COL_Y, COL_W, LBL_H),
                  txt(lid, col["label"].upper()),
-                 txtstyle(lid, sty["lbl"], 6.5, bold=True)]
+                 txtstyle(lid, sty["lbl"], 6.5, bold=True), clr(lid)]
 
         for ii, item in enumerate(col["items"]):
             iy = IY0 + ii*(ITEM_H+ITEM_GAP)
@@ -127,7 +135,7 @@ def mk_3col(sid, cols, reqs, theme='light'):
                 shape(bid, sid, "RECTANGLE", cx, iy, 2, ITEM_H),
                 fill(bid, sty["bar"]),
                 shape(cid, sid, "ROUND_RECTANGLE", cx+2, iy, COL_W-2, ITEM_H),
-                fill(cid, T['CARD_BG'], T['CARD_BORDER']),
+                fill(cid, T['CARD_BG'], T['CARD_BG'], 0),
                 txt(cid, item),
                 txtstyle(cid, T['BODY_COLOR'], 7.5),
             ]
@@ -138,7 +146,8 @@ def mk_3col(sid, cols, reqs, theme='light'):
                  txt(aid, "›"), txtstyle(aid, ORANGE, 13, bold=True),
                  {"updateParagraphStyle": {"objectId": aid,
                    "textRange":{"type":"ALL"},
-                   "style":{"alignment":"CENTER"},"fields":"alignment"}}]
+                   "style":{"alignment":"CENTER"},"fields":"alignment"}},
+                 clr(aid)]
 
 
 def mk_flow(sid, steps, cost_map, reqs, theme='dark'):
@@ -197,7 +206,7 @@ def mk_text_block(sid, body_text, reqs, y_start=83, font_size=8.5, theme='light'
     bid = f"{sid}_body"
     reqs += [shape(bid, sid, "TEXT_BOX", 56, y_start, 608, 280),
              txt(bid, body_text),
-             txtstyle(bid, T['BODY_COLOR'], font_size)]
+             txtstyle(bid, T['BODY_COLOR'], font_size), clr(bid)]
 
 
 def mk_section_divider(slide_oid, num, title, insert_index, reqs):
@@ -221,7 +230,8 @@ def mk_section_divider(slide_oid, num, title, insert_index, reqs):
                  "style": {"foregroundColor": {"opaqueColor": {"rgbColor": ORANGE}},
                            "fontSize": {"magnitude": 105, "unit": "PT"},
                            "fontFamily": "Proxima Nova", "bold": True},
-                 "fields": "foregroundColor,fontSize,fontFamily,bold"}}]
+                 "fields": "foregroundColor,fontSize,fontFamily,bold"}},
+             clr(nid)]
     # 섹션 제목 (21pt, 흰색)
     tid = f"{slide_oid}_ttl"
     reqs += [shape(tid, slide_oid, "TEXT_BOX", 56, 212, 600, 40),
@@ -231,7 +241,8 @@ def mk_section_divider(slide_oid, num, title, insert_index, reqs):
                  "style": {"foregroundColor": {"opaqueColor": {"rgbColor": T['TITLE_COLOR']}},
                            "fontSize": {"magnitude": 21, "unit": "PT"},
                            "fontFamily": "Noto Sans", "bold": False},
-                 "fields": "foregroundColor,fontSize,fontFamily,bold"}}]
+                 "fields": "foregroundColor,fontSize,fontFamily,bold"}},
+             clr(tid)]
 
 
 def mk_contents(slide_oid, sections, insert_index, reqs):
@@ -255,7 +266,8 @@ def mk_contents(slide_oid, sections, insert_index, reqs):
                  "style": {"foregroundColor": {"opaqueColor": {"rgbColor": ORANGE}},
                            "fontSize": {"magnitude": 14, "unit": "PT"},
                            "fontFamily": "Proxima Nova", "bold": True},
-                 "fields": "foregroundColor,fontSize,fontFamily,bold"}}]
+                 "fields": "foregroundColor,fontSize,fontFamily,bold"}},
+             clr(cid)]
     Y0 = 120
     for i, (num, title) in enumerate(sections):
         y = Y0 + i * 72
@@ -267,7 +279,8 @@ def mk_contents(slide_oid, sections, insert_index, reqs):
                      "style": {"foregroundColor": {"opaqueColor": {"rgbColor": ORANGE}},
                                "fontSize": {"magnitude": 28, "unit": "PT"},
                                "fontFamily": "Proxima Nova", "bold": True},
-                     "fields": "foregroundColor,fontSize,fontFamily,bold"}}]
+                     "fields": "foregroundColor,fontSize,fontFamily,bold"}},
+                 clr(nid)]
         tid = f"{slide_oid}_t{i}"
         reqs += [shape(tid, slide_oid, "TEXT_BOX", 140, y+4, 500, 36),
                  txt(tid, title),
@@ -276,7 +289,8 @@ def mk_contents(slide_oid, sections, insert_index, reqs):
                      "style": {"foregroundColor": {"opaqueColor": {"rgbColor": T['TITLE_COLOR']}},
                                "fontSize": {"magnitude": 20, "unit": "PT"},
                                "fontFamily": "Noto Sans", "bold": False},
-                     "fields": "foregroundColor,fontSize,fontFamily,bold"}}]
+                     "fields": "foregroundColor,fontSize,fontFamily,bold"}},
+                 clr(tid)]
         if i < len(sections) - 1:
             lid = f"{slide_oid}_ln{i}"
             reqs += [shape(lid, slide_oid, "RECTANGLE", 56, y+60, 608, 1),
@@ -308,7 +322,8 @@ def mk_quote(slide_oid, quote_text, insert_index, reqs, attribution=""):
                  "fields": "foregroundColor,fontSize,fontFamily,bold"}},
              {"updateParagraphStyle": {"objectId": qid,
                  "textRange": {"type": "ALL"},
-                 "style": {"alignment": "CENTER"}, "fields": "alignment"}}]
+                 "style": {"alignment": "CENTER"}, "fields": "alignment"}},
+             clr(qid)]
     if attribution:
         aid = f"{slide_oid}_attr"
         reqs += [shape(aid, slide_oid, "TEXT_BOX", 80, 250, 560, 24),
@@ -316,7 +331,8 @@ def mk_quote(slide_oid, quote_text, insert_index, reqs, attribution=""):
                  txtstyle(aid, T['BODY_COLOR'], 10),
                  {"updateParagraphStyle": {"objectId": aid,
                      "textRange": {"type": "ALL"},
-                     "style": {"alignment": "CENTER"}, "fields": "alignment"}}]
+                     "style": {"alignment": "CENTER"}, "fields": "alignment"}},
+                 clr(aid)]
 
 
 def mk_split(sid, left, right, reqs, theme='light'):
@@ -328,22 +344,22 @@ def mk_split(sid, left, right, reqs, theme='light'):
     lt = f"{sid}_lt"
     reqs += [shape(lt, sid, "TEXT_BOX", LX, 83, COL_W, 24),
              txt(lt, left['title']),
-             txtstyle(lt, T['TITLE_COLOR'], 14, bold=True)]
+             txtstyle(lt, T['TITLE_COLOR'], 14, bold=True), clr(lt)]
     lb = f"{sid}_lb"
     reqs += [shape(lb, sid, "TEXT_BOX", LX, 115, COL_W, 240),
              txt(lb, left['body']),
-             txtstyle(lb, T['BODY_COLOR'], 8.5)]
+             txtstyle(lb, T['BODY_COLOR'], 8.5), clr(lb)]
     div = f"{sid}_div"
     reqs += [shape(div, sid, "RECTANGLE", 356, 83, 1, 280),
              fill(div, T['CARD_BORDER'])]
     rt = f"{sid}_rt"
     reqs += [shape(rt, sid, "TEXT_BOX", RX, 83, COL_W, 24),
              txt(rt, right['title']),
-             txtstyle(rt, T['TITLE_COLOR'], 14, bold=True)]
+             txtstyle(rt, T['TITLE_COLOR'], 14, bold=True), clr(rt)]
     rb = f"{sid}_rb"
     reqs += [shape(rb, sid, "TEXT_BOX", RX, 115, COL_W, 240),
              txt(rb, right['body']),
-             txtstyle(rb, T['BODY_COLOR'], 8.5)]
+             txtstyle(rb, T['BODY_COLOR'], 8.5), clr(rb)]
 
 
 def mk_title_accent(sid, accent_part, rest_part, reqs, theme='light', subtitle="", y=44, font_size=22):
@@ -369,12 +385,13 @@ def mk_title_accent(sid, accent_part, rest_part, reqs, theme='light', subtitle="
                       "startIndex": 0, "endIndex": len(accent_part)},
         "style": {"foregroundColor": {"opaqueColor": {"rgbColor": ORANGE}}},
         "fields": "foregroundColor"}})
+    reqs.append(clr(hid))
     if subtitle:
         subid = f"{sid}_sub"
         sub_y = y + font_size * 2 + 4
         reqs += [shape(subid, sid, "TEXT_BOX", 56, sub_y, 608, 18),
                  txt(subid, subtitle),
-                 txtstyle(subid, T['BODY_COLOR'], 8)]
+                 txtstyle(subid, T['BODY_COLOR'], 8), clr(subid)]
 
 
 def mk_3col_cards(sid, cards, reqs, theme='light'):
@@ -419,12 +436,12 @@ def mk_3col_cards(sid, cards, reqs, theme='light'):
         ttid = f"{sid}_ctitle{ci}"
         reqs += [shape(ttid, sid, "TEXT_BOX", cx+16, CARD_Y+46, CARD_W-32, 40),
                  txt(ttid, card["title"]),
-                 txtstyle(ttid, sty["title"], 11, bold=True)]
+                 txtstyle(ttid, sty["title"], 11, bold=True), clr(ttid)]
         # 카드 본문
         bdid = f"{sid}_cbody{ci}"
         reqs += [shape(bdid, sid, "TEXT_BOX", cx+16, CARD_Y+94, CARD_W-32, 112),
                  txt(bdid, card["body"]),
-                 txtstyle(bdid, sty["body"], 7.5)]
+                 txtstyle(bdid, sty["body"], 7.5), clr(bdid)]
 
 
 def mk_toc(slide_oid, items, insert_index, reqs,
@@ -459,7 +476,8 @@ def mk_toc(slide_oid, items, insert_index, reqs,
                      "style": {"foregroundColor": {"opaqueColor": {"rgbColor": ORANGE}},
                                "fontSize": {"magnitude": 7, "unit": "PT"},
                                "fontFamily": "Proxima Nova", "bold": True},
-                     "fields": "foregroundColor,fontSize,fontFamily,bold"}}]
+                     "fields": "foregroundColor,fontSize,fontFamily,bold"}},
+                 clr(cid)]
     if year:
         yid = f"{slide_oid}_yr"
         reqs += [shape(yid, slide_oid, "TEXT_BOX", 600, 20, 84, 12),
@@ -471,7 +489,8 @@ def mk_toc(slide_oid, items, insert_index, reqs,
                      "fields": "foregroundColor,fontSize,fontFamily,bold"}},
                  {"updateParagraphStyle": {"objectId": yid,
                      "textRange": {"type": "ALL"},
-                     "style": {"alignment": "END"}, "fields": "alignment"}}]
+                     "style": {"alignment": "END"}, "fields": "alignment"}},
+                 clr(yid)]
 
     # 2색 대형 제목
     full_title = title_accent + title_rest
@@ -486,13 +505,14 @@ def mk_toc(slide_oid, items, insert_index, reqs,
         "textRange": {"type": "FIXED_RANGE", "startIndex": 0, "endIndex": len(title_accent)},
         "style": {"foregroundColor": {"opaqueColor": {"rgbColor": ORANGE}}},
         "fields": "foregroundColor"}})
+    reqs.append(clr(tid))
 
     # 제목 아래 설명 텍스트
     if description:
         did = f"{slide_oid}_desc"
         reqs += [shape(did, slide_oid, "TEXT_BOX", 36, 88, 500, 14),
                  txt(did, description),
-                 txtstyle(did, T['BODY_COLOR'], 7.5)]
+                 txtstyle(did, T['BODY_COLOR'], 7.5), clr(did)]
 
     # 2열 TOC 아이템
     COL1_X, COL2_X = 36, 375
@@ -515,17 +535,18 @@ def mk_toc(slide_oid, items, insert_index, reqs,
                          "style": {"foregroundColor": {"opaqueColor": {"rgbColor": ORANGE}},
                                    "fontSize": {"magnitude": 10, "unit": "PT"},
                                    "fontFamily": "Proxima Nova", "bold": True},
-                         "fields": "foregroundColor,fontSize,fontFamily,bold"}}]
+                         "fields": "foregroundColor,fontSize,fontFamily,bold"}},
+                     clr(aid)]
             # 섹션 제목
             stid = f"{slide_oid}_st{col_idx}{row}"
             reqs += [shape(stid, slide_oid, "TEXT_BOX", col_x+22, iy+6, 130, 14),
                      txt(stid, item["title"]),
-                     txtstyle(stid, T['TITLE_COLOR'], 9, bold=True)]
+                     txtstyle(stid, T['TITLE_COLOR'], 9, bold=True), clr(stid)]
             # 설명
             sdid = f"{slide_oid}_sd{col_idx}{row}"
             reqs += [shape(sdid, slide_oid, "TEXT_BOX", col_x+22, iy+20, 292, 20),
                      txt(sdid, item.get("desc", "")),
-                     txtstyle(sdid, T['BODY_COLOR'], 7)]
+                     txtstyle(sdid, T['BODY_COLOR'], 7), clr(sdid)]
 
 
 def mk_split_cards(sid, text_lines, cards, reqs, theme='light'):
@@ -547,7 +568,7 @@ def mk_split_cards(sid, text_lines, cards, reqs, theme='light'):
         lid = f"{sid}_tl{i}"
         reqs += [shape(lid, sid, "TEXT_BOX", 36, 143 + i * 24, 300, 20),
                  txt(lid, line),
-                 txtstyle(lid, T['BODY_COLOR'], 9)]
+                 txtstyle(lid, T['BODY_COLOR'], 9), clr(lid)]
 
     # 우측 카드 스택
     CARD_X, CARD_W, CARD_H, CARD_GAP = 370, 314, 56, 8
