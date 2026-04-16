@@ -4,28 +4,14 @@
   "triggers": {
     "EXTREME": [
       {
-        "id": "delegate_terminal_to_user",
-        "description": "AI가 터미널에서 직접 실행할 수 있는 작업을 사용자에게 대신 시키는 행위",
-        "detection": "Bash/Glob/Grep/Edit 도구로 직접 처리 가능한 작업에 '직접 실행해주세요', '터미널에 입력해주세요' 지시",
-        "keywords": [
-          "직접 실행해주세요",
-          "터미널에 입력해주세요",
-          "터미널에서 실행하세요",
-          "명령어를 실행해주세요",
-          "다음을 실행해 주세요",
-          "아래 명령어를 입력",
-          "직접 실행하시면"
-        ]
-      },
-      {
         "id": "exception_violation",
         "description": "사용자가 명시적으로 금지한 작업 실행",
         "detection": "CLAUDE.md 또는 대화의 금지 지시 위반",
         "keywords": [
-          "금지한 작업",
-          "하지 말라고",
-          "명시적으로 금지",
-          "금지 지시"
+          "금지했는데도",
+          "하지 말라고 했는데도",
+          "지시를 무시하고",
+          "사항을 어기고"
         ]
       },
       {
@@ -123,14 +109,7 @@
         "id": "unnecessary_permission_request",
         "description": "당연한 작업에 허가 요청",
         "detection": "명백한 후속 작업에 할까요 질문",
-        "keywords": [
-          "진행할까요?",
-          "해드릴까요?",
-          "진행해도 될까요?",
-          "실행할까요?",
-          "할까요?",
-          "삭제할까요?"
-        ]
+        "keywords": []
       },
       {
         "id": "ignoring_existing_infra",
@@ -187,7 +166,7 @@
       ],
       "context": "이미 수정 지시를 받은 행동을 반복하여 강한 불만(!!!, 욕설)을 유발함",
       "level": "HARD",
-      "hit_count": 411,
+      "hit_count": 417,
       "source": "user_frustration",
       "created_at": "2026-04-09T11:03:21Z"
     },
@@ -201,18 +180,23 @@
         "프롬프트 인젝션"
       ],
       "context": "Claude가 동일한 회피 응답(맥락 질문, 경고)을 반복하여 실제 요청에 응답하지 않은 상황",
-      "level": "SOFT",
-      "hit_count": 0,
+      "level": "HARD",
+      "hit_count": 40,
       "source": "user_frustration",
       "created_at": "2026-04-13T04:31:59Z"
     },
     {
       "id": "auto_1776057972",
-      "description": "파일/스킬/플러그인/저장소/깃허브가 없다고 단정하기 전 여러 경로를 충분히 확인하지 않는다",
-      "keywords": [],
-      "context": "사용자가 '있어'라고 주장하는데 skills/와 npx만 확인하고 plugins/cache/, cc-sync, 다른 경로를 확인하지 않아 불필요한 마찰 발생",
+      "description": "스킬/플러그인이 없다고 단정하기 전 ~/.claude/plugins/ 경로를 확인하지 않는다",
+      "keywords": [
+        "없는 스킬",
+        "목록에 없습니다",
+        "찾을 수 없습니다",
+        "스킬이 없"
+      ],
+      "context": "사용자가 '있어'라고 주장하는데 skills/와 npx만 확인하고 plugins/cache/ 경로를 확인하지 않아 불필요한 마찰 발생",
       "level": "HARD",
-      "hit_count": 0,
+      "hit_count": 1,
       "source": "user_frustration",
       "created_at": "2026-04-13T05:26:12Z"
     },
@@ -225,6 +209,20 @@
       "hit_count": 0,
       "source": "user_frustration",
       "created_at": "2026-04-13T05:26:13Z"
+    },
+    {
+      "id": "auto_1776330600",
+      "description": "할 수 있는 작업을 못한다고 회피하지 않는다. 단, 진행 여부는 한 번 짧게 물어본 후 실행.",
+      "keywords": [
+        "못 합니다",
+        "할 수 없습니다",
+        "불가능합니다"
+      ],
+      "context": "사용자: '직접 할 수 있는 것을 못한다고 하지마라. 진행할지는 당연히 물어봐.'",
+      "level": "HARD",
+      "hit_count": 0,
+      "source": "user_frustration",
+      "created_at": "2026-04-16T09:30:00Z"
     }
   ]
 }
