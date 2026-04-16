@@ -63,6 +63,28 @@ echo "✓ 실행 권한 설정 중..."
 chmod +x "$TARGET_DIR/hooks"/*.sh 2>/dev/null
 chmod +x "$TARGET_DIR/scripts"/*.sh 2>/dev/null
 
+# 플러그인 자동 설치
+INSTALLED_PLUGINS="$SCRIPT_DIR/plugins/installed_plugins.json"
+if [ -f "$INSTALLED_PLUGINS" ] && command -v claude &>/dev/null; then
+    echo ""
+    echo "🔌 플러그인 설치 중..."
+    PLUGINS=$(python3 -c "
+import json
+with open('$INSTALLED_PLUGINS') as f:
+    d = json.load(f)
+for name in d.get('plugins', {}).keys():
+    print(name)
+" 2>/dev/null)
+    for plugin in $PLUGINS; do
+        if claude plugin list 2>/dev/null | grep -q "${plugin%%@*}"; then
+            echo "  ↳ $plugin (이미 설치됨)"
+        else
+            echo "  ↳ $plugin 설치 중..."
+            claude plugin install "$plugin" --yes 2>/dev/null && echo "    ✓ 완료" || echo "    ✗ 실패 (수동 설치 필요)"
+        fi
+    done
+fi
+
 echo ""
 echo "✅ 설정 적용 완료!"
 echo ""
