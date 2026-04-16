@@ -162,5 +162,6 @@
         "apps"
       ]
     }
-  }
+  },
+  "model": "sonnet"
 }
