@@ -21,51 +21,7 @@
       "/Users/harugury/Documents/Obsidian Vault"
     ]
   },
-  "model": "opusplan",
-  "statusLine": {
-    "type": "command",
-    "command": "node /Users/harugury/.claude/hud/omc-hud.mjs"
-  },
-  "enabledPlugins": {
-    "oh-my-claudecode@omc": true,
-    "kkirikkiri@gptaku-plugins": true,
-    "telegram@claude-plugins-official": false,
-    "git-teacher@gptaku-plugins": true,
-    "memory-bank@memory-bank-dev": true,
-    "superpowers@claude-plugins-official": true
-  },
-  "extraKnownMarketplaces": {
-    "omc": {
-      "source": {
-        "source": "git",
-        "url": "https://github.com/Yeachan-Heo/oh-my-claudecode.git"
-      }
-    },
-    "memory-bank": {
-      "source": {
-        "source": "github",
-        "repo": "jung-wan-kim/memory-bank"
-      }
-    },
-    "gptaku-plugins": {
-      "source": {
-        "source": "git",
-        "url": "https://github.com/fivetaku/gptaku_plugins.git"
-      }
-    },
-    "claude-plugins-official": {
-      "source": {
-        "source": "github",
-        "repo": "anthropics/claude-plugins-official"
-      }
-    },
-    "memory-bank-dev": {
-      "source": {
-        "source": "git",
-        "url": "https://github.com/jung-wan-kim/memory-bank.git"
-      }
-    }
-  },
+  "model": "haiku",
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -73,6 +29,10 @@
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/harsh-critic-trigger.sh"
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/context-enrichment.sh"
           }
         ]
       }
@@ -105,7 +65,89 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/auto-validate.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/post_bash_git_commit.sh"
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/fix-commit-learner.sh"
+          }
+        ]
+      }
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "node /Users/harugury/.claude/claude-dashboard/dist/index.js"
+  },
+  "enabledPlugins": {
+    "oh-my-claudecode@omc": true,
+    "kkirikkiri@gptaku-plugins": true,
+    "telegram@claude-plugins-official": false,
+    "git-teacher@gptaku-plugins": true,
+    "memory-bank@memory-bank-dev": true,
+    "superpowers@claude-plugins-official": true,
+    "agent-skills@addy-agent-skills": true,
+    "insane-search@insane-search": true
+  },
+  "extraKnownMarketplaces": {
+    "omc": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/Yeachan-Heo/oh-my-claudecode.git"
+      }
+    },
+    "memory-bank": {
+      "source": {
+        "source": "github",
+        "repo": "jung-wan-kim/memory-bank"
+      }
+    },
+    "gptaku-plugins": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/fivetaku/gptaku_plugins.git"
+      }
+    },
+    "claude-plugins-official": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/claude-plugins-official"
+      }
+    },
+    "memory-bank-dev": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/jung-wan-kim/memory-bank.git"
+      }
+    },
+    "addy-agent-skills": {
+      "source": {
+        "source": "github",
+        "repo": "addyosmani/agent-skills"
+      }
+    },
+    "insane-search": {
+      "source": {
+        "source": "github",
+        "repo": "fivetaku/insane-search"
+      }
+    }
   },
   "language": "korean",
   "effortLevel": "high",
