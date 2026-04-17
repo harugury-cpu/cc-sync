@@ -1,0 +1,21 @@
+{
+  "displayMode": "custom",
+  "lines": [
+    [
+      "model",
+      "rateLimit5h",
+      "rateLimit7d",
+      "agentStatus",
+      "context",
+      "toolActivity"
+    ],
+    [
+      "lastPrompt"
+    ],
+    [
+      "codexUsage",
+      "sessionId",
+      "performance"
+    ]
+  ]
+}
