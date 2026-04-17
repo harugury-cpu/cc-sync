@@ -37,7 +37,7 @@ if [ -d "$SCRIPT_DIR/.opencode" ]; then
 fi
 
 # 단일 파일 복사
-for file in settings.json CLAUDE.md keybindings.json claude_desktop_config.json settings.local.json claude_code_config.json MANAGER_ORCHESTRATOR_ROLES.md claude-dashboard.local.json; do
+for file in settings.json CLAUDE.md keybindings.json claude_desktop_config.json settings.local.json claude_code_config.json MANAGER_ORCHESTRATOR_ROLES.md; do
     if [ -f "$SCRIPT_DIR/$file" ]; then
         echo "✓ $file 복사 중..."
         cp "$SCRIPT_DIR/$file" "$TARGET_DIR/"
