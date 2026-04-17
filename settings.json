@@ -21,6 +21,7 @@
       "/Users/harugury/Documents/Obsidian Vault"
     ]
   },
+  "model": "sonnet",
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -92,7 +93,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "node /Users/harugury/.claude/hud/omc-hud.mjs"
+    "command": "node /Users/harugury/.claude/claude-dashboard/dist/index.js"
   },
   "enabledPlugins": {
     "oh-my-claudecode@omc": true,
@@ -103,7 +104,9 @@
     "memory-bank@memory-bank-dev": true,
     "superpowers@claude-plugins-official": true,
     "agent-skills@addy-agent-skills": true,
-    "insane-search@insane-search": true
+    "insane-search@insane-search": true,
+    "show-me-the-prd@gptaku-plugins": true,
+    "skillers-suda@gptaku-plugins": true
   },
   "extraKnownMarketplaces": {
     "omc": {
@@ -163,6 +166,5 @@
         "apps"
       ]
     }
-  },
-  "model": "sonnet"
+  }
 }

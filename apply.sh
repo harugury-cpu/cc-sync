@@ -37,7 +37,7 @@ if [ -d "$SCRIPT_DIR/.opencode" ]; then
 fi
 
 # 단일 파일 복사
-for file in settings.json CLAUDE.md keybindings.json claude_desktop_config.json settings.local.json claude_code_config.json MANAGER_ORCHESTRATOR_ROLES.md; do
+for file in settings.json CLAUDE.md keybindings.json claude_desktop_config.json settings.local.json claude_code_config.json MANAGER_ORCHESTRATOR_ROLES.md claude-dashboard.local.json; do
     if [ -f "$SCRIPT_DIR/$file" ]; then
         echo "✓ $file 복사 중..."
         cp "$SCRIPT_DIR/$file" "$TARGET_DIR/"
@@ -56,6 +56,15 @@ fi
 if [ -f "$TARGET_DIR/settings.json" ]; then
     echo "✓ settings.json 경로 치환 중 ($HOME)..."
     sed -i '' "s|/Users/[^/\"']*/|$HOME/|g" "$TARGET_DIR/settings.json"
+fi
+
+# claude-dashboard 자동 설치 (없을 경우)
+DASHBOARD_DIR="$TARGET_DIR/claude-dashboard"
+if [ ! -d "$DASHBOARD_DIR" ]; then
+    echo "✓ claude-dashboard 설치 중..."
+    git clone https://github.com/uppinote20/claude-dashboard.git "$DASHBOARD_DIR" 2>/dev/null
+    cd "$DASHBOARD_DIR" && npm install --silent && npm run build --silent && cd "$SCRIPT_DIR"
+    echo "  ✓ claude-dashboard 빌드 완료"
 fi
 
 # hooks, scripts 실행 권한 부여
