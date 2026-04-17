@@ -92,7 +92,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "node /Users/harugury/.claude/claude-dashboard/dist/index.js"
+    "command": "node /Users/harugury/.claude/hud/omc-hud.mjs"
   },
   "enabledPlugins": {
     "oh-my-claudecode@omc": true,
