@@ -43,6 +43,7 @@ def shape(oid, page, stype, x, y, w, h):
                 "translateX": pt(x),"translateY": pt(y),"unit":"EMU"}}}}
 
 def fill(oid, fg, bg=None, wt=0.6):
+    # bg 생략 시 fg와 동일색 — 테두리가 렌더되어도 도형색과 같아 시각적으로 무해함 (의도적 설계)
     bg = bg or fg
     props = {"shapeBackgroundFill": {"solidFill": {"color": {"rgbColor": fg}}}}
     if wt > 0:
