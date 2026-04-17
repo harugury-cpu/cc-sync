@@ -1,14 +1,13 @@
 {
-  "timestamp": 1776129247867,
+  "timestamp": 1776173662208,
   "data": {
-    "fiveHourPercent": 26,
-    "weeklyPercent": 59,
-    "fiveHourResetsAt": "2026-04-14T05:00:00.468Z",
-    "weeklyResetsAt": "2026-04-15T01:00:00.468Z",
-    "sonnetWeeklyPercent": 77,
-    "sonnetWeeklyResetsAt": "2026-04-15T01:00:00.468Z"
+    "fiveHourPercent": 86,
+    "weeklyPercent": 74,
+    "fiveHourResetsAt": "2026-04-14T15:00:00.158Z",
+    "weeklyResetsAt": "2026-04-15T01:00:00.158Z",
+    "sonnetWeeklyPercent": 100,
+    "sonnetWeeklyResetsAt": "2026-04-15T01:00:00.158Z"
   },
   "error": false,
-  "source": "anthropic",
-  "lastSuccessAt": 1776129247867
+  "source": "anthropic"
 }
