@@ -9,6 +9,8 @@ interface LastSkillData {
 
 const CHUNK = 256 * 1024;
 
+let cache: { fileSize: number; result: LastSkillData | null } | null = null;
+
 export const lastSkillWidget: Widget<LastSkillData> = {
   id: 'lastSkill',
   name: 'Last Skill',
@@ -19,6 +21,11 @@ export const lastSkillWidget: Widget<LastSkillData> = {
 
     try {
       const fileStat = await stat(transcriptPath);
+
+      if (cache && cache.fileSize === fileStat.size) {
+        return cache.result;
+      }
+
       const size = Math.min(CHUNK, fileStat.size);
       const fd = await open(transcriptPath, 'r');
       try {
@@ -35,7 +42,9 @@ export const lastSkillWidget: Widget<LastSkillData> = {
             for (const block of content) {
               if (block.type === 'tool_use' && block.name === 'Skill' && block.input?.skill) {
                 const skillName = (block.input.skill as string).split(':').pop() || block.input.skill;
-                return { name: skillName };
+                const result = { name: skillName };
+                cache = { fileSize: fileStat.size, result };
+                return result;
               }
             }
           } catch { /* skip malformed lines */ }
@@ -43,6 +52,8 @@ export const lastSkillWidget: Widget<LastSkillData> = {
       } finally {
         await fd.close();
       }
+
+      cache = { fileSize: fileStat.size, result: null };
     } catch { /* file not found or unreadable */ }
 
     return null;
