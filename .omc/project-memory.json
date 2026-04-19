@@ -1,0 +1,185 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1776478168929,
+  "projectRoot": "/Users/harugury/cc-sync",
+  "techStack": {
+    "languages": [],
+    "frameworks": [],
+    "packageManager": null,
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "docs",
+      "examples",
+      "scripts"
+    ],
+    "gitBranches": {
+      "defaultBranch": "master",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "agents": {
+      "path": "agents",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1776478168912,
+      "keyFiles": [
+        "debugger.md"
+      ]
+    },
+    "claude-dashboard-patches": {
+      "path": "claude-dashboard-patches",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1776478168913,
+      "keyFiles": [
+        "last-skill.ts"
+      ]
+    },
+    "commands": {
+      "path": "commands",
+      "purpose": null,
+      "fileCount": 4,
+      "lastAccessed": 1776478168913,
+      "keyFiles": [
+        "search-conversations.md",
+        "show-dashboard.md",
+        "show-memory-bank.md",
+        "skills-upgrade.md"
+      ]
+    },
+    "data": {
+      "path": "data",
+      "purpose": "Data files",
+      "fileCount": 1,
+      "lastAccessed": 1776478168919,
+      "keyFiles": [
+        "harsh-critic-triggers.json"
+      ]
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 1,
+      "lastAccessed": 1776478168920,
+      "keyFiles": [
+        "cc-sync-overview.html"
+      ]
+    },
+    "examples": {
+      "path": "examples",
+      "purpose": "Example code",
+      "fileCount": 2,
+      "lastAccessed": 1776478168920,
+      "keyFiles": [
+        "CLAUDE.md.example",
+        "settings.json.example"
+      ]
+    },
+    "hooks": {
+      "path": "hooks",
+      "purpose": null,
+      "fileCount": 10,
+      "lastAccessed": 1776478168920,
+      "keyFiles": [
+        "README.md",
+        "auto-validate.sh",
+        "codex-review-reminder.sh",
+        "context-enrichment.sh",
+        "fix-commit-learner.sh"
+      ]
+    },
+    "memory-bank-sync": {
+      "path": "memory-bank-sync",
+      "purpose": null,
+      "fileCount": 5,
+      "lastAccessed": 1776478168922,
+      "keyFiles": [
+        "facts.jsonl",
+        "meta.json",
+        "ontology-categories.jsonl",
+        "ontology-domains.jsonl",
+        "ontology-relations.jsonl"
+      ]
+    },
+    "plugins": {
+      "path": "plugins",
+      "purpose": null,
+      "fileCount": 6,
+      "lastAccessed": 1776478168923,
+      "keyFiles": [
+        "blocklist.json",
+        "blocklist.json.28acd116baa77fce.tmp",
+        "blocklist.json.d9715fb54d3dfb5d.tmp",
+        "install-counts-cache.json",
+        "installed_plugins.json"
+      ]
+    },
+    "rules": {
+      "path": "rules",
+      "purpose": null,
+      "fileCount": 4,
+      "lastAccessed": 1776478168923,
+      "keyFiles": [
+        "cc-sync.md",
+        "context-window.md",
+        "language.md",
+        "workflow.md"
+      ]
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 3,
+      "lastAccessed": 1776478168924,
+      "keyFiles": [
+        "backup.sh",
+        "batch-p1p2p3.py",
+        "diagnose.sh"
+      ]
+    },
+    "skills": {
+      "path": "skills",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1776478168924,
+      "keyFiles": [
+        "harsh-critic.md"
+      ]
+    },
+    "teams": {
+      "path": "teams",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1776478168926,
+      "keyFiles": []
+    },
+    "plugins/data": {
+      "path": "plugins/data",
+      "purpose": "Data files",
+      "fileCount": 0,
+      "lastAccessed": 1776478168929,
+      "keyFiles": []
+    }
+  },
+  "hotPaths": [],
+  "userDirectives": []
+}

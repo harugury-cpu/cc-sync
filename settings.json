@@ -21,7 +21,6 @@
       "/Users/harugury/Documents/Obsidian Vault"
     ]
   },
-  "model": "sonnet",
   "hooks": {
     "UserPromptSubmit": [
       {

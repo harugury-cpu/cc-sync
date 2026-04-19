@@ -7,7 +7,7 @@
         "installPath": "/Users/harugury/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7",
         "version": "5.0.7",
         "installedAt": "2026-03-06T02:14:35.119Z",
-        "lastUpdated": "2026-04-16T10:47:23.401Z",
+        "lastUpdated": "2026-04-19T04:22:21.613Z",
         "gitCommitSha": "e4a2375cb705ca5800f0833528ce36a3faf9017a"
       }
     ],
@@ -17,7 +17,7 @@
         "installPath": "/Users/harugury/.claude/plugins/cache/omc/oh-my-claudecode/4.7.5",
         "version": "4.7.5",
         "installedAt": "2026-03-06T02:41:21.642Z",
-        "lastUpdated": "2026-03-06T02:41:21.642Z",
+        "lastUpdated": "2026-04-19T01:07:59.071Z",
         "gitCommitSha": "fd6b98680b973d34a12b3d10e918d415ac6137ea"
       }
     ],
@@ -37,7 +37,7 @@
         "installPath": "/Users/harugury/.claude/plugins/cache/gptaku-plugins/git-teacher/1.3.1",
         "version": "1.3.1",
         "installedAt": "2026-03-12T13:28:11.101Z",
-        "lastUpdated": "2026-03-12T13:28:11.101Z",
+        "lastUpdated": "2026-04-19T01:07:59.071Z",
         "gitCommitSha": "4dbc2be7259a7f3c8f807d1414d89a8591dee909"
       }
     ],
@@ -74,11 +74,10 @@
     "show-me-the-prd@gptaku-plugins": [
       {
         "scope": "user",
-        "installPath": "/Users/harugury/.claude/plugins/cache/gptaku-plugins/show-me-the-prd/0.7.1",
-        "version": "0.7.1",
-        "installedAt": "2026-03-12T13:28:11.751Z",
-        "lastUpdated": "2026-03-12T13:28:11.751Z",
-        "gitCommitSha": "633a8ffc453da8329a37ddebc0ee6503cba4d145"
+        "installPath": "/Users/harugury/.claude/plugins/cache/gptaku-plugins/show-me-the-prd/0.7.2",
+        "version": "0.7.2",
+        "installedAt": "2026-04-17T14:28:57.389Z",
+        "lastUpdated": "2026-04-19T01:07:59.071Z"
       }
     ],
     "kkirikkiri@gptaku-plugins": [
@@ -87,18 +86,17 @@
         "installPath": "/Users/harugury/.claude/plugins/cache/gptaku-plugins/kkirikkiri/0.9.0",
         "version": "0.9.0",
         "installedAt": "2026-03-12T13:28:11.897Z",
-        "lastUpdated": "2026-03-12T13:28:11.897Z",
+        "lastUpdated": "2026-04-19T01:07:59.071Z",
         "gitCommitSha": "fc2562e9ed90eaa0dcfce6369fe92c557ee93307"
       }
     ],
     "skillers-suda@gptaku-plugins": [
       {
         "scope": "user",
-        "installPath": "/Users/harugury/.claude/plugins/cache/gptaku-plugins/skillers-suda/1.0.0",
-        "version": "1.0.0",
-        "installedAt": "2026-03-12T13:28:12.051Z",
-        "lastUpdated": "2026-03-12T13:28:12.051Z",
-        "gitCommitSha": "2756590c3f616c65594a610adb6c88f6bf118645"
+        "installPath": "/Users/harugury/.claude/plugins/cache/gptaku-plugins/skillers-suda/1.3.0",
+        "version": "1.3.0",
+        "installedAt": "2026-04-17T14:29:20.550Z",
+        "lastUpdated": "2026-04-19T01:07:59.071Z"
       }
     ],
     "nopal@gptaku-plugins": [
@@ -107,7 +105,7 @@
         "installPath": "/Users/harugury/.claude/plugins/cache/gptaku-plugins/nopal/0.6.0",
         "version": "0.6.0",
         "installedAt": "2026-03-12T13:28:12.201Z",
-        "lastUpdated": "2026-03-12T13:28:12.201Z",
+        "lastUpdated": "2026-04-19T01:07:59.071Z",
         "gitCommitSha": "a9c5362fc90c7446e95f5fcadab31fb53075beb1"
       }
     ],
@@ -117,7 +115,7 @@
         "installPath": "/Users/harugury/.claude/plugins/cache/claude-plugins-official/telegram/0.0.6",
         "version": "0.0.6",
         "installedAt": "2026-04-09T08:37:13.898Z",
-        "lastUpdated": "2026-04-15T00:11:52.553Z"
+        "lastUpdated": "2026-04-19T01:07:59.071Z"
       }
     ],
     "memory-bank@memory-bank-dev": [
@@ -126,7 +124,7 @@
         "installPath": "/Users/harugury/.claude/plugins/cache/memory-bank-dev/memory-bank/1.0.16",
         "version": "1.0.16",
         "installedAt": "2026-04-09T08:37:13.898Z",
-        "lastUpdated": "2026-04-09T08:37:13.898Z",
+        "lastUpdated": "2026-04-19T01:07:59.071Z",
         "gitCommitSha": "3d31f145f2eb66c69e53dae0e7c5d7cbc6cd1ce7"
       }
     ]
