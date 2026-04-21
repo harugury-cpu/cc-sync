@@ -450,3 +450,20 @@ echo "URL: https://docs.google.com/presentation/d/$NEW_ID/edit"
 | 10% 오렌지 틴트 카드 | `_fill(oid, ORNG, 0.1)` (유료 STEP, Phase current, callout) |
 | 취소선 텍스트 | `_style(oid, WHT, 16.5, strike=True)` |
 | `"›"` 화살표 | 별도 TEXT_BOX, `_ghost()` 적용 + `_center()` |
+
+### C-5. 커스텀 마스터 템플릿 사용 시 (중요)
+
+기본 Google 테마가 아닌 커스텀 마스터(예: 참조 템플릿 `1aVvlg0jQyZkcp...`)를 복사해 사용할 때는  
+`predefinedLayout: "BLANK"`가 지원되지 않을 수 있다. 이 경우 기존 슬라이드의 `layoutObjectId`를 가져와  
+`layout_id` 파라미터로 전달한다.
+
+```python
+prs = gws_get(NEW_ID)
+slides = prs['slides']
+layout_id = slides[1]['slideProperties'].get('layoutObjectId')  # 기존 콘텐츠 슬라이드에서 추출
+
+ccbot_compare("s01_cmp", rows, callout, 1, reqs, page_no=1, total=2, layout_id=layout_id)
+ccbot_flow("s02_flow", steps, table_rows, summary, 2, reqs, page_no=2, total=2, layout_id=layout_id)
+```
+
+> API 주의: 읽을 때는 `slideProperties.layoutObjectId`, 생성할 때는 `createSlide.slideLayoutReference.layoutId` (다른 필드명)

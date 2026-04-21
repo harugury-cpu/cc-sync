@@ -90,15 +90,17 @@ def _header(sid, page_no, total, section, title, footer, reqs):
 # ─────────────────────────────────────────────────────────────────────
 # A: 현황 비교
 # ─────────────────────────────────────────────────────────────────────
-def ccbot_compare(sid, rows, callout, insert_index, reqs):
+def ccbot_compare(sid, rows, callout, insert_index, reqs, page_no=1, total=3, layout_id=None):
     """
     rows = [{"item":"인력 투입","before":"크로스체크 2인","after":"크로스체크 1인 + 봇 체크 1"}, ...]
     callout = "기존 2인 육안 대조를 1인 + 봇으로 전환, 건당 약 100초 · 월 ₩10,000 이하"
+    layout_id: 커스텀 마스터 레이아웃 objectId (None이면 predefinedLayout BLANK 사용)
     """
+    layout_ref = {"layoutId": layout_id} if layout_id else {"predefinedLayout": "BLANK"}
     reqs.append({"createSlide": {"objectId": sid, "insertionIndex": insert_index,
-        "slideLayoutReference": {"predefinedLayout": "BLANK"}}})
+        "slideLayoutReference": layout_ref}})
     _page_bg(sid, reqs)
-    _header(sid, 1, 3, "현황 분석", "현행 vs 크로스체크봇", "현행 vs 도입 후 비교", reqs)
+    _header(sid, page_no, total, "현황 분석", "현행 vs 크로스체크봇", "현행 vs 도입 후 비교", reqs)
 
     # 열 헤더
     for oid, x, text, color in [(f"{sid}_chb", M, "현재", WHT), (f"{sid}_cha", 741, "도입 후", ORNG)]:
@@ -140,18 +142,20 @@ def ccbot_compare(sid, rows, callout, insert_index, reqs):
 # ─────────────────────────────────────────────────────────────────────
 # B: 프로세스 & 비용 흐름도
 # ─────────────────────────────────────────────────────────────────────
-def ccbot_flow(sid, steps, table_rows, summary, insert_index, reqs):
+def ccbot_flow(sid, steps, table_rows, summary, insert_index, reqs, page_no=2, total=3, layout_id=None):
     """
     steps = [{"num":"01","name":"이미지 업로드","service":"Google Chat API",
               "desc":"라벨 이미지 업로드","cost":"무료","paid":False}, ...]
     table_rows = [("인프라","과금 기준","사용량","월 비용"), ...]  ← 첫 행=헤더
     summary = {"label":"장당 발생 비용","price":"≈ ₩133",
                "subtitle":"월 75장 기준 · 월 ₩10,000 이하","note":"배포시에만 발생"}
+    layout_id: 커스텀 마스터 레이아웃 objectId (None이면 predefinedLayout BLANK 사용)
     """
+    layout_ref = {"layoutId": layout_id} if layout_id else {"predefinedLayout": "BLANK"}
     reqs.append({"createSlide": {"objectId": sid, "insertionIndex": insert_index,
-        "slideLayoutReference": {"predefinedLayout": "BLANK"}}})
+        "slideLayoutReference": layout_ref}})
     _page_bg(sid, reqs)
-    _header(sid, 2, 3, "프로세스 & 비용", "동작 흐름과 단계별 발생 비용",
+    _header(sid, page_no, total, "프로세스 & 비용", "동작 흐름과 단계별 발생 비용",
             "프로세스 & 비용 구조", reqs)
 
     # ── Step 카드 ────────────────────────────────────────────────
@@ -235,7 +239,7 @@ def ccbot_flow(sid, steps, table_rows, summary, insert_index, reqs):
 # ─────────────────────────────────────────────────────────────────────
 # C: 로드맵 (Phase 카드 + Schedule + KPI)
 # ─────────────────────────────────────────────────────────────────────
-def ccbot_roadmap(sid, phases, schedule, kpi, insert_index, reqs):
+def ccbot_roadmap(sid, phases, schedule, kpi, insert_index, reqs, page_no=3, total=3, layout_id=None):
     """
     phases = [
         {"label":"Phase 1 · 개발","period":"~ 2026. 08","title":"봇 개발 완료",
@@ -248,11 +252,13 @@ def ccbot_roadmap(sid, phases, schedule, kpi, insert_index, reqs):
     schedule = [{"num":"1","title":"봇 개발 완료","when":"~ 8월"}, ...]
     kpi = {"label":"파일럿 목표 · 연말 리뷰 지표",
            "text":"OCR 정확도 95% 이상 · 월 실사용 비용 정확 산출 · 팀원 사용 만족도 90% 이상"}
+    layout_id: 커스텀 마스터 레이아웃 objectId (None이면 predefinedLayout BLANK 사용)
     """
+    layout_ref = {"layoutId": layout_id} if layout_id else {"predefinedLayout": "BLANK"}
     reqs.append({"createSlide": {"objectId": sid, "insertionIndex": insert_index,
-        "slideLayoutReference": {"predefinedLayout": "BLANK"}}})
+        "slideLayoutReference": layout_ref}})
     _page_bg(sid, reqs)
-    _header(sid, 3, 3, "NEXT STEPS", "일정 · 목표 · 확장 계획", "일정 · 목표 · 확장 계획", reqs)
+    _header(sid, page_no, total, "NEXT STEPS", "일정 · 목표 · 확장 계획", "일정 · 목표 · 확장 계획", reqs)
 
     # ROADMAP 라벨
     reqs += [shape(f"{sid}_rmlbl", sid, "TEXT_BOX", M, 292, 120, 16),
