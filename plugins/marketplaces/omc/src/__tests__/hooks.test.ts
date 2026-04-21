@@ -42,6 +42,17 @@ import {
 } from '../hooks/ralph/index.js';
 import { processHook, type HookInput } from '../hooks/bridge.js';
 
+function writeTranscriptWithContext(filePath: string, contextWindow: number, inputTokens: number): void {
+  writeFileSync(
+    filePath,
+    `${JSON.stringify({
+      usage: { context_window: contextWindow, input_tokens: inputTokens },
+      context_window: contextWindow,
+      input_tokens: inputTokens,
+    })}\n`,
+  );
+}
+
 describe('Keyword Detector', () => {
   describe('extractPromptText', () => {
     it('should extract text from text parts', () => {
@@ -355,6 +366,12 @@ describe('Keyword Detector', () => {
         expect(hasAnalyze).toBe(false);
       }
     });
+
+    it('should NOT trigger autopilot for "오토파일럿 설명" (bare 설명 is informational)', () => {
+      const detected = detectKeywordsWithType('오토파일럿 설명');
+      const hasAutopilot = detected.some(d => d.type === 'autopilot');
+      expect(hasAutopilot).toBe(false);
+    });
   });
 
   describe('hasKeyword', () => {
@@ -565,6 +582,49 @@ describe('Team staged workflow integration', () => {
     expect(result.message || '').toContain('team-exec');
   });
 
+  it('compacts OMC-style root AGENTS guidance on session-start without dropping key sections', async () => {
+    const agentsContent = `# oh-my-claudecode - Intelligent Multi-Agent Orchestration
+
+<guidance_schema_contract>
+schema
+</guidance_schema_contract>
+
+<operating_principles>
+- preserve this
+</operating_principles>
+
+<agent_catalog>
+- drop verbose catalog
+</agent_catalog>
+
+<skills>
+- drop verbose skills list
+</skills>
+
+<team_compositions>
+- drop verbose team compositions
+</team_compositions>
+
+<verification>
+- preserve verification
+</verification>`;
+
+    writeFileSync(join(testDir, 'AGENTS.md'), agentsContent);
+
+    const result = await processHook('session-start', {
+      sessionId,
+      directory: testDir,
+    });
+
+    expect(result.continue).toBe(true);
+    expect(result.message || '').toContain('[ROOT AGENTS.md LOADED]');
+    expect(result.message || '').toContain('<operating_principles>');
+    expect(result.message || '').toContain('<verification>');
+    expect(result.message || '').not.toContain('<agent_catalog>');
+    expect(result.message || '').not.toContain('<skills>');
+    expect(result.message || '').not.toContain('<team_compositions>');
+  });
+
   it('emits terminal Team restore guidance on cancelled stage', async () => {
     writeFileSync(
       join(testDir, '.omc', 'state', 'sessions', sessionId, 'team-state.json'),
@@ -604,9 +664,10 @@ describe('Team staged workflow integration', () => {
     });
 
     expect(result.continue).toBe(false);
-    expect(result.message).toContain('[TEAM MODE CONTINUATION]');
+    // checkTeamPipeline() in persistent-mode now handles team enforcement
+    expect(result.message).toContain('team-pipeline-continuation');
     expect(result.message).toContain('team-verify');
-    expect(result.message).toContain('Continue verification');
+    expect(result.message).toContain('Continue working');
   });
 
   it('enforces fix stage continuation while active and non-terminal', async () => {
@@ -626,9 +687,10 @@ describe('Team staged workflow integration', () => {
     });
 
     expect(result.continue).toBe(false);
-    expect(result.message).toContain('[TEAM MODE CONTINUATION]');
+    // checkTeamPipeline() in persistent-mode now handles team enforcement
+    expect(result.message).toContain('team-pipeline-continuation');
     expect(result.message).toContain('team-fix');
-    expect(result.message).toContain('fix loop');
+    expect(result.message).toContain('Continue working');
   });
 
   it('skips Team stage continuation on authentication stop reasons', async () => {
@@ -740,7 +802,7 @@ describe('Team staged workflow integration', () => {
       })
     );
     writeFileSync(
-      join(testDir, '.omc', 'state', 'sessions', sessionId, 'team-stop-breaker.json'),
+      join(testDir, '.omc', 'state', 'sessions', sessionId, 'team-pipeline-stop-breaker.json'),
       JSON.stringify({ count: 20, updated_at: new Date().toISOString() }, null, 2)
     );
 
@@ -751,6 +813,34 @@ describe('Team staged workflow integration', () => {
 
     expect(result.continue).toBe(true);
     expect(result.message || '').not.toContain('[TEAM MODE CONTINUATION]');
+  });
+
+  it('bypasses autopilot continuation when transcript context is critically exhausted', async () => {
+    const transcriptPath = join(testDir, 'transcript.jsonl');
+    writeFileSync(
+      join(testDir, '.omc', 'state', 'sessions', sessionId, 'autopilot-state.json'),
+      JSON.stringify({
+        active: true,
+        phase: 'execution',
+        session_id: sessionId,
+        iteration: 2,
+        max_iterations: 20,
+        reinforcement_count: 0,
+        last_checked_at: new Date().toISOString(),
+        started_at: new Date().toISOString(),
+      })
+    );
+    writeTranscriptWithContext(transcriptPath, 1000, 960);
+
+    const result = await processHook('persistent-mode', {
+      sessionId,
+      directory: testDir,
+      transcript_path: transcriptPath,
+      stopReason: 'end_turn',
+    } as HookInput);
+
+    expect(result.continue).toBe(true);
+    expect(result.message).toBeUndefined();
   });
 });
 
@@ -1580,5 +1670,52 @@ describe('Mutual Exclusion - UltraQA and Ralph', () => {
 
       expect(isUltraQAActive(testDir)).toBe(false);
     });
+  });
+});
+
+// ===========================================================================
+// Skill-Active State Clearing on Skill Completion
+// ===========================================================================
+
+describe('Skill-active state lifecycle', () => {
+  let testDir: string;
+
+  beforeEach(() => {
+    testDir = join(tmpdir(), `hooks-skill-clear-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(testDir, { recursive: true });
+    execSync('git init', { cwd: testDir, stdio: 'pipe' });
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('clearSkillActiveState is a no-op for legacy/external skills without protection', async () => {
+    const { writeSkillActiveState, readSkillActiveState, clearSkillActiveState } = await import('../hooks/skill-state/index.js');
+
+    const sessionId = 'test-skill-clear-session';
+    const written = writeSkillActiveState(testDir, 'code-review', sessionId);
+    expect(written).toBeNull();
+
+    // Verify legacy/external skill state is not created
+    const stateBefore = readSkillActiveState(testDir, sessionId);
+    expect(stateBefore).toBeNull();
+
+    // Clear remains safe when no state exists
+    const cleared = clearSkillActiveState(testDir, sessionId);
+    expect(cleared).toBe(true);
+
+    // Verify state remains absent
+    const stateAfter = readSkillActiveState(testDir, sessionId);
+    expect(stateAfter).toBeNull();
+  });
+
+  it('clearSkillActiveState is safe to call when no state exists', async () => {
+    const { clearSkillActiveState, readSkillActiveState } = await import('../hooks/skill-state/index.js');
+
+    // Should not throw even when no state file exists
+    clearSkillActiveState(testDir, 'no-such-session');
+    const state = readSkillActiveState(testDir, 'no-such-session');
+    expect(state).toBeNull();
   });
 });

@@ -1,24 +1,12 @@
 ---
 name: plan-plus
+classification: hybrid
+classification-reason: Combines workflow automation with capability-dependent features
+deprecation-risk: low
+effort: high
 description: |
-  Plan Plus — Brainstorming-Enhanced PDCA Planning.
-  Combines intent discovery from brainstorming methodology with bkit PDCA's structured planning.
-  Produces higher-quality Plan documents by exploring user intent, comparing alternatives,
-  and applying YAGNI review before document generation.
-
-  Use proactively when user mentions planning with brainstorming, intent discovery,
-  exploring alternatives, or wants a more thorough planning process.
-
-  Triggers: plan-plus, plan plus, brainstorming plan, enhanced plan, deep plan,
-  플랜 플러스, 브레인스토밍, 기획, 의도 탐색, 대안 탐색,
-  プランプラス, ブレインストーミング, 企画, 意図探索,
-  计划加强, 头脑风暴, 深度规划, 意图探索,
-  plan mejorado, lluvia de ideas, planificación profunda,
-  plan amélioré, remue-méninges, planification approfondie,
-  erweiterter Plan, Brainstorming, vertiefte Planung,
-  piano migliorato, brainstorming, pianificazione approfondita
-
-  Do NOT use for: simple tasks that don't need planning, code-only changes.
+  Brainstorming-enhanced PDCA planning with intent discovery and YAGNI review.
+  Triggers: plan-plus, brainstorm, plan plus, intent, 브레인스토밍, 플랜플러스.
 argument-hint: "[feature]"
 user-invocable: true
 allowed-tools:
@@ -178,6 +166,8 @@ Generate the Plan document using `plan-plus.template.md` with results from Phase
 - **Alternatives Explored** — Approaches compared in Phase 2
 - **YAGNI Review** — Included/deferred/removed items from Phase 3
 - **Brainstorming Log** — Key decisions from Phases 1-4
+- **Executive Summary** -- Auto-synthesize 4-perspective summary (Problem/Solution/Function UX Effect/Core Value) from Phases 1-4 results. Place at document top, before numbered sections.
+- **Executive Summary Response** -- MANDATORY: After generating the Plan document, also output the Executive Summary table in your response so the user sees the summary immediately without opening the file.
 
 **Output Path**: `docs/01-plan/features/{feature}.plan.md`
 

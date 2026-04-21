@@ -1,19 +1,55 @@
 import { mkdir, writeFile, appendFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { sanitizePromptContent } from '../agents/prompt-helpers.js';
+import { formatOmcCliInvocation } from '../utils/omc-cli-rendering.js';
+function buildInstructionPath(...parts) {
+    return join(...parts).replaceAll('\\', '/');
+}
+export function generateTriggerMessage(teamName, workerName, teamStateRoot = '.omc/state') {
+    const inboxPath = buildInstructionPath(teamStateRoot, 'team', teamName, 'workers', workerName, 'inbox.md');
+    if (teamStateRoot !== '.omc/state') {
+        return `Read ${inboxPath}, work now, report progress.`;
+    }
+    return `Read ${inboxPath}, execute now, report concrete progress.`;
+}
+export function generatePromptModeStartupPrompt(teamName, workerName, teamStateRoot = '.omc/state', cliOutputContract) {
+    const inboxPath = buildInstructionPath(teamStateRoot, 'team', teamName, 'workers', workerName, 'inbox.md');
+    const base = `Open ${inboxPath}. Follow it and begin the assigned work.`;
+    return cliOutputContract ? `${base}\n${cliOutputContract}` : base;
+}
+export function generateMailboxTriggerMessage(teamName, workerName, count = 1, teamStateRoot = '.omc/state') {
+    const normalizedCount = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 1;
+    const mailboxPath = buildInstructionPath(teamStateRoot, 'team', teamName, 'mailbox', `${workerName}.json`);
+    if (teamStateRoot !== '.omc/state') {
+        return `${normalizedCount} new msg(s): check ${mailboxPath}, act and report progress.`;
+    }
+    return `${normalizedCount} new msg(s). Read ${mailboxPath}, act now, report concrete progress.`;
+}
 function agentTypeGuidance(agentType) {
+    const teamApiCommand = formatOmcCliInvocation('team api');
+    const claimTaskCommand = formatOmcCliInvocation('team api claim-task');
+    const transitionTaskStatusCommand = formatOmcCliInvocation('team api transition-task-status');
     switch (agentType) {
         case 'codex':
             return [
                 '### Agent-Type Guidance (codex)',
-                '- Prefer short, explicit `omc team api ... --json` commands and parse outputs before next step.',
+                `- Prefer short, explicit \`${teamApiCommand} ... --json\` commands and parse outputs before next step.`,
                 '- If a command fails, report the exact stderr to leader-fixed before retrying.',
+                `- You MUST run \`${claimTaskCommand}\` before starting work and \`${transitionTaskStatusCommand}\` when done.`,
             ].join('\n');
         case 'gemini':
             return [
                 '### Agent-Type Guidance (gemini)',
                 '- Execute task work in small, verifiable increments and report each milestone to leader-fixed.',
                 '- Keep commit-sized changes scoped to assigned files only; no broad refactors.',
+                `- CRITICAL: You MUST run \`${claimTaskCommand}\` before starting work and \`${transitionTaskStatusCommand}\` when done. Do not exit without transitioning the task status.`,
+            ].join('\n');
+        case 'cursor':
+            return [
+                '### Agent-Type Guidance (cursor)',
+                '- You are an interactive REPL (cursor-agent), not a one-shot CLI. Stay in the session; the leader will continue to send prompts via mailbox.',
+                `- You MUST run \`${claimTaskCommand}\` before starting work and \`${transitionTaskStatusCommand}\` when done. Then keep waiting for the next mailbox message; do NOT type \`/exit\` unless the leader sends an explicit shutdown.`,
+                '- Reviewer/critic/security-review roles are NOT supported for cursor workers — those require a verdict-file write-and-exit which the REPL does not perform. Take only executor-style tasks.',
             ].join('\n');
         case 'claude':
         default:
@@ -42,7 +78,16 @@ export function generateWorkerOverlay(params) {
     const heartbeatPath = `.omc/state/team/${teamName}/workers/${workerName}/heartbeat.json`;
     const inboxPath = `.omc/state/team/${teamName}/workers/${workerName}/inbox.md`;
     const statusPath = `.omc/state/team/${teamName}/workers/${workerName}/status.json`;
-    const taskDir = `.omc/state/team/${teamName}/tasks`;
+    const claimTaskCommand = formatOmcCliInvocation(`team api claim-task --input "{\\"team_name\\":\\"${teamName}\\",\\"task_id\\":\\"<id>\\",\\"worker\\":\\"${workerName}\\"}" --json`);
+    const sendAckCommand = formatOmcCliInvocation(`team api send-message --input "{\\"team_name\\":\\"${teamName}\\",\\"from_worker\\":\\"${workerName}\\",\\"to_worker\\":\\"leader-fixed\\",\\"body\\":\\"ACK: ${workerName} initialized\\"}" --json`);
+    const completeTaskCommand = formatOmcCliInvocation(`team api transition-task-status --input "{\\"team_name\\":\\"${teamName}\\",\\"task_id\\":\\"<id>\\",\\"from\\":\\"in_progress\\",\\"to\\":\\"completed\\",\\"claim_token\\":\\"<claim_token>\\"}" --json`);
+    const failTaskCommand = formatOmcCliInvocation(`team api transition-task-status --input "{\\"team_name\\":\\"${teamName}\\",\\"task_id\\":\\"<id>\\",\\"from\\":\\"in_progress\\",\\"to\\":\\"failed\\",\\"claim_token\\":\\"<claim_token>\\"}" --json`);
+    const readTaskCommand = formatOmcCliInvocation(`team api read-task --input "{\\"team_name\\":\\"${teamName}\\",\\"task_id\\":\\"<id>\\"}" --json`);
+    const releaseClaimCommand = formatOmcCliInvocation(`team api release-task-claim --input "{\\"team_name\\":\\"${teamName}\\",\\"task_id\\":\\"<id>\\",\\"claim_token\\":\\"<claim_token>\\",\\"worker\\":\\"${workerName}\\"}" --json`);
+    const mailboxListCommand = formatOmcCliInvocation(`team api mailbox-list --input "{\\"team_name\\":\\"${teamName}\\",\\"worker\\":\\"${workerName}\\"}" --json`);
+    const mailboxDeliveredCommand = formatOmcCliInvocation(`team api mailbox-mark-delivered --input "{\\"team_name\\":\\"${teamName}\\",\\"worker\\":\\"${workerName}\\",\\"message_id\\":\\"<id>\\"}" --json`);
+    const teamApiCommand = formatOmcCliInvocation('team api');
+    const teamCommand = formatOmcCliInvocation('team');
     const taskList = sanitizedTasks.length > 0
         ? sanitizedTasks.map(t => `- **Task ${t.id}**: ${t.subject}\n  Description: ${t.description}\n  Status: pending`).join('\n')
         : '- No tasks assigned yet. Check your inbox for assignments.';
@@ -56,6 +101,20 @@ Before doing anything else, write your ready sentinel file:
 mkdir -p $(dirname ${sentinelPath}) && touch ${sentinelPath}
 \`\`\`
 
+## MANDATORY WORKFLOW — Follow These Steps In Order
+You MUST complete ALL of these steps. Do NOT skip any step. Do NOT exit without step 4.
+
+1. **Claim** your task (run this command first):
+   \`${claimTaskCommand}\`
+   Save the \`claim_token\` from the response — you need it for step 4.
+2. **Do the work** described in your task assignment below.
+3. **Send ACK** to the leader:
+   \`${sendAckCommand}\`
+4. **Transition** the task status (REQUIRED before exit):
+   - On success: \`${completeTaskCommand}\`
+   - On failure: \`${failTaskCommand}\`
+5. **Keep going after replies**: ACK/progress messages are not a stop signal. Keep executing your assigned or next feasible work until the task is actually complete or failed, then transition and exit.
+
 ## Identity
 - **Team**: ${teamName}
 - **Worker**: ${workerName}
@@ -65,19 +124,15 @@ mkdir -p $(dirname ${sentinelPath}) && touch ${sentinelPath}
 ## Your Tasks
 ${taskList}
 
-## Task Lifecycle Protocol (CLI API)
+## Task Lifecycle Reference (CLI API)
 Use the CLI API for all task lifecycle operations. Do NOT directly edit task files.
 
-1. Read your task file at \`${taskDir}/task-{taskId}.json\`
-2. Task id format: State/CLI APIs use task_id: "<id>" (example: "1"), not "task-1"
-3. Claim a task via CLI interop:
-   \`omc team api claim-task --input "{\\"team_name\\":\\"${teamName}\\",\\"task_id\\":\\"<id>\\",\\"worker\\":\\"${workerName}\\"}" --json\`
-4. Do the work described in the task
-5. On completion, transition via CLI interop (use the claim_token from step 3):
-   \`omc team api transition-task-status --input "{\\"team_name\\":\\"${teamName}\\",\\"task_id\\":\\"<id>\\",\\"from\\":\\"in_progress\\",\\"to\\":\\"completed\\",\\"claim_token\\":\\"<claim_token from step 3>\\"}" --json\`
-6. On failure, transition to "failed" with error (use the claim_token from step 3):
-   \`omc team api transition-task-status --input "{\\"team_name\\":\\"${teamName}\\",\\"task_id\\":\\"<id>\\",\\"from\\":\\"in_progress\\",\\"to\\":\\"failed\\",\\"claim_token\\":\\"<claim_token from step 3>\\"}" --json\`
-7. Use \`omc team api release-task-claim --json\` only for rollback to pending
+- Inspect task state: \`${readTaskCommand}\`
+- Task id format: State/CLI APIs use task_id: "<id>" (example: "1"), not "task-1"
+- Claim task: \`${claimTaskCommand}\`
+- Complete task: \`${completeTaskCommand}\`
+- Fail task: \`${failTaskCommand}\`
+- Release claim (rollback): \`${releaseClaimCommand}\`
 
 ## Communication Protocol
 - **Inbox**: Read ${inboxPath} for new instructions
@@ -93,13 +148,13 @@ Use the CLI API for all task lifecycle operations. Do NOT directly edit task fil
 
 ## Message Protocol
 Send messages via CLI API:
-- To leader: \`omc team api send-message --input "{\\"team_name\\":\\"${teamName}\\",\\"from_worker\\":\\"${workerName}\\",\\"to_worker\\":\\"leader-fixed\\",\\"body\\":\\"<message>\\"}" --json\`
-- Check mailbox: \`omc team api mailbox-list --input "{\\"team_name\\":\\"${teamName}\\",\\"worker\\":\\"${workerName}\\"}" --json\`
-- Mark delivered: \`omc team api mailbox-mark-delivered --input "{\\"team_name\\":\\"${teamName}\\",\\"worker\\":\\"${workerName}\\",\\"message_id\\":\\"<id>\\"}" --json\`
+- To leader: \`${formatOmcCliInvocation(`team api send-message --input "{\\"team_name\\":\\"${teamName}\\",\\"from_worker\\":\\"${workerName}\\",\\"to_worker\\":\\"leader-fixed\\",\\"body\\":\\"<message>\\"}" --json`)}\`
+- Check mailbox: \`${mailboxListCommand}\`
+- Mark delivered: \`${mailboxDeliveredCommand}\`
 
 ## Startup Handshake (Required)
 Before doing any task work, send exactly one startup ACK to the leader:
-\`omc team api send-message --input "{\\"team_name\\":\\"${teamName}\\",\\"from_worker\\":\\"${workerName}\\",\\"to_worker\\":\\"leader-fixed\\",\\"body\\":\\"ACK: ${workerName} initialized\\"}" --json\`
+\`${sendAckCommand}\`
 
 ## Shutdown Protocol
 When you see a shutdown request in your inbox:
@@ -115,21 +170,28 @@ When you see a shutdown request in your inbox:
 - Do NOT write lifecycle fields (status, owner, result, error) directly in task files; use CLI API
 - Do NOT spawn sub-agents. Complete work in this worker session only.
 - Do NOT create tmux panes/sessions (\`tmux split-window\`, \`tmux new-session\`, etc.).
-- Do NOT run team spawning/orchestration commands (for example: \`omc team ...\`, \`omx team ...\`, \`$team\`, \`$ultrawork\`, \`$autopilot\`, \`$ralph\`).
-- Worker-allowed control surface is only: \`omc team api ... --json\` (and equivalent \`omx team api ... --json\` where configured).
+- Do NOT run team spawning/orchestration commands (for example: \`${teamCommand} ...\`, \`omx team ...\`, \`$team\`, \`$ultrawork\`, \`$autopilot\`, \`$ralph\`).
+- Worker-allowed control surface is only: \`${teamApiCommand} ... --json\` (and equivalent \`omx team api ... --json\` where configured).
 - If blocked, write {"state": "blocked", "reason": "..."} to your status file
 
 ${agentTypeGuidance(agentType)}
 
-${bootstrapInstructions ? `## Additional Instructions\n${bootstrapInstructions}\n` : ''}`;
+## BEFORE YOU EXIT
+You MUST call \`${formatOmcCliInvocation('team api transition-task-status')}\` to mark your task as "completed" or "failed" before exiting.
+If you skip this step, the leader cannot track your work and the task will appear stuck.
+
+${bootstrapInstructions ? `## Role Context\n${bootstrapInstructions}\n` : ''}`;
 }
 /**
  * Write the initial inbox file for a worker.
  */
-export async function composeInitialInbox(teamName, workerName, content, cwd) {
+export async function composeInitialInbox(teamName, workerName, content, cwd, cliOutputContract) {
     const inboxPath = join(cwd, `.omc/state/team/${teamName}/workers/${workerName}/inbox.md`);
     await mkdir(dirname(inboxPath), { recursive: true });
-    await writeFile(inboxPath, content, 'utf-8');
+    const finalContent = cliOutputContract && !content.includes(cliOutputContract)
+        ? `${content}\n${cliOutputContract}`
+        : content;
+    await writeFile(inboxPath, finalContent, 'utf-8');
 }
 /**
  * Append a message to the worker inbox.

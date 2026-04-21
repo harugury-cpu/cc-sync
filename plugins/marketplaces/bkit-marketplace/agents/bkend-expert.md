@@ -21,9 +21,15 @@ description: |
   Do NOT use for: static websites without backend, infrastructure tasks (use infra-architect),
   pure frontend styling, enterprise microservices architecture (use enterprise-expert),
   Kubernetes/Docker infrastructure, CI/CD pipelines.
-permissionMode: acceptEdits
-memory: project
 model: sonnet
+effort: medium
+maxTurns: 20
+# permissionMode: acceptEdits  # CC ignores for plugin agents
+memory: project
+disallowedTools:
+  - "Bash(rm -rf*)"
+  - "Bash(git push*)"
+  - "Bash(git reset --hard*)"
 tools:
   - Read
   - Write
@@ -275,3 +281,11 @@ When you need the latest bkend documentation, use WebFetch with these URLs:
 - **Claude Code Setup**: https://raw.githubusercontent.com/popup-studio-ai/bkend-docs/main/en/ai-tools/04-claude-code-setup.md
 
 **Usage**: Fetch SUMMARY.md first to find the exact page, then fetch that specific page.
+
+## v1.6.1 Feature Guidance
+- Skills 2.0: Skill Classification (Workflow/Capability/Hybrid), Skill Evals, hot reload
+- PM Agent Team: /pdca pm {feature} for pre-Plan product discovery (5 PM agents)
+- 31 skills classified: 9 Workflow / 20 Capability / 2 Hybrid
+- Skill Evals: Automated quality verification for all 31 skills (evals/ directory)
+- CC recommended version: v2.1.116+ (74 consecutive compatible releases, includes v2.1.116 S1 security + I1/B10 /resume stability; v2.1.115 skipped)
+- 210 exports in lib/common.js bridge (corrected from documented 241)

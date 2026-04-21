@@ -1,7 +1,7 @@
 /**
  * PDCA Automation Module
  * @module lib/pdca/automation
- * @version 1.5.1
+ * @version 2.0.0
  */
 
 // Lazy require
@@ -59,8 +59,10 @@ function shouldAutoAdvance(phase) {
     return !reviewCheckpoints.includes(phase);
   }
 
-  // semi-auto: only auto-advance from check to act (when matchRate < 90)
-  return phase === 'check';
+  // v2.1.5 I1: semi-auto now includes plan and design for continuous flow
+  // plan→design→do is a natural document generation sequence that benefits from auto-advance
+  const semiAutoPhases = ['plan', 'design', 'check', 'qa', 'report', 'completed'];
+  return semiAutoPhases.includes(phase);
 }
 
 /**
@@ -73,16 +75,62 @@ function generateAutoTrigger(currentPhase, context = {}) {
   if (!shouldAutoAdvance(currentPhase)) return null;
 
   const phaseMap = {
+    pm: { skill: 'pdca', args: `plan ${context.feature}` },
     plan: { skill: 'pdca', args: `design ${context.feature}` },
     design: { skill: 'pdca', args: `do ${context.feature}` },
     do: { skill: 'pdca', args: `analyze ${context.feature}` },
-    check: context.matchRate >= 90
-      ? { skill: 'pdca', args: `report ${context.feature}` }
+    check: context.matchRate >= 100
+      ? { skill: 'qa-phase', args: context.feature }
       : { skill: 'pdca', args: `iterate ${context.feature}` },
     act: { skill: 'pdca', args: `analyze ${context.feature}` },
+    qa: context.qaPassRate >= 95 && context.qaCriticalCount === 0
+      ? { skill: 'pdca', args: `report ${context.feature}` }
+      : { skill: 'pdca', args: `iterate ${context.feature}` },
+    report: { complete: true, feature: context.feature },
+    completed: { complete: true, feature: context.feature },
   };
 
   return phaseMap[currentPhase] || null;
+}
+
+/**
+ * v1.5.7: Generate batch trigger for multiple features
+ * @param {string[]} features - Feature names to batch process
+ * @param {string} phase - Target PDCA phase
+ * @returns {Object|null}
+ */
+function generateBatchTrigger(features, phase) {
+  if (!Array.isArray(features) || features.length < 2) return null;
+
+  const { debugLog } = getCore();
+
+  debugLog('PDCA', 'Batch trigger generated', {
+    featureCount: features.length,
+    phase
+  });
+
+  return {
+    type: 'batch',
+    features,
+    phase,
+    commands: features.map(f => ({
+      skill: 'pdca',
+      args: `${phase} ${f}`
+    }))
+  };
+}
+
+/**
+ * v1.5.7: Check if batch mode is appropriate
+ * @param {Object} context - Current context with activeFeatures
+ * @returns {boolean}
+ */
+function shouldSuggestBatch(context = {}) {
+  const { getPdcaStatusFull } = getStatus();
+  const status = getPdcaStatusFull();
+  const activeFeatures = status?.activeFeatures || [];
+
+  return activeFeatures.length >= 2;
 }
 
 /**
@@ -123,11 +171,13 @@ function autoAdvancePdcaPhase(feature, currentPhase, result = {}) {
   }
 
   const nextPhaseMap = {
+    pm: 'plan',
     plan: 'design',
     design: 'do',
     do: 'check',
-    check: result.matchRate >= 90 ? 'report' : 'act',
-    act: 'check'
+    check: result.matchRate >= 100 ? 'qa' : 'act',
+    act: 'check',
+    qa: (result.qaPassRate >= 95 && result.qaCriticalCount === 0) ? 'report' : 'act',
   };
 
   const nextPhase = nextPhaseMap[currentPhase];
@@ -197,19 +247,49 @@ function emitUserPrompt(options = {}) {
 
 /**
  * Format ask user question payload
+ * v1.5.9: Added preview field support (ENH-78 graceful degradation)
+ * v1.6.0: ENH-92 AskUserQuestion preview performance optimized (CC v2.1.70 fix)
  * @param {Object} payload
  * @returns {Object}
  */
 function formatAskUserQuestion(payload) {
+  const defaultOptions = [
+    { label: 'Continue', description: 'Proceed with current task' },
+    { label: 'Skip', description: 'Skip this step' }
+  ];
+
+  const options = (payload.options || defaultOptions).map(opt => {
+    const result = {
+      label: opt.label,
+      description: opt.description
+    };
+    // v1.5.9: preview field (CC v2.1.69+, silently ignored on older versions)
+    // v1.6.0: ENH-92 performance improved by CC v2.1.70 AskUserQuestion preview fix
+    if (opt.preview) {
+      result.preview = opt.preview;
+    }
+    return result;
+  });
+
+  // v1.6.0 ENH-92: Include executive summary in preview when available
+  if (payload.executiveSummary && options.length > 0 && !options[0].preview) {
+    const es = payload.executiveSummary;
+    options[0].preview = [
+      '## Executive Summary',
+      '',
+      `**Problem**: ${es.problem || 'N/A'}`,
+      `**Solution**: ${es.solution || 'N/A'}`,
+      `**Impact**: ${es.impact || 'N/A'}`,
+      `**Value**: ${es.value || 'N/A'}`
+    ].join('\n');
+  }
+
   return {
     questions: [
       {
         question: payload.question || 'How would you like to proceed?',
         header: payload.header || 'Action',
-        options: payload.options || [
-          { label: 'Continue', description: 'Proceed with current task' },
-          { label: 'Skip', description: 'Skip this step' }
-        ],
+        options,
         multiSelect: payload.multiSelect || false
       }
     ]
@@ -217,19 +297,268 @@ function formatAskUserQuestion(payload) {
 }
 
 /**
- * v1.5.1: TaskCompleted 이벤트에서 PDCA phase 감지
- * @param {string} taskSubject - 완료된 Task의 subject
+ * v1.5.9: Build PDCA phase-specific Next Action AskUserQuestion
+ * @param {string} phase - Completed PDCA phase ('plan'|'plan-plus'|'report'|'check')
+ * @param {string} feature - Feature name
+ * @param {Object} [context] - Additional context (matchRate, iterCount)
+ * @returns {Object} formatAskUserQuestion compatible payload
+ */
+function buildNextActionQuestion(phase, feature, context = {}) {
+  const { matchRate = 0, iterCount = 0 } = context;
+
+  const questionSets = {
+    'pm': {
+      question: 'PM analysis completed. Please select next step.',
+      header: 'PM Complete',
+      options: [
+        {
+          label: 'Start Plan (Recommended)',
+          description: 'Create Plan document with PRD auto-reference',
+          preview: [
+            '## Plan Phase',
+            '',
+            `**Command**: \`/pdca plan ${feature}\``,
+            '',
+            `**PRD Auto-Reference**: docs/00-pm/${feature}.prd.md`,
+            '',
+            '**Duration**: 15-30 min',
+            '',
+            '**PDCA Status**:',
+            '[PM] OK -> **[Plan]** -> [Design] -> [Do] -> [Check]'
+          ].join('\n')
+        },
+        {
+          label: 'Re-run PM Analysis',
+          description: 'Run PM analysis again with different parameters',
+          preview: [
+            '## Re-run PM',
+            '',
+            `**Command**: \`/pdca pm ${feature}\``,
+            '',
+            '**Note**: Existing PRD will be overwritten'
+          ].join('\n')
+        },
+        {
+          label: 'Skip to Plan-Plus',
+          description: 'Use brainstorming-enhanced planning instead',
+          preview: [
+            '## Plan Plus',
+            '',
+            `**Command**: \`/plan-plus ${feature}\``,
+            '',
+            '**Note**: PRD from PM will still be auto-referenced'
+          ].join('\n')
+        }
+      ]
+    },
+
+    'plan-plus': {
+      question: 'Plan Plus completed. Please select next step.',
+      header: 'Next Action',
+      options: [
+        {
+          label: 'Start Design (Recommended)',
+          description: 'Start technical design document',
+          preview: [
+            '## Design Phase',
+            '',
+            `**Command**: \`/pdca design ${feature}\``,
+            '',
+            '**Duration**: 20-40 min',
+            '',
+            '**Output**:',
+            `- \`docs/02-design/features/${feature}.design.md\``,
+            '- API endpoint specs',
+            '- DB schema and data model',
+            '- UI component structure'
+          ].join('\n')
+        },
+        {
+          label: 'Revise Plan',
+          description: 'Apply changes to current plan document',
+          preview: [
+            '## Revise Plan',
+            '',
+            `**Target**: \`docs/01-plan/features/${feature}.plan.md\``,
+            '',
+            '**Key areas**:',
+            '- Scope (In/Out) adjustment',
+            '- Add/remove functional requirements',
+            '- Redefine success criteria'
+          ].join('\n')
+        },
+        {
+          label: 'Request Team Review',
+          description: 'Request CTO Team plan review',
+          preview: [
+            '## CTO Team Review',
+            '',
+            `**Command**: \`/pdca team ${feature}\``,
+            '',
+            '**Requires**: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`',
+            '',
+            '**Duration**: 10-20 min'
+          ].join('\n')
+        }
+      ]
+    },
+
+    'plan': {
+      question: 'Plan completed. Please select next step.',
+      header: 'Next Action',
+      options: [
+        {
+          label: 'Start Design (Recommended)',
+          description: 'Start technical design based on plan',
+          preview: [
+            '## Design Phase',
+            '',
+            `**Command**: \`/pdca design ${feature}\``,
+            '',
+            '**Duration**: 15-30 min',
+            '',
+            '**PDCA Status**:',
+            '[Plan] OK -> **[Design]** -> [Do] -> [Check]'
+          ].join('\n')
+        },
+        {
+          label: 'Revise Plan',
+          description: 'Apply additional changes to plan',
+          preview: [
+            '## Revise Plan',
+            '',
+            `**Target**: \`docs/01-plan/features/${feature}.plan.md\``,
+            '',
+            '**Tip**: For major scope changes, consider `/plan-plus` restart'
+          ].join('\n')
+        },
+        {
+          label: 'Other Feature First',
+          description: 'Pause this feature, work on something else',
+          preview: [
+            '## Pause Feature',
+            '',
+            `**Current state**: ${feature} saved at "plan" phase`,
+            '',
+            `**Resume**: \`/pdca status\` then \`/pdca design ${feature}\``
+          ].join('\n')
+        }
+      ]
+    },
+
+    'report': {
+      question: `Report completed (Match Rate: ${matchRate}%). Please select next step.`,
+      header: 'PDCA Complete',
+      options: [
+        {
+          label: 'Archive (Recommended)',
+          description: 'Archive completed PDCA documents',
+          preview: [
+            '## Archive',
+            '',
+            `**Command**: \`/pdca archive ${feature}\``,
+            '',
+            '**Documents** (4 files):',
+            '- plan.md, design.md, analysis.md, report.md',
+            '',
+            `**Location**: \`docs/archive/YYYY-MM/${feature}/\``,
+            '',
+            '**Tip**: Use `--summary` to preserve metrics'
+          ].join('\n')
+        },
+        {
+          label: 'Further Improvement',
+          description: 'Apply additional improvements to current feature',
+          preview: [
+            '## Additional Improvement',
+            '',
+            `**Current Match Rate**: ${matchRate}%`,
+            `**Iterations completed**: ${iterCount}`,
+            '',
+            `**Command**: \`/pdca iterate ${feature}\``
+          ].join('\n')
+        },
+        {
+          label: 'Next Feature',
+          description: 'Start new feature PDCA cycle',
+          preview: [
+            '## New Feature',
+            '',
+            '**Start commands**:',
+            '- `/plan-plus {new-feature}` (recommended)',
+            '- `/pdca plan {new-feature}`',
+            '',
+            `**Current feature**: ${feature} stays at "report" phase`
+          ].join('\n')
+        }
+      ]
+    }
+  };
+
+  // v2.1.1: QA phase question set
+  questionSets['qa'] = {
+    question: `QA Phase completed (Pass Rate: ${context.qaPassRate || 0}%). Please select next step.`,
+    header: 'QA Complete',
+    options: [
+      {
+        label: 'Generate Report (Recommended)',
+        description: 'All QA tests passed, generate completion report',
+        preview: [
+          '## Report Phase',
+          '',
+          `**Command**: \`/pdca report ${feature}\``,
+          '',
+          `**QA Pass Rate**: ${context.qaPassRate || 0}%`,
+          `**Critical Issues**: ${context.qaCriticalCount || 0}`,
+          '',
+          '**PDCA Status**:',
+          '[Check] OK -> [QA] OK -> **[Report]**'
+        ].join('\n')
+      },
+      {
+        label: 'Fix & Retry QA',
+        description: 'Fix failed tests and re-run QA phase',
+        preview: [
+          '## Fix & Retry',
+          '',
+          `**Command**: \`/pdca iterate ${feature}\` then \`/qa-phase ${feature}\``,
+          '',
+          '**Failed Tests**: Review docs/05-qa/ for details'
+        ].join('\n')
+      },
+      {
+        label: 'Skip QA → Report',
+        description: 'Skip remaining QA tests and proceed to report',
+        preview: [
+          '## Skip QA',
+          '',
+          `**Command**: \`/pdca report ${feature}\``,
+          '',
+          '**Warning**: QA results will be recorded as "skipped"'
+        ].join('\n')
+      }
+    ]
+  };
+
+  return questionSets[phase] || questionSets['plan'];
+}
+
+/**
+ * v1.5.1: Detect PDCA phase from TaskCompleted event
+ * @param {string} taskSubject - Completed task's subject
  * @returns {{ phase: string, feature: string } | null}
  */
 function detectPdcaFromTaskSubject(taskSubject) {
   if (!taskSubject) return null;
 
   const patterns = {
+    pm:     /\[PM\]\s+(.+)/,
     plan:   /\[Plan\]\s+(.+)/,
     design: /\[Design\]\s+(.+)/,
     do:     /\[Do\]\s+(.+)/,
     check:  /\[Check\]\s+(.+)/,
     act:    /\[Act(?:-\d+)?\]\s+(.+)/,
+    qa:     /\[QA\]\s+(.+)/,
     report: /\[Report\]\s+(.+)/,
   };
 
@@ -244,8 +573,8 @@ function detectPdcaFromTaskSubject(taskSubject) {
 }
 
 /**
- * v1.5.1: TaskCompleted 후 다음 PDCA 액션 결정
- * @param {string} phase - 완료된 phase
+ * v1.5.1: Determine next PDCA action after TaskCompleted
+ * @param {string} phase - Completed phase
  * @param {string} feature - feature name
  * @returns {{ nextPhase: string, command: string, autoExecute: boolean } | null}
  */
@@ -260,13 +589,17 @@ function getNextPdcaActionAfterCompletion(phase, feature) {
   const matchRate = featureData?.matchRate;
 
   const nextPhaseMap = {
+    pm: { nextPhase: 'plan', command: `/pdca plan ${feature}` },
     plan: { nextPhase: 'design', command: `/pdca design ${feature}` },
     design: { nextPhase: 'do', command: `/pdca do ${feature}` },
     do: { nextPhase: 'check', command: `/pdca analyze ${feature}` },
-    check: matchRate >= 90
-      ? { nextPhase: 'report', command: `/pdca report ${feature}` }
+    check: matchRate >= 100
+      ? { nextPhase: 'qa', command: `/qa-phase ${feature}` }
       : { nextPhase: 'act', command: `/pdca iterate ${feature}` },
     act: { nextPhase: 'check', command: `/pdca analyze ${feature}` },
+    qa: featureData?.qaPassRate >= 95
+      ? { nextPhase: 'report', command: `/pdca report ${feature}` }
+      : { nextPhase: 'act', command: `/pdca iterate ${feature}` },
     report: { nextPhase: 'completed', command: `/pdca archive ${feature}` },
   };
 
@@ -279,16 +612,155 @@ function getNextPdcaActionAfterCompletion(phase, feature) {
   };
 }
 
+/**
+ * v2.1.5 I2: Canonical PDCA Phase Transition Map (Single Source of Truth)
+ * Consolidates PDCA_PHASE_TRANSITIONS from pdca-skill-stop.js
+ * @type {Object}
+ */
+const PDCA_PHASE_TRANSITIONS = {
+  'pm': {
+    next: 'plan',
+    skill: '/pdca plan',
+    message: 'PM analysis completed. Proceed to Plan phase.',
+    taskTemplate: '[Plan] {feature}'
+  },
+  'plan': {
+    next: 'design',
+    skill: '/pdca design',
+    message: 'Plan completed. Proceed to Design phase.',
+    taskTemplate: '[Design] {feature}'
+  },
+  'design': {
+    next: 'do',
+    skill: null,
+    message: 'Design completed. Start implementation.',
+    taskTemplate: '[Do] {feature}'
+  },
+  'do': {
+    next: 'check',
+    skill: '/pdca analyze',
+    message: 'Implementation completed. Run Gap analysis.',
+    taskTemplate: '[Check] {feature}'
+  },
+  'check': {
+    conditions: [
+      {
+        when: (ctx) => ctx.matchRate >= 90,
+        next: 'report',
+        skill: '/pdca report',
+        message: 'Check passed! Generate completion report.',
+        taskTemplate: '[Report] {feature}'
+      },
+      {
+        when: (ctx) => ctx.matchRate < 90,
+        next: 'act',
+        skill: '/pdca iterate',
+        message: 'Check below threshold. Run auto improvement.',
+        taskTemplate: '[Act-{N}] {feature}'
+      }
+    ]
+  },
+  'act': {
+    next: 'check',
+    skill: '/pdca analyze',
+    message: 'Act completed. Run re-verification.',
+    taskTemplate: '[Check] {feature}'
+  },
+  'qa': {
+    conditions: [
+      {
+        when: (ctx) => ctx.qaPassRate >= 95 && ctx.qaCriticalCount === 0,
+        next: 'report',
+        skill: '/pdca report',
+        message: 'QA passed! Generate completion report.',
+        taskTemplate: '[Report] {feature}'
+      },
+      {
+        when: () => true,
+        next: 'act',
+        skill: '/pdca iterate',
+        message: 'QA issues found. Run auto improvement.',
+        taskTemplate: '[Act-{N}] {feature}'
+      }
+    ]
+  },
+  'report': {
+    next: 'completed',
+    skill: null,
+    message: 'PDCA cycle completed!',
+    taskTemplate: null
+  }
+};
+
+/**
+ * v2.1.5 I2: Determine PDCA transition from canonical map
+ * @param {string} currentPhase
+ * @param {Object} context - { matchRate, iterationCount, feature, qaPassRate, qaCriticalCount }
+ * @returns {Object|null} { next, skill, message, taskTemplate }
+ */
+function determinePdcaTransition(currentPhase, context = {}) {
+  const transition = PDCA_PHASE_TRANSITIONS[currentPhase];
+  if (!transition) return null;
+
+  if (transition.conditions) {
+    for (const condition of transition.conditions) {
+      if (condition.when(context)) {
+        return {
+          next: condition.next,
+          skill: condition.skill,
+          message: condition.message,
+          taskTemplate: (condition.taskTemplate || '').replace('{N}', context.iterationCount || 1)
+        };
+      }
+    }
+    return null;
+  }
+
+  return {
+    next: transition.next,
+    skill: transition.skill,
+    message: transition.message,
+    taskTemplate: transition.taskTemplate
+  };
+}
+
+/**
+ * v2.1.5 I3: Convert integer automation level (L0-L4) to string
+ * @param {number} intLevel - 0-4
+ * @returns {string} 'manual' | 'semi-auto' | 'full-auto'
+ */
+function toLevelString(intLevel) {
+  const map = { 0: 'manual', 1: 'manual', 2: 'semi-auto', 3: 'full-auto', 4: 'full-auto' };
+  return map[intLevel] || 'manual';
+}
+
+/**
+ * v2.1.5 I3: Convert string automation level to integer (L0-L4)
+ * @param {string} strLevel - 'manual' | 'semi-auto' | 'full-auto'
+ * @returns {number} 0-4
+ */
+function fromLevelString(strLevel) {
+  const map = { 'manual': 0, 'semi-auto': 2, 'full-auto': 4 };
+  return map[strLevel] ?? 0;
+}
+
 module.exports = {
   getAutomationLevel,
   isFullAutoMode,
   shouldAutoAdvance,
   generateAutoTrigger,
+  generateBatchTrigger,
+  shouldSuggestBatch,
   shouldAutoStartPdca,
   autoAdvancePdcaPhase,
   getHookContext,
   emitUserPrompt,
   formatAskUserQuestion,
+  buildNextActionQuestion,
   detectPdcaFromTaskSubject,
   getNextPdcaActionAfterCompletion,
+  PDCA_PHASE_TRANSITIONS,
+  determinePdcaTransition,
+  toLevelString,
+  fromLevelString,
 };

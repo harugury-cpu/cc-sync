@@ -24,6 +24,9 @@ export {
   // PRD flag helpers
   detectNoPrdFlag,
   stripNoPrdFlag,
+  detectCriticModeFlag,
+  stripCriticModeFlag,
+  normalizeRalphCriticMode,
 
   // Team coordination
   getTeamPhaseDirective,
@@ -40,6 +43,7 @@ export {
 
   // Types
   type RalphLoopState,
+  type RalphCriticMode,
   type RalphLoopOptions,
   type RalphLoopHook,
   type PRD,
@@ -63,6 +67,7 @@ export {
   getPrdStatus,
   markStoryComplete,
   markStoryIncomplete,
+  markStoryArchitectVerified,
   getStory,
   getNextStory,
 
@@ -70,6 +75,7 @@ export {
   createPrd,
   createSimplePrd,
   initPrd,
+  ensurePrdForStartup,
 
   // Formatting
   formatPrdStatus,

@@ -10,16 +10,46 @@
  */
 
 import { existsSync, readdirSync, readFileSync } from 'fs';
-import { join, dirname } from 'path';
+import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import type { BuiltinSkill } from './types.js';
 import { parseFrontmatter, parseFrontmatterAliases } from '../../utils/frontmatter.js';
+import { rewriteOmcCliInvocations } from '../../utils/omc-cli-rendering.js';
+import { parseSkillPipelineMetadata, renderSkillPipelineGuidance } from '../../utils/skill-pipeline.js';
+import { renderSkillResourcesGuidance } from '../../utils/skill-resources.js';
+import { renderSkillRuntimeGuidance } from './runtime-guidance.js';
+import { isSkininthegamebrosUser } from '../../utils/skininthegamebros-user.js';
+import { getClaudeConfigDir } from '../../utils/config-dir.js';
 
-// Get the project root directory (go up from src/features/builtin-skills/)
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const PROJECT_ROOT = join(__dirname, '..', '..', '..');
-const SKILLS_DIR = join(PROJECT_ROOT, 'skills');
+function getPackageDir(): string {
+  if (typeof __dirname !== 'undefined' && __dirname) {
+    const currentDirName = basename(__dirname);
+    const parentDirName = basename(dirname(__dirname));
+    const grandparentDirName = basename(dirname(dirname(__dirname)));
+
+    if (currentDirName === 'bridge') {
+      return join(__dirname, '..');
+    }
+
+    if (
+      currentDirName === 'builtin-skills'
+      && parentDirName === 'features'
+      && (grandparentDirName === 'src' || grandparentDirName === 'dist')
+    ) {
+      return join(__dirname, '..', '..', '..');
+    }
+  }
+
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    return join(__dirname, '..', '..', '..');
+  } catch {
+    return process.cwd();
+  }
+}
+
+const SKILLS_DIR = join(getPackageDir(), 'skills');
 
 /**
  * Claude Code native commands that must not be shadowed by OMC skill short names.
@@ -39,11 +69,103 @@ const CC_NATIVE_COMMANDS = new Set([
   'memory',
 ]);
 
+const SKININTHEGAMEBROS_ONLY_SKILLS = new Set([
+  'remember',
+  'verify',
+  'debug',
+  'skillify',
+]);
+
+const DEFAULT_DEEP_INTERVIEW_AMBIGUITY_THRESHOLD = 0.2;
+
 function toSafeSkillName(name: string): string {
   const normalized = name.trim();
   return CC_NATIVE_COMMANDS.has(normalized.toLowerCase())
     ? `omc-${normalized}`
     : normalized;
+}
+
+function readJsonObject(path: string): Record<string, unknown> | null {
+  if (!existsSync(path)) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf-8'));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function readDeepInterviewThresholdFromSettings(path: string): number | null {
+  const settings = readJsonObject(path);
+  const omc = settings?.omc;
+  if (!omc || typeof omc !== 'object' || Array.isArray(omc)) {
+    return null;
+  }
+
+  const deepInterview = (omc as Record<string, unknown>).deepInterview;
+  if (!deepInterview || typeof deepInterview !== 'object' || Array.isArray(deepInterview)) {
+    return null;
+  }
+
+  const threshold = (deepInterview as Record<string, unknown>).ambiguityThreshold;
+  return typeof threshold === 'number' && Number.isFinite(threshold) && threshold >= 0 && threshold <= 1
+    ? threshold
+    : null;
+}
+
+function getDeepInterviewAmbiguityThreshold(): number {
+  const profileThreshold = readDeepInterviewThresholdFromSettings(join(getClaudeConfigDir(), 'settings.json'));
+  const projectThreshold = readDeepInterviewThresholdFromSettings(join(process.cwd(), '.claude', 'settings.json'));
+  return projectThreshold ?? profileThreshold ?? DEFAULT_DEEP_INTERVIEW_AMBIGUITY_THRESHOLD;
+}
+
+function formatThresholdPercent(threshold: number): string {
+  return `${(threshold * 100).toFixed(2).replace(/\.?0+$/, '')}%`;
+}
+
+function applyDeepInterviewRuntimeSettings(template: string): string {
+  const threshold = getDeepInterviewAmbiguityThreshold();
+  const percent = formatThresholdPercent(threshold);
+
+  const withResolvedPlaceholders = template
+    .replaceAll('<resolvedThreshold>', `${threshold}`)
+    .replaceAll('<resolvedThresholdPercent>', percent);
+
+  const withRuntimeSettings = withResolvedPlaceholders.includes('3.5. **Load runtime settings**:')
+    ? withResolvedPlaceholders
+    : withResolvedPlaceholders.replace(
+      '4. **Initialize state** via `state_write(mode="deep-interview")`:',
+      [
+        `3.5. **Load runtime settings** from \`~/.claude/settings.json\` and \`./.claude/settings.json\` before state init (project overrides profile). For this run, use \`ambiguityThreshold = ${threshold}\`.`,
+        '4. **Initialize state** via `state_write(mode="deep-interview")`:',
+      ].join('\n'),
+    );
+
+  return withRuntimeSettings
+    .replace('"threshold": 0.2,', `"threshold": ${threshold},`)
+    .replace(
+      'We\'ll proceed to execution once ambiguity drops below 20%.',
+      `We'll proceed to execution once ambiguity drops below ${percent}.`,
+    )
+    // Fix #2545: replace remaining hardcoded 20%/0.2 references that conflict with runtime threshold injection
+    .replace('(default: 20%)', `(default: ${percent})`)
+    .replace('(default 0.2)', `(default ${threshold})`)
+    .replace('"ambiguityThreshold": 0.2,', `"ambiguityThreshold": ${threshold},`)
+    .replace('Gate: ≤20% ambiguity', `Gate: ≤${percent} ambiguity`)
+    .replace('(threshold: 20%).', `(threshold: ${percent}).`)
+    .replace('ambiguity ≤ 20%', `ambiguity ≤ ${percent}`);
+}
+
+export function renderBundledSkillBody(skillName: string, body: string): string {
+  const rewrittenBody = rewriteOmcCliInvocations(body.trim());
+  return skillName === 'deep-interview'
+    ? applyDeepInterviewRuntimeSettings(rewrittenBody)
+    : rewrittenBody;
 }
 
 /**
@@ -53,9 +175,17 @@ function loadSkillFromFile(skillPath: string, skillName: string): BuiltinSkill[]
   try {
     const content = readFileSync(skillPath, 'utf-8');
     const { metadata, body } = parseFrontmatter(content);
-
     const resolvedName = metadata.name || skillName;
     const safePrimaryName = toSafeSkillName(resolvedName);
+    const pipeline = parseSkillPipelineMetadata(metadata);
+    const renderedBody = renderBundledSkillBody(safePrimaryName, body);
+    const template = [
+      renderedBody,
+      renderSkillRuntimeGuidance(safePrimaryName),
+      renderSkillPipelineGuidance(safePrimaryName, pipeline),
+      renderSkillResourcesGuidance(skillPath),
+    ].filter((section) => section.trim().length > 0).join('\n\n');
+
     const safeAliases = Array.from(
       new Set(
         parseFrontmatterAliases(metadata.aliases)
@@ -82,11 +212,12 @@ function loadSkillFromFile(skillPath: string, skillName: string): BuiltinSkill[]
           ? undefined
           : `Skill alias "${name}" is deprecated. Use "${safePrimaryName}" instead.`,
         description: metadata.description || '',
-        template: body.trim(),
+        template,
         // Optional fields from frontmatter
         model: metadata.model,
         agent: metadata.agent,
         argumentHint: metadata['argument-hint'],
+        pipeline: name === safePrimaryName ? pipeline : undefined,
       });
     }
 
@@ -112,6 +243,9 @@ function loadSkillsFromDirectory(): BuiltinSkill[] {
 
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
+      if (SKININTHEGAMEBROS_ONLY_SKILLS.has(entry.name) && !isSkininthegamebrosUser()) {
+        continue;
+      }
 
       const skillPath = join(SKILLS_DIR, entry.name, 'SKILL.md');
       if (existsSync(skillPath)) {
@@ -134,6 +268,13 @@ function loadSkillsFromDirectory(): BuiltinSkill[] {
 
 // Cache loaded skills to avoid repeated file reads
 let cachedSkills: BuiltinSkill[] | null = null;
+let cachedSkillsKey: string | null = null;
+
+function getBuiltinSkillsCacheKey(): string {
+  return JSON.stringify({
+    deepInterviewAmbiguityThreshold: getDeepInterviewAmbiguityThreshold(),
+  });
+}
 
 /**
  * Get all builtin skills
@@ -142,8 +283,10 @@ let cachedSkills: BuiltinSkill[] | null = null;
  * Results are cached after first load.
  */
 export function createBuiltinSkills(): BuiltinSkill[] {
-  if (cachedSkills === null) {
+  const cacheKey = getBuiltinSkillsCacheKey();
+  if (cachedSkills === null || cachedSkillsKey !== cacheKey) {
     cachedSkills = loadSkillsFromDirectory();
+    cachedSkillsKey = cacheKey;
   }
   return cachedSkills;
 }
@@ -177,6 +320,7 @@ export function listBuiltinSkillNames(options?: ListBuiltinSkillNamesOptions): s
  */
 export function clearSkillsCache(): void {
   cachedSkills = null;
+  cachedSkillsKey = null;
 }
 
 /**

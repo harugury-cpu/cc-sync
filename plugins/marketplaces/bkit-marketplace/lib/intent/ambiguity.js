@@ -1,7 +1,7 @@
 /**
  * Ambiguity Analysis Module
  * @module lib/intent/ambiguity
- * @version 1.4.7
+ * @version 2.0.0
  */
 
 // Lazy require
@@ -191,7 +191,11 @@ function calculateAmbiguityScore(userRequest, context = {}) {
   // Clamp score to 0-1 range
   score = Math.min(1, Math.max(0, score));
 
-  return { score, factors };
+  // Determine if clarification is needed
+  const confidenceThreshold = getConfig('triggers.confidenceThreshold', 0.7);
+  const shouldClarify = score >= (1 - confidenceThreshold) && factors.length >= 2;
+
+  return { score, factors, shouldClarify };
 }
 
 /**

@@ -14,8 +14,8 @@ flowchart TB
         subgraph ROW1[" "]
             direction LR
             SPEC["**1. SPEC**<br/>Plan Doc<br/>Design Doc"]
-            CONTEXT["**2. CONTEXT**<br/>CLAUDE.md<br/>27 Skills"]
-            AGENT["**3. AI AGENT**<br/>16 Agents<br/>Autonomous Implementation"]
+            CONTEXT["**2. CONTEXT**<br/>CLAUDE.md<br/>39 Skills"]
+            AGENT["**3. AI AGENT**<br/>36 Agents<br/>Controllable Implementation"]
         end
 
         OVERSIGHT["**4. HUMAN OVERSIGHT**<br/>Gap Analysis<br/>Verification & Approval"]
@@ -95,15 +95,19 @@ Based on research from industry leaders (Addy Osmani, Sapphire Ventures, DevOps.
 - Automated testing and validation
 - Self-correction through iteration
 
-### 4. Human Oversight by Design
+### 4. Human Oversight by Design (Controllable AI)
 
-**Principle**: Humans provide strategic direction while AI handles execution.
+**Principle**: Humans govern AI through progressive trust, 5-level automation control, and interactive checkpoints.
 
-**Balance**:
-- AI proposes, human approves
-- Critical decisions require human judgment
-- Verification at key checkpoints
-- Final quality assurance by humans
+**bkit v2.0.3 Controllable AI**:
+- **L0-L4 automation levels**: Manual → Guided → Semi-Auto → Auto → Full-Auto
+- **Interactive Checkpoints (v2.0.3)**: 5 AskUserQuestion gates — Plan (requirements + questions), Design (3 architecture options), Do (scope approval), Check (fix strategy)
+- **Confidence-Based Analysis (v2.0.3)**: code-analyzer reports only ≥80% confidence issues with Critical/Important severity
+- **Trust Score (0-100)**: Earned through track record, 6 weighted components
+- **Quality Gates (7 stages)**: Configurable thresholds per phase transition
+- **Audit trail**: JSONL logging + decision tracer for full transparency
+- **Emergency stop**: Immediate pause with checkpoint/rollback support
+- **Destructive detection**: 8 rules (rm -rf, git push --force, etc.) with blast radius analysis
 
 ---
 
@@ -126,21 +130,24 @@ According to Addy Osmani's research on AI-Native engineers, effective practition
 - Test edge cases and error handling
 - Validate against requirements
 
-### 4. Context Engineering (v1.4.5 Enhanced)
+### 4. Context Engineering (v2.0.0)
 
 Context Engineering is the **systematic design of information flow to LLMs**—going beyond simple prompt crafting to build entire systems that consistently guide AI behavior.
 
 **Key Practices**:
-- Design multi-layered context injection systems
-- Build state management for session persistence
-- Create adaptive triggers based on user intent
-- Implement quality feedback loops (Evaluator-Optimizer)
+- Design multi-layered context injection systems (21 hook events, 6 layers)
+- Build state management with declarative state machines (20 transitions, 9 guards)
+- Create adaptive triggers based on user intent (8-language, auto-detection)
+- Implement quality feedback loops with quality gates and metrics (M1-M10)
 
-**bkit Implementation**:
+**bkit v2.1.9 Implementation**:
 ```
-Domain Knowledge (27 Skills) ─┐
-Behavioral Rules (16 Agents) ─┼─→ Unified Hook System ─→ Dynamic Context Injection
-State Management (241 funcs) ─┘
+Domain Knowledge (39 Skills) ──┐
+Behavioral Rules (36 Agents) ──┼─→ 21-Event Hook System ─→ Dynamic Context Injection
+State Management (101 modules) ─┤
+Workflow Engine (3 presets) ────┤
+Controllable AI (L0-L4) ───────┤
+Audit System (JSONL traces) ───┘
 ```
 
 See [bkit-system/philosophy/context-engineering.md](bkit-system/philosophy/context-engineering.md) for detailed implementation.
@@ -176,20 +183,22 @@ bkit implements **Context Engineering**—the systematic curation of context tok
 | **3 Project Levels** | Starter, Dynamic, Enterprise contexts |
 | **Convention Skill (Phase 2)** | Defines naming, structure, patterns |
 | **CLAUDE.md Files** | Project-specific AI instructions |
-| **Skill System (27 skills)** | Domain-specific knowledge |
-| **Unified Hook System (v1.4.5)** | Centralized context injection via hooks.json |
-| **lib/*.js (86+ functions)** | State management, intent detection, ambiguity handling |
+| **Skill System (39 skills)** | Domain-specific knowledge |
+| **21-Event Hook System** | Centralized context injection via hooks.json (21 events, 43 scripts) |
+| **lib/ (101 modules)** | 11 subdirectories: audit, context, control, core, intent, pdca, qa, quality, task, team, ui |
 
-**Context Engineering Architecture**:
+**Context Engineering Architecture (v2.1.9)**:
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│              bkit Context Engineering Layers                     │
+│              bkit v2.1.9 Context Engineering Layers              │
 ├─────────────────────────────────────────────────────────────────┤
-│  Layer 1: Domain Knowledge   │ 27 Skills (structured instructions)│
-│  Layer 2: Behavioral Rules   │ 16 Agents (role + constraints)    │
-│  Layer 3: State Management   │ PDCA v2.0, Multi-Feature Context  │
-│  Layer 4: Dynamic Injection  │ Intent detection, ambiguity score │
-│  Layer 5: Feedback Loop      │ Match Rate → Iteration            │
+│  Layer 1: Domain Knowledge   │ 39 Skills (structured knowledge)  │
+│  Layer 2: Behavioral Rules   │ 36 Agents (role + constraints)    │
+│  Layer 3: State Management   │ State machine, workflow engine    │
+│  Layer 4: Dynamic Injection  │ Intent detection, 8-lang triggers │
+│  Layer 5: Controllable AI    │ L0-L4 automation, trust score     │
+│  Layer 6: Quality & Audit    │ 7 gates, M1-M10 metrics, audit   │
+│  Layer 7: Feedback Loop      │ Match Rate → Iteration (max 5)   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -203,7 +212,7 @@ User Message → Intent Detection → Skill/Agent Trigger →
 
 | bkit Feature | Implementation |
 |--------------|----------------|
-| **16 Specialized Agents** | code-analyzer, qa-monitor, cto-lead, frontend-architect, etc. |
+| **36 Specialized Agents** | cto-lead, code-analyzer, gap-detector, pm-lead, self-healing, etc. |
 | **Evaluator-Optimizer Pattern** | Automatic iteration cycles |
 | **gap-detector Agent** | Finds design-implementation gaps |
 | **code-analyzer Agent** | Quality and security analysis |
@@ -217,14 +226,19 @@ code-explorer → code-architect → implementation → code-reviewer → qa-mon
 
 | bkit Feature | Implementation |
 |--------------|----------------|
-| **PDCA Methodology** | Checkpoint at each phase |
-| **Check Phase** | Human verification of AI work |
-| **Act Phase** | Human approval before proceeding |
+| **Interactive Checkpoints (v2.0.3)** | 5 AskUserQuestion gates: requirements, questions, architecture, scope, fix strategy |
+| **PDCA Methodology** | Quality gate at each phase transition |
+| **Confidence-Based Analysis** | code-analyzer reports only ≥80% confidence issues |
 | **Iteration Reports** | Transparent progress documentation |
 
-**Verification Points**:
+**Verification Points (v2.0.3 — State Machine + Quality Gates + Interactive Checkpoints)**:
 ```
-Plan → [Human Review] → Design → [Human Review] → Do → Check → [Human Review] → Act
+idle → [PM Gate] → Plan [CP1: Requirements] [CP2: Questions]
+  → [Plan Gate] → Design [CP3: 3 Architecture Options]
+  → [Design Gate] → Do [CP4: Implementation Scope Approval]
+  → [Do Gate] → Check [CP5: Fix Strategy Selection]
+  → [Check Gate: ≥90%] → Report → Completed
+  └──→ [Iterate Gate: <90%] → Act → Check (max 5)
 ```
 
 ### Principle 5: CTO-Led Agent Teams (v1.5.3)
@@ -254,8 +268,8 @@ Plan → [Human Review] → Design → [Human Review] → Do → Check → [Huma
 
 | Level | Teammates | Agents |
 |-------|-----------|--------|
-| Dynamic | 3 | QA + Frontend + Backend |
-| Enterprise | 5 | QA + Frontend + Backend + Security + Product |
+| Dynamic | 3 | developer, qa, frontend |
+| Enterprise | 5 | architect, developer, qa, reviewer, security |
 
 **Requirements**: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` + Claude Code v2.1.32+
 

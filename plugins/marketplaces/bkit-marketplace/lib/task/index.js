@@ -1,7 +1,7 @@
 /**
  * Task Module Entry Point
  * @module lib/task
- * @version 1.5.4
+ * @version 2.0.0
  */
 
 const classification = require('./classification');

@@ -13,7 +13,7 @@ readRalphState, writeRalphState, clearRalphState, clearLinkedUltraworkState, inc
 // Loop control
 createRalphLoopHook, isUltraQAActive, 
 // PRD flag helpers
-detectNoPrdFlag, stripNoPrdFlag, 
+detectNoPrdFlag, stripNoPrdFlag, detectCriticModeFlag, stripCriticModeFlag, normalizeRalphCriticMode, 
 // Team coordination
 getTeamPhaseDirective, 
 // PRD integration
@@ -25,9 +25,9 @@ export {
 // File operations
 readPrd, writePrd, findPrdPath, getPrdPath, getOmcPrdPath, 
 // PRD status & operations
-getPrdStatus, markStoryComplete, markStoryIncomplete, getStory, getNextStory, 
+getPrdStatus, markStoryComplete, markStoryIncomplete, markStoryArchitectVerified, getStory, getNextStory, 
 // PRD creation
-createPrd, createSimplePrd, initPrd, 
+createPrd, createSimplePrd, initPrd, ensurePrdForStartup, 
 // Formatting
 formatPrdStatus, formatStory, formatPrd, formatNextStoryPrompt, 
 // Constants

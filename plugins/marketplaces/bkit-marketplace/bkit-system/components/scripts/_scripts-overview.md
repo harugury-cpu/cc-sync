@@ -1,10 +1,22 @@
 # Scripts Overview
 
-> 45 Node.js Scripts used by bkit hooks (v1.5.3)
+> 43 Node.js Scripts used by bkit hooks (v2.1.9)
+>
+> **v2.1.9**: CC v2.1.116 response — Scripts unchanged (43). ENH-254 `config-change-handler.js:17-29` defense-in-depth comment reinforced (5 DANGEROUS_PATTERNS + Layer 1/Layer 2 architecture). Positive drift: ENH-264 `unified-bash-pre.js:144,183` `outputBlockWithContext` calls (deploy/QA phase paths). CC recommended: v2.1.116+.
+> **v2.1.8**: Issue #81 hotfix - scripts unchanged (43). Focus was `hooks/session-start.js` (ENH-239 fingerprint dedup integration) + `hooks/startup/session-context.js` (ENH-238/240 guard + budget). Two new `lib/core/` modules: `context-budget.js` (95 LOC) + `session-ctx-fp.js` (115 LOC).
+> **v2.1.7**: Issue #79 hotfix - `skill-post.js` argument order, `pre-write.js` phantom feature guard, `gap-detector-stop.js` analysis doc auto-generation.
 >
 > **v1.5.0**: Claude Code Exclusive - Gemini CLI support removed, simplified architecture
 > **v1.4.7**: Core Modularization - lib/ split into 4 modules, Task Management Integration
-> **v1.5.3**: lib/ expanded to 5 modules (241 functions), Team module added
+> **v1.5.3**: lib/ expanded to 5 modules, Team module added
+> **v1.5.5**: Plan Plus skill (brainstorming-enhanced planning)
+> **v1.5.6**: Auto-memory integration, 182 exports
+> **v1.5.7**: /simplify + /batch PDCA integration, CC_COMMAND_PATTERNS, English conversion (3 stop scripts)
+> **v1.5.8**: Path Registry in lib/core/paths.js, auto-migration in session-start.js, 186 exports
+> **v1.5.9**: Executive Summary module, AskUserQuestion Preview UX, ENH-74~81, 199 exports
+> **v1.6.0**: Skills 2.0 integration, PM Agent Team
+> **v1.6.1**: CTO Orchestration Redesign, P0 Bug Fixes (4), Config-Code Sync, 3-Tier Agent Security, 208 exports, CC v2.1.71
+> **v1.6.2**: CC v2.1.78 Integration, 210 exports, 49 scripts
 > **v1.4.6**: Sub-agent call stability with `bkit:` prefix
 > **v1.4.5**: `/pdca archive` action, 8-language trigger completion
 > **v1.4.4**: hooks-json-integration, unified handlers (unified-stop.js, unified-bash-pre.js, etc.)
@@ -69,7 +81,7 @@ All scripts are at root level (not in .claude/):
 
 ```
 bkit-claude-code/
-├── lib/                       # Modular Library (v1.5.3, 241 functions)
+├── lib/                       # Modular Library (v2.0.6, ~620+ exports)
 │   ├── common.js              # Migration Bridge (re-exports all modules)
 │   ├── core/                  # Core utilities (7 files, 40 exports)
 │   │   ├── index.js           # Entry point
@@ -212,14 +224,16 @@ bkit-claude-code/
 
 > **Note**: pdca-pre-write.js was deprecated and deleted in v1.4.2. Its functionality is integrated into pre-write.js.
 
-## Shared Library: lib/ (v1.5.3)
+## Shared Library: lib/ (v2.0.6)
 
-> **v1.5.3**: 5 module directories with 241 functions total (team module added)
+> **v2.0.6**: 11 subdirectories, 88 modules with ~620+ exports total
+> **v2.0.3**: 10 subdirectories, 76 modules with ~580+ exports total
+> **v1.6.2**: 5 module directories with 210 exports total
 > **v1.4.7**: Core Modularization - 4 module directories with 132 functions total
 > **v1.4.2**: 6 library modules with 86+ functions total
 > **v1.4.0**: Expanded from 38 to 80+ functions with dual platform support
 
-### Library Modules (v1.5.3)
+### Library Modules (v2.0.6)
 
 | Module | Files | Exports | Purpose |
 |--------|:-----:|:-------:|---------|
@@ -228,9 +242,10 @@ bkit-claude-code/
 | `lib/intent/` | 4 | 19 | Language detection, triggers, ambiguity scoring |
 | `lib/task/` | 5 | 26 | Task classification, context, creation, tracking |
 | `lib/team/` | 9 | 40 | Team coordination, strategy, state-writer |
-| `lib/common.js` | 1 | 180 | Migration Bridge (re-exports all modules) |
+| `lib/context/` | 7 | 30+ | Living Context loader, invariant checker, impact analyzer, scenario runner, self-healing |
+| `lib/common.js` | 1 | ~620+ | Migration Bridge (re-exports all modules) |
 
-**Export summary**: core:41 + pdca:54 + intent:19 + task:26 + team:40 = bridge 180
+**Export summary**: ~620+ total exports via bridge (11 subdirectories, 88 modules)
 
 ### Import Options
 

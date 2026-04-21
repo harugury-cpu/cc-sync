@@ -1,10 +1,13 @@
 # Trigger Matrix
 
-> Core matrix showing which components trigger on each event (v1.5.0)
+> Core matrix showing which components trigger on each event (v1.6.2)
 >
 > **v1.5.0**: Claude Code Exclusive
+> **v1.6.0**: PM Agent Team triggers, Skills 2.0, 28 skills, 21 agents
+> **v1.6.1**: CTO Orchestration Redesign, 3-Tier Agent Security Model
+> **v1.6.2**: CC v2.1.78 Integration, 12 hook events, 29 agents, 31 skills
 
-## Hook Event Reference (v1.5.4)
+## Hook Event Reference (v1.6.2)
 
 | Hook Event | Description | Added |
 |------------|-------------|:-----:|
@@ -18,8 +21,10 @@
 | `SubagentStop` | Subagent completed | v1.5.3 |
 | `TaskCompleted` | Task completion | v1.5.1 |
 | `TeammateIdle` | Teammate idle detection | v1.5.1 |
+| `PostCompact` | After context compaction | v1.6.2 |
+| `StopFailure` | Agent failure handling | v1.6.2 |
 
-> **Note (v1.5.3)**: SubagentStart and SubagentStop added for Team Visibility. TaskCompleted and TeammateIdle added in v1.5.1 for Agent Teams support. Total: 10 hook events.
+> **Note (v1.6.2)**: PostCompact and StopFailure added in v1.6.2. Total: 12 hook events.
 
 ---
 
@@ -207,6 +212,16 @@ Skills and Agents are activated by semantic matching on their description field.
 | [[../agents/qa-monitor|qa-monitor]] | zero script qa, QA, testing, log analysis, docker logs |
 | [[../agents/pdca-iterator|pdca-iterator]] | iterate, optimize, auto-fix, automatically fix |
 | [[../agents/report-generator|report-generator]] | PDCA report, completion report, summary, progress report |
+
+### PM Team Agent Triggers (v1.6.0)
+
+| Agent | Trigger Keywords |
+|-------|------------------|
+| [[../agents/pm-lead|pm-lead]] | pm, PRD, product discovery, market research, product strategy |
+| [[../agents/pm-discovery|pm-discovery]] | user research, market analysis, pain points, user needs |
+| [[../agents/pm-strategy|pm-strategy]] | product positioning, go-to-market, competitive advantage |
+| [[../agents/pm-research|pm-research]] | competitive analysis, market trends, data research |
+| [[../agents/pm-prd|pm-prd]] | PRD, product requirements, user stories, acceptance criteria |
 
 ---
 

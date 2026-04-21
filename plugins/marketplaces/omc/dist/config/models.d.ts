@@ -14,30 +14,7 @@ export declare const BUILTIN_EXTERNAL_MODEL_DEFAULTS: {
     readonly codexModel: "gpt-5.3-codex";
     readonly geminiModel: "gemini-3.1-pro-preview";
 };
-/**
- * Centralized Model ID Constants
- *
- * All default model IDs are defined here so they can be overridden
- * via environment variables without editing source code.
- *
- * Environment variables (highest precedence):
- *   OMC_MODEL_HIGH    - Model ID for HIGH tier (opus-class)
- *   OMC_MODEL_MEDIUM  - Model ID for MEDIUM tier (sonnet-class)
- *   OMC_MODEL_LOW     - Model ID for LOW tier (haiku-class)
- *
- * User config (~/.config/claude-omc/config.jsonc) can also override
- * via `routing.tierModels` or per-agent `agents.<name>.model`.
- */
-/**
- * Resolve the default model ID for a tier.
- *
- * Resolution order:
- * 1. Environment variable (OMC_MODEL_HIGH / OMC_MODEL_MEDIUM / OMC_MODEL_LOW)
- * 2. Built-in fallback
- *
- * User/project config overrides are applied later by the config loader
- * via deepMerge, so they take precedence over these defaults.
- */
+export declare function hasTierModelEnvOverrides(): boolean;
 export declare function getDefaultModelHigh(): string;
 export declare function getDefaultModelMedium(): string;
 export declare function getDefaultModelLow(): string;
@@ -72,6 +49,39 @@ export declare function getBuiltinExternalDefaultModel(provider: 'codex' | 'gemi
  * model IDs with region/inference-profile prefixes.
  */
 export declare function isBedrock(): boolean;
+/**
+ * Check whether a model ID is a provider-specific identifier that should NOT
+ * be normalized to a bare alias (sonnet/opus/haiku).
+ *
+ * Provider-specific IDs include:
+ *   - Bedrock prefixed: us.anthropic.claude-*, global.anthropic.claude-*, anthropic.claude-*
+ *   - Bedrock ARN: arn:aws:bedrock:...
+ *   - Vertex AI: vertex_ai/...
+ *
+ * These IDs must be passed through to the CLI as-is because normalizing them
+ * to aliases like "sonnet" causes Claude Code to expand them to Anthropic API
+ * model names (e.g. claude-sonnet-4-6) which are invalid on Bedrock/Vertex.
+ */
+export declare function isProviderSpecificModelId(modelId: string): boolean;
+/**
+ * Detect whether a model ID has a Claude Code extended-context window suffix
+ * (e.g., `[1m]`, `[200k]`) that is NOT a valid Bedrock API identifier.
+ *
+ * The `[1m]` suffix is a Claude Code internal annotation for the 1M context
+ * window variant. It is valid for the parent session's API path but is
+ * rejected by the sub-agent spawning runtime, which strips it to a bare
+ * Anthropic model ID (e.g., `claude-sonnet-4-6`) that is invalid on Bedrock.
+ */
+export declare function hasExtendedContextSuffix(modelId: string): boolean;
+/**
+ * Check whether a model ID is safe to pass as the `model` parameter when
+ * spawning sub-agents on non-standard providers (Bedrock, Vertex AI).
+ *
+ * A model ID is sub-agent safe if it is provider-specific (full Bedrock or
+ * Vertex AI format) AND does not carry a Claude Code context-window suffix
+ * like `[1m]` that the sub-agent runtime cannot handle.
+ */
+export declare function isSubagentSafeModelId(modelId: string): boolean;
 /**
  * Detect whether Claude Code is running on Google Vertex AI.
  *

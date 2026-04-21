@@ -15,6 +15,8 @@
 import { readFile, writeFile, mkdir, readdir, appendFile, rename, rm, stat } from 'fs/promises';
 import { existsSync } from 'fs';
 import { dirname, join, resolve } from 'path';
+import { createSwallowedErrorLogger } from '../lib/swallowed-error.js';
+import { tmuxExecAsync } from '../cli/tmux-utils.js';
 // ── Helpers ────────────────────────────────────────────────────────────────
 function safeString(value, fallback = '') {
     if (typeof value === 'string')
@@ -312,13 +314,13 @@ async function runProcess(cmd, args, timeoutMs) {
     const result = await execFileAsync(cmd, args, { timeout: timeoutMs });
     return { stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
 }
-async function defaultInjector(request, config, cwd) {
+async function defaultInjector(request, config, _cwd) {
     const target = defaultInjectTarget(request, config);
     if (!target)
         return { ok: false, reason: 'missing_tmux_target' };
     const paneTarget = target.value;
     try {
-        const inMode = await runProcess('tmux', ['display-message', '-t', paneTarget, '-p', '#{pane_in_mode}'], 1000);
+        const inMode = await tmuxExecAsync(['display-message', '-t', paneTarget, '-p', '#{pane_in_mode}'], { timeout: 1000 });
         if (safeString(inMode.stdout).trim() === '1') {
             return { ok: false, reason: 'scroll_active' };
         }
@@ -329,7 +331,7 @@ async function defaultInjector(request, config, cwd) {
     let preCaptureHasTrigger = false;
     if (attemptCountAtStart >= 1) {
         try {
-            const preCapture = await runProcess('tmux', ['capture-pane', '-t', paneTarget, '-p', '-S', '-8'], 2000);
+            const preCapture = await tmuxExecAsync(['capture-pane', '-t', paneTarget, '-p', '-S', '-8'], { timeout: 2000 });
             preCaptureHasTrigger = capturedPaneContainsTrigger(preCapture.stdout, request.trigger_message);
         }
         catch {
@@ -339,13 +341,17 @@ async function defaultInjector(request, config, cwd) {
     const shouldTypePrompt = attemptCountAtStart === 0 || !preCaptureHasTrigger;
     if (shouldTypePrompt) {
         if (attemptCountAtStart >= 1) {
-            await runProcess('tmux', ['send-keys', '-t', paneTarget, 'C-u'], 1000).catch(() => { });
+            await tmuxExecAsync(['send-keys', '-t', paneTarget, 'C-u'], { timeout: 1000 }).catch(() => { });
             await new Promise((r) => setTimeout(r, 50));
         }
-        await runProcess('tmux', ['send-keys', '-t', paneTarget, '-l', request.trigger_message], 3000);
+        // Strip control characters (including newlines) from trigger_message to prevent
+        // keystroke injection — tmux send-keys -l sends literal keystrokes, so a \n
+        // in the message would execute as Enter in the target pane's shell.
+        const sanitizedMessage = request.trigger_message.replace(/[\x00-\x1f\x7f]/g, '');
+        await tmuxExecAsync(['send-keys', '-t', paneTarget, '-l', sanitizedMessage], { timeout: 3000 });
     }
     for (let i = 0; i < submitKeyPresses; i++) {
-        await runProcess('tmux', ['send-keys', '-t', paneTarget, 'C-m'], 3000);
+        await tmuxExecAsync(['send-keys', '-t', paneTarget, 'C-m'], { timeout: 3000 });
         if (i < submitKeyPresses - 1) {
             await new Promise((r) => setTimeout(r, 100));
         }
@@ -354,8 +360,8 @@ async function defaultInjector(request, config, cwd) {
     for (let round = 0; round < INJECT_VERIFY_ROUNDS; round++) {
         await new Promise((r) => setTimeout(r, INJECT_VERIFY_DELAY_MS));
         try {
-            const narrowCap = await runProcess('tmux', ['capture-pane', '-t', paneTarget, '-p', '-S', '-8'], 2000);
-            const wideCap = await runProcess('tmux', ['capture-pane', '-t', paneTarget, '-p'], 2000);
+            const narrowCap = await tmuxExecAsync(['capture-pane', '-t', paneTarget, '-p', '-S', '-8'], { timeout: 2000 });
+            const wideCap = await tmuxExecAsync(['capture-pane', '-t', paneTarget, '-p'], { timeout: 2000 });
             if (paneHasActiveTask(wideCap.stdout)) {
                 return { ok: true, reason: 'tmux_send_keys_confirmed_active_task', pane: paneTarget };
             }
@@ -370,7 +376,7 @@ async function defaultInjector(request, config, cwd) {
         }
         catch { /* capture failed; retry */ }
         for (let i = 0; i < submitKeyPresses; i++) {
-            await runProcess('tmux', ['send-keys', '-t', paneTarget, 'C-m'], 3000).catch(() => { });
+            await tmuxExecAsync(['send-keys', '-t', paneTarget, 'C-m'], { timeout: 3000 }).catch(() => { });
         }
     }
     return { ok: true, reason: 'tmux_send_keys_unconfirmed', pane: paneTarget };
@@ -488,6 +494,7 @@ export async function drainPendingTeamDispatch(options = { cwd: '' }) {
     let processed = 0;
     let skipped = 0;
     let failed = 0;
+    const logMailboxSyncFailure = createSwallowedErrorLogger('hooks.team-dispatch drainPendingTeamDispatch mailbox notification sync failed');
     const issueCooldownMs = resolveIssueDispatchCooldownMs();
     const triggerCooldownMs = resolveDispatchTriggerCooldownMs();
     for (const teamName of teams) {
@@ -619,7 +626,7 @@ export async function drainPendingTeamDispatch(options = { cwd: '' }) {
                     request.notified_at = nowIso;
                     request.last_reason = result.reason;
                     if (request.kind === 'mailbox' && request.message_id) {
-                        await updateMailboxNotified(stateDir, teamName, request.to_worker, request.message_id).catch(() => { });
+                        await updateMailboxNotified(stateDir, teamName, request.to_worker, request.message_id).catch(logMailboxSyncFailure);
                     }
                     processed += 1;
                     mutated = true;

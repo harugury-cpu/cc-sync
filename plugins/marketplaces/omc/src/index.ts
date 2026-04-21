@@ -19,6 +19,7 @@ import { getDefaultMcpServers, toSdkMcpFormat } from './mcp/servers.js';
 import { omcToolsServer, getOmcToolNames } from './mcp/omc-tools-server.js';
 import { createMagicKeywordProcessor, detectMagicKeywords } from './features/magic-keywords.js';
 import { continuationSystemPromptAddition } from './features/continuation-enforcement.js';
+import { appendSkininthegamebrosGuidance } from './agents/skininthegamebros-guidance.js';
 import {
   createBackgroundTaskManager,
   shouldRunInBackground as shouldRunInBackgroundFn,
@@ -64,7 +65,7 @@ export {
   backgroundUpdateCheck,
   compareVersions
 } from './features/auto-update.js';
-export * from './shared/types.js';
+export * from './shared/index.js';
 
 // Hooks module exports
 export * from './hooks/index.js';
@@ -110,6 +111,7 @@ export {
   type InjectionStrategy,
   type InjectionResult
 } from './features/index.js';
+export { searchSessionHistory, parseSinceSpec, type SessionHistoryMatch, type SessionHistorySearchOptions, type SessionHistorySearchReport } from './features/index.js';
 
 // Agent module exports (modular agent system)
 export {
@@ -145,6 +147,8 @@ export {
   exploreAgent,
   EXPLORE_PROMPT_METADATA,
   DOCUMENT_SPECIALIST_PROMPT_METADATA,
+  tracerAgent,
+  TRACER_PROMPT_METADATA,
   executorAgent,
   EXECUTOR_PROMPT_METADATA,
   designerAgent,
@@ -276,7 +280,7 @@ export function createOmcSession(options?: OmcOptions): OmcSession {
   }
 
   // Build system prompt
-  let systemPrompt = omcSystemPrompt;
+  let systemPrompt = appendSkininthegamebrosGuidance(omcSystemPrompt, 'system');
 
   // Add continuation enforcement
   if (config.features?.continuationEnforcement !== false) {
@@ -294,9 +298,7 @@ export function createOmcSession(options?: OmcOptions): OmcSession {
   }
 
   // Get agent definitions
-  const agents = getAgentDefinitions({
-    enableHarshCritic: config.features?.harshCritic === true,
-  });
+  const agents = getAgentDefinitions({ config });
 
   // Build MCP servers configuration
   const externalMcpServers = getDefaultMcpServers({
@@ -389,7 +391,7 @@ export function getOmcSystemPrompt(options?: {
   includeContinuation?: boolean;
   customAddition?: string;
 }): string {
-  let prompt = omcSystemPrompt;
+  let prompt = appendSkininthegamebrosGuidance(omcSystemPrompt, 'system');
 
   if (options?.includeContinuation !== false) {
     prompt += continuationSystemPromptAddition;

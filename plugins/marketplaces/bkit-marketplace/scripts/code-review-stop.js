@@ -2,28 +2,20 @@
 /**
  * Code Review Skill Stop Hook
  *
- * 코드 리뷰 완료 후 다음 단계 안내
+ * Post code review next step guidance
  *
- * @version 1.4.4
+ * @version 1.6.0
  */
 
-const path = require('path');
-
-// Load common utilities
-let common;
-try {
-  common = require(path.join(__dirname, '..', 'lib', 'common.js'));
-} catch (e) {
-  console.error('[code-review-stop] Failed to load common.js:', e.message);
-  process.exit(0);
-}
+const { debugLog } = require('../lib/core/debug');
+const { getPdcaStatusFull } = require('../lib/pdca/status');
 
 async function main() {
   try {
-    common.debugLog('CodeReviewStop', 'Hook triggered');
+    debugLog('CodeReviewStop', 'Hook triggered');
 
     // Get current PDCA status
-    const pdcaStatus = common.getPdcaStatusFull();
+    const pdcaStatus = getPdcaStatusFull();
     const currentFeature = pdcaStatus?.currentFeature;
     const currentPhase = pdcaStatus?.features?.[currentFeature]?.phase;
 
@@ -33,42 +25,43 @@ async function main() {
     if (currentPhase === 'do') {
       suggestion = `
 ─────────────────────────────────────────────────
-💡 Code Review 완료 - 다음 단계 안내
+💡 Code Review Complete - Next Steps
 ─────────────────────────────────────────────────
-코드 리뷰가 완료되었습니다.
+Code review has been completed.
 
-추천 다음 단계:
-1. 발견된 이슈 수정
-2. Gap 분석 실행: /pdca analyze ${currentFeature || '[feature]'}
-3. 또는 추가 리뷰 요청
+Recommended next steps:
+1. Fix discovered issues
+2. /simplify for automatic code quality improvement
+3. Run Gap analysis: /pdca analyze ${currentFeature || '[feature]'}
+4. Or request additional review
 
-🔄 이슈 수정 후 다시 리뷰하려면: /code-review [path]
+🔄 To re-review after fixes: /code-review [path]
 ─────────────────────────────────────────────────`;
     } else if (currentPhase === 'check') {
       suggestion = `
 ─────────────────────────────────────────────────
-💡 Code Review 완료
+💡 Code Review Complete
 ─────────────────────────────────────────────────
-Check 단계 코드 리뷰가 완료되었습니다.
+Check phase code review has been completed.
 
-매치율에 따른 다음 단계:
-- 90% 미만: /pdca iterate ${currentFeature || '[feature]'}
-- 90% 이상: /pdca report ${currentFeature || '[feature]'}
+Next steps based on match rate:
+- ≥90%: /simplify code cleanup then /pdca report ${currentFeature || '[feature]'}
+- <90%: /pdca iterate ${currentFeature || '[feature]'}
 ─────────────────────────────────────────────────`;
     } else {
       suggestion = `
 ─────────────────────────────────────────────────
-💡 Code Review 완료
+💡 Code Review Complete
 ─────────────────────────────────────────────────
-코드 리뷰가 완료되었습니다.
-발견된 이슈를 검토하고 필요한 수정을 진행하세요.
+Code review has been completed.
+Review discovered issues and proceed with necessary fixes.
 ─────────────────────────────────────────────────`;
     }
 
     console.log(suggestion);
 
   } catch (error) {
-    common.debugLog('CodeReviewStop', 'Error in hook', { error: error.message });
+    debugLog('CodeReviewStop', 'Error in hook', { error: error.message });
   }
 }
 

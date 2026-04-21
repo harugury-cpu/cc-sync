@@ -47,6 +47,7 @@ function makeContext(overrides: Partial<HudRenderContext> = {}): HudRenderContex
     promptTime: null,
     apiKeySource: null,
     profileName: null,
+    sessionSummary: null,
     ...overrides,
   };
 }
@@ -109,6 +110,21 @@ describe('render: rate limits display priority', () => {
 
     const output = await render(context, makeConfig());
     expect(output).toContain('[API err]');
+  });
+
+  it('shows stale cached data instead of [API err] when transient failures still have usage data', async () => {
+    const context = makeContext({
+      rateLimitsResult: {
+        rateLimits: { fiveHourPercent: 61, weeklyPercent: 22 },
+        error: 'network',
+        stale: true,
+      },
+    });
+
+    const output = await render(context, makeConfig());
+    expect(output).toContain('61%');
+    expect(output).toContain('*');
+    expect(output).not.toContain('[API err]');
   });
 
   it('shows [API auth] when error=auth and rateLimits is null', async () => {

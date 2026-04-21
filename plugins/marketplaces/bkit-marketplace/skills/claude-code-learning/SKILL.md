@@ -1,24 +1,12 @@
 ---
 name: claude-code-learning
+classification: capability
+classification-reason: Highly likely to be subsumed by model's native capabilities
+deprecation-risk: high
+effort: low
 description: |
-  Claude Code learning and education skill.
-  Teaches users how to configure and optimize Claude Code settings.
-  Works across any project and any language.
-
-  Start learning/setup with "learn" or "setup".
-
-  Use proactively when user is new to Claude Code, asks about configuration,
-  or wants to improve their Claude Code setup.
-
-  Triggers: learn claude code, claude code setup, CLAUDE.md, hooks, commands, skills,
-  how to configure, 클로드 코드 배우기, 설정 방법, Claude Code 학습,
-  クロードコード学習, 设置方法, how do I use claude code,
-  aprender claude code, configuración, cómo configurar,
-  apprendre claude code, configuration, comment configurer,
-  Claude Code lernen, Konfiguration, wie konfigurieren,
-  imparare claude code, configurazione, come configurare
-
-  Do NOT use for: actual coding tasks, debugging, or feature implementation.
+  Claude Code learning — configure and optimize Claude Code settings, tips, and workflows.
+  Triggers: learn, setup, claude code, optimize, 학습, 설정, 최적화.
 argument-hint: "[learn|setup|upgrade] [level]"
 agent: claude-code-guide
 allowed-tools:
@@ -35,7 +23,6 @@ imports:
 next-skill: null
 pdca-phase: null
 task-template: "[Learn] Claude Code {level}"
-# hooks: Managed by hooks/hooks.json (unified-stop.js) - GitHub #9354 workaround
 ---
 
 # Claude Code Learning Skill
@@ -256,3 +243,22 @@ Files to analyze:
 - .claude/agents/
 - .claude/skills/
 - .mcp.json
+
+## Skills 2.0 Hot Reload (CC 2.1.0+)
+
+CC 2.1.0+ supports hot reload for skill changes. No session restart needed.
+
+### Hot Reload Scope
+- SKILL.md body changes: Instant reflection
+- Frontmatter field changes: Instant reflection
+- New skill additions: Instant reflection
+
+### Development Workflow
+1. Edit SKILL.md content and save
+2. Next slash invoke reflects changes immediately
+3. Use `/reload-plugins` for forced refresh
+
+### Tips
+- Test with `/eval run [skill-name]` after changes
+- Use `classification` frontmatter to categorize skills
+- Monitor with `/loop 5m /pdca status` for ongoing work

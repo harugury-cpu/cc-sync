@@ -1,7 +1,9 @@
 ---
 name: team
 description: N coordinated agents on shared task list using Claude Code native teams
+argument-hint: "[N:agent-type] [ralph] <task description>"
 aliases: []
+level: 4
 ---
 
 # Team Skill
@@ -21,7 +23,7 @@ The `swarm` compatibility alias was removed in #1131.
 ### Parameters
 
 - **N** - Number of teammate agents (1-20). Optional; defaults to auto-sizing based on task decomposition.
-- **agent-type** - OMC agent to spawn for the `team-exec` stage (e.g., executor, build-fixer, designer, codex, gemini). Optional; defaults to stage-aware routing. Use `codex` to spawn Codex CLI workers or `gemini` for Gemini CLI workers (requires respective CLIs installed). See Stage Agent Routing below.
+- **agent-type** - OMC agent to spawn for the `team-exec` stage (e.g., executor, debugger, designer, codex, gemini). Optional; defaults to stage-aware routing. Use `codex` to spawn Codex CLI workers or `gemini` for Gemini CLI workers (requires respective CLIs installed). See Stage Agent Routing below.
 - **task** - High-level task to decompose and distribute among teammates
 - **ralph** - Optional modifier. When present, wraps the team pipeline in Ralph's persistence loop (retry on failure, architect verification before completion). See Team + Ralph Composition below.
 
@@ -29,7 +31,7 @@ The `swarm` compatibility alias was removed in #1131.
 
 ```bash
 /team 5:executor "fix all TypeScript errors across the project"
-/team 3:build-fixer "fix build errors in src/"
+/team 3:debugger "fix build errors in src/"
 /team 4:designer "implement responsive layouts for all page components"
 /team "refactor the auth module with security review"
 /team ralph "build a complete REST API for user management"
@@ -102,9 +104,9 @@ Each pipeline stage uses **specialized agents** -- not just executors. The lead 
 |-------|----------------|-----------------|-------------------|
 | **team-plan** | `explore` (haiku), `planner` (opus) | `analyst` (opus), `architect` (opus) | Use `analyst` for unclear requirements. Use `architect` for systems with complex boundaries. |
 | **team-prd** | `analyst` (opus) | `critic` (opus) | Use `critic` to challenge scope. |
-| **team-exec** | `executor` (sonnet) | `deep-executor` (opus), `build-fixer` (sonnet), `designer` (sonnet), `writer` (haiku), `test-engineer` (sonnet) | Match agent to subtask type. Use `deep-executor` for complex autonomous work, `designer` for UI, `build-fixer` for compilation issues, `writer` for docs, `test-engineer` for test creation. |
-| **team-verify** | `verifier` (sonnet) | `test-engineer` (sonnet), `security-reviewer` (sonnet), `code-reviewer` (opus), `quality-reviewer` (sonnet) | Always run `verifier`. Add `security-reviewer` for auth/crypto changes. Add `code-reviewer` for >20 files or architectural changes. Add `quality-reviewer` (model=haiku) for style/formatting checks. |
-| **team-fix** | `executor` (sonnet) | `build-fixer` (sonnet), `debugger` (sonnet), `deep-executor` (opus) | Use `build-fixer` for type/build errors. Use `debugger` for regression isolation. Use `deep-executor` for complex multi-file fixes. |
+| **team-exec** | `executor` (sonnet) | `executor` (opus), `debugger` (sonnet), `designer` (sonnet), `writer` (haiku), `test-engineer` (sonnet) | Match agent to subtask type. Use `executor` (model=opus) for complex autonomous work, `designer` for UI, `debugger` for compilation issues, `writer` for docs, `test-engineer` for test creation. |
+| **team-verify** | `verifier` (sonnet) | `test-engineer` (sonnet), `security-reviewer` (sonnet), `code-reviewer` (opus) | Always run `verifier`. Add `security-reviewer` for auth/crypto changes. Add `code-reviewer` for >20 files or architectural changes. `code-reviewer` also covers style/formatting checks. |
+| **team-fix** | `executor` (sonnet) | `debugger` (sonnet), `executor` (opus) | Use `debugger` for type/build errors and regression isolation. Use `executor` (model=opus) for complex multi-file fixes. |
 
 **Routing rules:**
 
@@ -134,7 +136,7 @@ Each pipeline stage uses **specialized agents** -- not just executors. The lead 
   - Exit (fail): fix tasks are generated and control moves to `team-fix`.
 - **team-fix**
   - Entry: verification found defects/regressions/incomplete criteria.
-  - Agents: `executor`/`build-fixer`/`debugger` depending on defect type.
+  - Agents: `executor`/`debugger` depending on defect type.
   - Exit: fixes are complete and flow returns to `team-exec` then `team-verify`.
 
 ### Verify/Fix Loop and Stop Conditions
@@ -798,7 +800,7 @@ See Cancellation section below for details.
 
 If the lead crashes mid-run, the team skill should detect existing state and resume:
 
-1. Check `~/.claude/teams/` for teams matching the task slug
+1. Check `${CLAUDE_CONFIG_DIR:-~/.claude}/teams/` for teams matching the task slug
 2. If found, read `config.json` to discover active members
 3. Resume monitor mode instead of creating a duplicate team
 4. Call `TaskList` to determine current progress
@@ -870,25 +872,96 @@ When `OMC_TEAM_SCALING_ENABLED=1` is set, the team supports mid-session scaling:
 
 ## Configuration
 
-Optional settings via `.omc-config.json`:
+Optional settings live in `.claude/omc.jsonc` (project) or `~/.config/claude-omc/config.jsonc` (user). Project values override user values; `OMC_TEAM_ROLE_OVERRIDES` (env JSON) supersedes both.
 
-```json
+```jsonc
 {
   "team": {
-    "maxAgents": 20,
-    "defaultAgentType": "executor",
-    "monitorIntervalMs": 30000,
-    "shutdownTimeoutMs": 15000
+    "ops": {
+      "maxAgents": 20,
+      "defaultAgentType": "claude",
+      "monitorIntervalMs": 30000,
+      "shutdownTimeoutMs": 15000
+    }
   }
 }
 ```
 
-- **maxAgents** - Maximum teammates (default: 20)
-- **defaultAgentType** - Agent type when not specified (default: `executor`)
-- **monitorIntervalMs** - How often to poll `TaskList` (default: 30s)
-- **shutdownTimeoutMs** - How long to wait for shutdown responses (default: 15s)
+- **ops.maxAgents** - Maximum teammates (default: 20)
+- **ops.defaultAgentType** - CLI provider when a `/team` invocation does not specify one (`claude` | `codex` | `gemini`, default: `claude`)
+- **ops.monitorIntervalMs** - How often to poll `TaskList` (default: 30s)
+- **ops.shutdownTimeoutMs** - How long to wait for shutdown responses (default: 15s)
 
 > **Note:** Team members do not have a hardcoded model default. Each teammate is a separate Claude Code session that inherits the user's configured model. Since teammates can spawn their own subagents, the session model acts as the orchestration layer while subagents can use any model tier.
+
+## Per-Role Provider & Model Routing
+
+> **Scope:** Applies to `/team` only. Task-based delegation uses `delegationRouting` (see separate docs). The two systems coexist by design.
+
+Declare which provider (`claude`, `codex`, `gemini`) and which model tier should back each canonical role. Routing is resolved **once** at team creation and persisted in `TeamConfig.resolved_routing` — spawn, scale-up, and restart all read from the snapshot, so a role's worker CLI and model are stable for the lifetime of the team.
+
+### Example — user target mapping
+
+```jsonc
+// .claude/omc.jsonc
+{
+  "team": {
+    "roleRouting": {
+      "orchestrator":  { "model": "inherit" },
+      "planner":       { "provider": "claude", "model": "HIGH" },
+      "analyst":       { "provider": "claude", "model": "HIGH" },
+      "executor":      { "provider": "claude", "model": "MEDIUM" },
+      "critic":        { "provider": "codex" },
+      "code-reviewer": { "provider": "gemini" },
+      "test-engineer": { "provider": "gemini", "model": "MEDIUM" }
+    }
+  }
+}
+```
+
+| Role | Provider | Model |
+|---|---|---|
+| `orchestrator` | claude (pinned) | inherits invoking session |
+| `planner` | claude | `HIGH` (opus) |
+| `analyst` | claude | `HIGH` (opus) |
+| `executor` | claude | `MEDIUM` (sonnet) |
+| `critic` | codex | codex default |
+| `code-reviewer` | gemini | gemini default |
+| `test-engineer` | gemini | `MEDIUM` (sonnet) |
+
+### Canonical roles
+
+`orchestrator`, `planner`, `analyst`, `architect`, `executor`, `debugger`, `critic`, `code-reviewer`, `security-reviewer`, `test-engineer`, `designer`, `writer`, `code-simplifier`, `explore`, `document-specialist`.
+
+User-friendly aliases normalize via `normalizeDelegationRole()` — e.g. `reviewer` → `code-reviewer`, `quality-reviewer` → `code-reviewer`, `harsh-critic` → `critic`, `build-fixer` → `debugger`. Accepted alias keys are honored during resolved snapshot creation and later stage routing, not just validation. Unknown roles fail validation at parse time.
+
+### Spec fields (`TeamRoleAssignmentSpec`)
+
+- **provider** — `"claude" | "codex" | "gemini"`. Omitted → defaults to `claude`.
+- **model** — tier name (`"HIGH" | "MEDIUM" | "LOW"`) or an explicit model ID. Tiers resolve through `routing.tierModels`.
+- **agent** — optional Claude agent name (e.g. `"critic"`, `"executor"`). Only honored when the resolved provider is `claude`.
+
+`orchestrator` is pinned to `claude`; only `model` is user-configurable. Any other key on `orchestrator` is rejected by the validator.
+
+### Env override
+
+```bash
+OMC_TEAM_ROLE_OVERRIDES='{"critic":{"provider":"codex"},"code-reviewer":{"provider":"gemini"}}'
+```
+
+Precedence: `OMC_TEAM_ROLE_OVERRIDES` > `.claude/omc.jsonc` (project) > `~/.config/claude-omc/config.jsonc` (user) > built-in defaults. Invalid JSON logs a warning and is ignored — env overrides are best-effort and never abort the run.
+
+### Fallback when a CLI is missing
+
+If the CLI for a configured provider is absent from `PATH` at spawn time, `buildLaunchArgs()` throws, the team lead emits a visible `SendMessage` warning, and the runtime falls back to a deterministic Claude assignment pre-computed by `buildResolvedRoutingSnapshot` (same tier + same agent, `provider: "claude"`). Fallback is loud by design — silent fallback is a test failure. Probe provider availability with `omc doctor --team-routing`.
+
+### Stickiness — resolved once, reused everywhere
+
+Resolved routing is immutable per team. Editing config mid-team-lifetime does not affect running teams; a new `/team` invocation picks up the new mapping. This guarantees that spawn, scale-up, and worker-restart all see identical routing, including across worktree detaches (the snapshot travels with `TeamConfig`).
+
+### Zero-config behavior
+
+An empty `team.roleRouting` preserves pre-patch behavior: every worker is Claude, model tiers follow `routing.tierModels`, and `/team 3:executor ...` still spawns three Claude Sonnet executors.
 
 ## State Cleanup
 

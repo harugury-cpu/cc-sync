@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
 const CLAUDE_CONFIG_DIR = '/tmp/test-claude';
-const CACHE_PATH = `${CLAUDE_CONFIG_DIR}/plugins/oh-my-claudecode/.usage-cache.json`;
+const CACHE_PATH = `${CLAUDE_CONFIG_DIR}/plugins/oh-my-claudecode/.usage-cache-zai.json`;
 const LOCK_PATH = `${CACHE_PATH}.lock`;
 function createFsMock(initialFiles) {
     const files = new Map(Object.entries(initialFiles));
@@ -69,7 +69,7 @@ describe('getUsage lock failure fallback', () => {
     });
     afterEach(() => {
         process.env = { ...originalEnv };
-        vi.unmock('../../utils/paths.js');
+        vi.unmock('../../utils/config-dir.js');
         vi.unmock('../../utils/ssrf-guard.js');
         vi.unmock('fs');
         vi.unmock('child_process');
@@ -96,13 +96,14 @@ describe('getUsage lock failure fallback', () => {
                 return true;
             return originalKill.call(process, pid, signal);
         });
-        vi.doMock('../../utils/paths.js', () => ({
+        vi.doMock('../../utils/config-dir.js', () => ({
             getClaudeConfigDir: () => CLAUDE_CONFIG_DIR,
         }));
         vi.doMock('../../utils/ssrf-guard.js', () => ({
             validateAnthropicBaseUrl: () => ({ allowed: true }),
         }));
-        vi.doMock('child_process', () => ({
+        vi.doMock('child_process', async () => ({
+            ...(await vi.importActual('child_process')),
             execSync: vi.fn(),
         }));
         vi.doMock('fs', () => fsModule);
@@ -136,13 +137,14 @@ describe('getUsage lock failure fallback', () => {
                 return true;
             return originalKill.call(process, pid, signal);
         });
-        vi.doMock('../../utils/paths.js', () => ({
+        vi.doMock('../../utils/config-dir.js', () => ({
             getClaudeConfigDir: () => CLAUDE_CONFIG_DIR,
         }));
         vi.doMock('../../utils/ssrf-guard.js', () => ({
             validateAnthropicBaseUrl: () => ({ allowed: true }),
         }));
-        vi.doMock('child_process', () => ({
+        vi.doMock('child_process', async () => ({
+            ...(await vi.importActual('child_process')),
             execSync: vi.fn(),
         }));
         vi.doMock('fs', () => fsModule);
@@ -170,7 +172,7 @@ describe('getUsage lock behavior', () => {
     });
     afterEach(() => {
         process.env = { ...originalEnv };
-        vi.unmock('../../utils/paths.js');
+        vi.unmock('../../utils/config-dir.js');
         vi.unmock('../../utils/ssrf-guard.js');
         vi.unmock('fs');
         vi.unmock('child_process');
@@ -187,13 +189,14 @@ describe('getUsage lock behavior', () => {
         });
         const { files, fsModule } = createFsMock({ [CACHE_PATH]: expiredCache });
         let requestSawLock = false;
-        vi.doMock('../../utils/paths.js', () => ({
+        vi.doMock('../../utils/config-dir.js', () => ({
             getClaudeConfigDir: () => CLAUDE_CONFIG_DIR,
         }));
         vi.doMock('../../utils/ssrf-guard.js', () => ({
             validateAnthropicBaseUrl: () => ({ allowed: true }),
         }));
-        vi.doMock('child_process', () => ({
+        vi.doMock('child_process', async () => ({
+            ...(await vi.importActual('child_process')),
             execSync: vi.fn(),
         }));
         vi.doMock('fs', () => fsModule);

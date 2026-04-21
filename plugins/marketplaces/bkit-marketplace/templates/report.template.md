@@ -22,7 +22,7 @@ variables:
 
 ---
 
-## 1. Summary
+## Executive Summary
 
 ### 1.1 Project Overview
 
@@ -44,6 +44,38 @@ variables:
 │  ❌ Cancelled:     0 / 20 items              │
 └─────────────────────────────────────────────┘
 ```
+
+### 1.3 Value Delivered
+
+| Perspective | Content |
+|-------------|---------|
+| **Problem** | {Core problem that was solved} |
+| **Solution** | {Solution approach that was applied} |
+| **Function/UX Effect** | {Actual achieved functional/UX impact with metrics} |
+| **Core Value** | {Validated core value} |
+
+---
+
+## 1.4 Success Criteria Final Status
+
+> From Plan document — final evaluation of each criterion.
+
+| # | Criteria | Status | Evidence |
+|---|---------|:------:|----------|
+| SC-1 | {criteria text} | ✅ Met | {file:line, test result, or metric} |
+| SC-2 | {criteria text} | ✅ Met | {file:line, test result, or metric} |
+
+**Success Rate**: {X}/{Y} criteria met ({percentage}%)
+
+## 1.5 Decision Record Summary
+
+> Key decisions from PRD→Plan→Design chain and their outcomes.
+
+| Source | Decision | Followed? | Outcome |
+|--------|----------|:---------:|---------|
+| [PRD] | {decision} | ✅ | {actual outcome} |
+| [Plan] | {decision} | ✅ | {actual outcome} |
+| [Design] | {decision} | ✅ | {actual outcome} |
 
 ---
 

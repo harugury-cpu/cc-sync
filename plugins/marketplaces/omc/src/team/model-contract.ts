@@ -1,8 +1,11 @@
 import { spawnSync } from 'child_process';
 import { isAbsolute, normalize, win32 as win32Path } from 'path';
 import { validateTeamName } from './team-name.js';
+import { normalizeToCcAlias } from '../features/delegation-enforcer.js';
+import { isBedrock, isVertexAI, isProviderSpecificModelId } from '../config/models.js';
+import { isExternalLLMDisabled } from '../lib/security-config.js';
 
-export type CliAgentType = 'claude' | 'codex' | 'gemini';
+export type CliAgentType = 'claude' | 'codex' | 'gemini' | 'cursor';
 
 export interface CliAgentContract {
   agentType: CliAgentType;
@@ -27,6 +30,12 @@ export interface WorkerLaunchConfig {
    * Used by runtime preflight validation to ensure spawns are pinned.
    */
   resolvedBinaryPath?: string;
+  /**
+   * Optional path the worker writes its structured verdict JSON to
+   * (used by the CLI-worker output contract for critic/reviewer stages).
+   * Consumed by the worker-completion handler in runtime-v2.
+   */
+  output_file?: string;
 }
 
 /** @deprecated Backward-compat shim for older team API consumers. */
@@ -155,7 +164,14 @@ const CONTRACTS: Record<CliAgentType, CliAgentContract> = {
     installInstructions: 'Install Claude CLI: https://claude.ai/download',
     buildLaunchArgs(model?: string, extraFlags: string[] = []): string[] {
       const args = ['--dangerously-skip-permissions'];
-      if (model) args.push('--model', model);
+      if (model) {
+        // Provider-specific model IDs (Bedrock, Vertex) must be passed as-is.
+        // Normalizing them to aliases like "sonnet" causes Claude Code to expand
+        // them to Anthropic API names (claude-sonnet-4-6) which are invalid on
+        // these providers. (issue #1695)
+        const resolved = isProviderSpecificModelId(model) ? model : normalizeToCcAlias(model);
+        args.push('--model', resolved);
+      }
       return [...args, ...extraFlags];
     },
     parseOutput(rawOutput: string): string {
@@ -208,12 +224,36 @@ const CONTRACTS: Record<CliAgentType, CliAgentContract> = {
       return rawOutput.trim();
     },
   },
+  cursor: {
+    agentType: 'cursor',
+    binary: 'cursor-agent',
+    installInstructions: 'Install Cursor Agent CLI: see https://docs.cursor.com/cli',
+    // cursor-agent runs as an interactive REPL — no exit-on-complete prompt mode.
+    // Keep supportsPromptMode false so the verdict-file contract path
+    // (CONTRACT_ROLES + shouldInjectContract) skips this provider; cursor
+    // workers participate as executors only.
+    supportsPromptMode: false,
+    buildLaunchArgs(_model?: string, extraFlags: string[] = []): string[] {
+      // Minimal flags — cursor-agent owns its own session/auth state.
+      // The model is selected interactively inside cursor-agent itself.
+      return [...extraFlags];
+    },
+    parseOutput(rawOutput: string): string {
+      return rawOutput.trim();
+    },
+  },
 };
 
 export function getContract(agentType: CliAgentType): CliAgentContract {
   const contract = CONTRACTS[agentType];
   if (!contract) {
     throw new Error(`Unknown agent type: ${agentType}. Supported: ${Object.keys(CONTRACTS).join(', ')}`);
+  }
+  if (agentType !== 'claude' && isExternalLLMDisabled()) {
+    throw new Error(
+      `External LLM provider "${agentType}" is blocked by security policy (disableExternalLLM). ` +
+      `Only Claude workers are allowed in the current security configuration.`
+    );
   }
   return contract;
 }
@@ -256,7 +296,10 @@ export function isCliAvailable(agentType: CliAgentType): boolean {
       return result.status === 0;
     }
 
-    const result = spawnSync(resolvedBinary, ['--version'], { timeout: 5000 });
+    const result = spawnSync(resolvedBinary, ['--version'], {
+      timeout: 5000,
+      shell: process.platform === 'win32',
+    });
     return result.status === 0;
   } catch {
     return false;
@@ -300,13 +343,48 @@ export function buildWorkerCommand(agentType: CliAgentType, config: WorkerLaunch
     .join(' ');
 }
 
-export function getWorkerEnv(teamName: string, workerName: string, agentType: CliAgentType): Record<string, string> {
+const WORKER_MODEL_ENV_ALLOWLIST = [
+  'ANTHROPIC_MODEL',
+  'CLAUDE_MODEL',
+  'ANTHROPIC_BASE_URL',
+  'CLAUDE_CODE_USE_BEDROCK',
+  'CLAUDE_CODE_USE_VERTEX',
+  'CLAUDE_CODE_BEDROCK_OPUS_MODEL',
+  'CLAUDE_CODE_BEDROCK_SONNET_MODEL',
+  'CLAUDE_CODE_BEDROCK_HAIKU_MODEL',
+  'ANTHROPIC_DEFAULT_OPUS_MODEL',
+  'ANTHROPIC_DEFAULT_SONNET_MODEL',
+  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+  'OMC_MODEL_HIGH',
+  'OMC_MODEL_MEDIUM',
+  'OMC_MODEL_LOW',
+  'OMC_EXTERNAL_MODELS_DEFAULT_CODEX_MODEL',
+  'OMC_CODEX_DEFAULT_MODEL',
+  'OMC_EXTERNAL_MODELS_DEFAULT_GEMINI_MODEL',
+  'OMC_GEMINI_DEFAULT_MODEL',
+] as const;
+
+export function getWorkerEnv(
+  teamName: string,
+  workerName: string,
+  agentType: CliAgentType,
+  env: NodeJS.ProcessEnv = process.env,
+): Record<string, string> {
   validateTeamName(teamName);
-  return {
+  const workerEnv: Record<string, string> = {
     OMC_TEAM_WORKER: `${teamName}/${workerName}`,
     OMC_TEAM_NAME: teamName,
     OMC_WORKER_AGENT_TYPE: agentType,
   };
+
+  for (const key of WORKER_MODEL_ENV_ALLOWLIST) {
+    const value = env[key];
+    if (typeof value === 'string' && value.length > 0) {
+      workerEnv[key] = value;
+    }
+  }
+
+  return workerEnv;
 }
 
 export function parseCliOutput(agentType: CliAgentType, rawOutput: string): string {
@@ -319,6 +397,60 @@ export function parseCliOutput(agentType: CliAgentType, rawOutput: string): stri
 export function isPromptModeAgent(agentType: CliAgentType): boolean {
   const contract = getContract(agentType);
   return !!contract.supportsPromptMode;
+}
+
+/**
+ * Resolve the active model for Claude team workers on Bedrock/Vertex.
+ *
+ * When running on a non-standard provider (Bedrock, Vertex), workers need
+ * the provider-specific model ID passed explicitly via --model. Without it,
+ * Claude Code falls back to its built-in default (claude-sonnet-4-6) which
+ * is invalid on these providers.
+ *
+ * Resolution order:
+ *   1. ANTHROPIC_MODEL / CLAUDE_MODEL env vars (user's explicit setting)
+ *   2. Provider tier-specific env vars (CLAUDE_CODE_BEDROCK_SONNET_MODEL, etc.)
+ *   3. undefined — let Claude Code handle its own default
+ *
+ * Returns undefined when not on Bedrock/Vertex (standard Anthropic API
+ * handles bare aliases fine).
+ */
+export function resolveClaudeWorkerModel(
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  // When force-inherit routing is enabled, do not resolve/override worker model.
+  // This preserves parent model inheritance and avoids alias normalization drift.
+  if (env.OMC_ROUTING_FORCE_INHERIT === 'true') {
+    return undefined;
+  }
+
+  // Only needed for non-standard providers
+  if (!isBedrock() && !isVertexAI()) {
+    return undefined;
+  }
+
+  // Direct model env vars — highest priority
+  const directModel = env.ANTHROPIC_MODEL || env.CLAUDE_MODEL || '';
+  if (directModel) {
+    return directModel;
+  }
+
+  // Fallback: Bedrock tier-specific env vars (default to sonnet tier)
+  const bedrockModel =
+    env.CLAUDE_CODE_BEDROCK_SONNET_MODEL ||
+    env.ANTHROPIC_DEFAULT_SONNET_MODEL ||
+    '';
+  if (bedrockModel) {
+    return bedrockModel;
+  }
+
+  // OMC tier env vars
+  const omcModel = env.OMC_MODEL_MEDIUM || '';
+  if (omcModel) {
+    return omcModel;
+  }
+
+  return undefined;
 }
 
 /**

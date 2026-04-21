@@ -1,24 +1,31 @@
+import { randomUUID } from 'crypto';
 import { spawn } from 'child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { appendFile, readFile, readdir, rm } from 'fs/promises';
-import { homedir } from 'os';
+import { readFile, rm } from 'fs/promises';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { killWorkerPanes } from '../team/tmux-session.js';
+import { executeTeamApiOperation as executeCanonicalTeamApiOperation, resolveTeamApiOperation } from '../team/api-interop.js';
+import { cleanupTeamWorktrees } from '../team/git-worktree.js';
+import { killWorkerPanes, killTeamSession } from '../team/tmux-session.js';
 import { validateTeamName } from '../team/team-name.js';
 import { monitorTeam, resumeTeam, shutdownTeam } from '../team/runtime.js';
-const JOB_ID_PATTERN = /^omc-[a-z0-9]{1,12}$/;
-const VALID_CLI_AGENT_TYPES = new Set(['claude', 'codex', 'gemini']);
+import { readTeamConfig } from '../team/monitor.js';
+import { isProcessAlive } from '../platform/index.js';
+import { getGlobalOmcStatePath } from '../utils/paths.js';
+const JOB_ID_PATTERN = /^omc-[a-z0-9]{1,16}$/;
+const VALID_CLI_AGENT_TYPES = new Set(['claude', 'codex', 'gemini', 'cursor']);
 const SUBCOMMANDS = new Set(['start', 'status', 'wait', 'cleanup', 'resume', 'shutdown', 'api', 'help', '--help', '-h']);
 const SUPPORTED_API_OPERATIONS = new Set([
     'send-message',
     'broadcast',
     'mailbox-list',
     'mailbox-mark-delivered',
+    'mailbox-mark-notified',
     'list-tasks',
     'read-task',
     'read-config',
     'get-summary',
+    'orphan-cleanup',
 ]);
 const TEAM_API_USAGE = `
 Usage:
@@ -34,15 +41,34 @@ function getTeamWorkerIdentityFromEnv(env = process.env) {
     const omx = typeof env.OMX_TEAM_WORKER === 'string' ? env.OMX_TEAM_WORKER.trim() : '';
     return omx || null;
 }
-function assertTeamSpawnAllowed(env = process.env) {
+async function assertTeamSpawnAllowed(cwd, env = process.env) {
     const workerIdentity = getTeamWorkerIdentityFromEnv(env);
-    if (!workerIdentity)
+    const { teamReadManifest } = await import('../team/team-ops.js');
+    const { findActiveTeamsV2 } = await import('../team/runtime-v2.js');
+    const { DEFAULT_TEAM_GOVERNANCE, normalizeTeamGovernance } = await import('../team/governance.js');
+    if (workerIdentity) {
+        const [parentTeamName] = workerIdentity.split('/');
+        const parentManifest = parentTeamName ? await teamReadManifest(parentTeamName, cwd) : null;
+        const governance = normalizeTeamGovernance(parentManifest?.governance, parentManifest?.policy);
+        if (!governance.nested_teams_allowed) {
+            throw new Error(`Worker context (${workerIdentity}) cannot start nested teams because nested_teams_allowed is false.`);
+        }
+        if (!governance.delegation_only) {
+            throw new Error(`Worker context (${workerIdentity}) cannot start nested teams because delegation_only is false.`);
+        }
         return;
-    throw new Error(`Worker context (${workerIdentity}) cannot start/spawn new teams. ` +
-        `Use only "omc team api ..." operations from worker sessions.`);
+    }
+    const activeTeams = await findActiveTeamsV2(cwd);
+    for (const activeTeam of activeTeams) {
+        const manifest = await teamReadManifest(activeTeam, cwd);
+        const governance = normalizeTeamGovernance(manifest?.governance, manifest?.policy);
+        if (governance.one_team_per_leader_session ?? DEFAULT_TEAM_GOVERNANCE.one_team_per_leader_session) {
+            throw new Error(`Leader session already owns active team "${activeTeam}" and one_team_per_leader_session is enabled.`);
+        }
+    }
 }
 function resolveJobsDir(env = process.env) {
-    return env.OMC_JOBS_DIR || join(homedir(), '.omc', 'team-jobs');
+    return env.OMC_JOBS_DIR || getGlobalOmcStatePath('team-jobs');
 }
 function resolveRuntimeCliPath(env = process.env) {
     if (env.OMC_RUNTIME_CLI_PATH) {
@@ -94,15 +120,6 @@ function writeJobToDisk(jobId, job, jobsDir) {
     ensureJobsDir(jobsDir);
     writeFileSync(jobPath(jobsDir, jobId), JSON.stringify(job), 'utf-8');
 }
-function isPidAlive(pid) {
-    try {
-        process.kill(pid, 0);
-        return true;
-    }
-    catch {
-        return false;
-    }
-}
 function parseJobResult(raw) {
     if (!raw)
         return undefined;
@@ -118,8 +135,8 @@ function buildStatus(jobId, job) {
         stderr: job.stderr,
     };
 }
-function generateJobId(now = Date.now()) {
-    return `omc-${now.toString(36)}`;
+export function generateJobId(now = Date.now()) {
+    return `omc-${now.toString(36)}${randomUUID().slice(0, 8)}`;
 }
 function convergeWithResultArtifact(jobId, job, jobsDir) {
     try {
@@ -136,7 +153,7 @@ function convergeWithResultArtifact(jobId, job, jobsDir) {
     catch {
         // no artifact yet
     }
-    if (job.status === 'running' && job.pid != null && !isPidAlive(job.pid)) {
+    if (job.status === 'running' && job.pid != null && !isProcessAlive(job.pid)) {
         return {
             ...job,
             status: 'failed',
@@ -185,41 +202,8 @@ function parseJsonInput(inputRaw) {
     }
     return parsed;
 }
-function readInputString(input, ...keys) {
-    for (const key of keys) {
-        const value = input[key];
-        if (typeof value === 'string' && value.trim()) {
-            return value.trim();
-        }
-    }
-    return '';
-}
-function mailboxPath(cwd, teamName, workerName) {
-    return join(teamStateRoot(cwd, teamName), 'mailbox', `${workerName}.jsonl`);
-}
-async function readTaskFiles(cwd, teamName) {
-    const tasksDir = join(teamStateRoot(cwd, teamName), 'tasks');
-    let files = [];
-    try {
-        files = (await readdir(tasksDir)).filter((f) => f.endsWith('.json'));
-    }
-    catch {
-        return [];
-    }
-    const loaded = await Promise.all(files.map(async (file) => {
-        try {
-            const raw = await readFile(join(tasksDir, file), 'utf-8');
-            const parsed = parseJsonSafe(raw);
-            return parsed ?? null;
-        }
-        catch {
-            return null;
-        }
-    }));
-    return loaded.filter((v) => v !== null);
-}
 export async function startTeamJob(input) {
-    assertTeamSpawnAllowed();
+    await assertTeamSpawnAllowed(input.cwd);
     validateTeamName(input.teamName);
     if (!Array.isArray(input.agentTypes) || input.agentTypes.length === 0) {
         throw new Error('agentTypes must be a non-empty array');
@@ -251,12 +235,16 @@ export async function startTeamJob(input) {
         agentTypes: input.agentTypes,
         tasks: input.tasks,
         cwd: input.cwd,
+        newWindow: input.newWindow,
         pollIntervalMs: input.pollIntervalMs,
         sentinelGateTimeoutMs: input.sentinelGateTimeoutMs,
         sentinelGatePollIntervalMs: input.sentinelGatePollIntervalMs,
     };
-    child.stdin.write(JSON.stringify(payload));
-    child.stdin.end();
+    if (child.stdin && typeof child.stdin.on === 'function') {
+        child.stdin.on('error', () => { });
+    }
+    child.stdin?.write(JSON.stringify(payload));
+    child.stdin?.end();
     child.unref();
     if (child.pid != null) {
         job.pid = child.pid;
@@ -310,7 +298,13 @@ export async function cleanupTeamJob(jobId, graceMs = 10_000) {
     const paneArtifact = await readFile(panesArtifactPath(jobsDir, jobId), 'utf-8')
         .then((content) => parseJsonSafe(content))
         .catch(() => null);
-    if (paneArtifact?.paneIds?.length) {
+    if (paneArtifact?.sessionName && (paneArtifact.ownsWindow === true || !paneArtifact.sessionName.includes(':'))) {
+        const sessionMode = paneArtifact.ownsWindow === true
+            ? (paneArtifact.sessionName.includes(':') ? 'dedicated-window' : 'detached-session')
+            : 'detached-session';
+        await killTeamSession(paneArtifact.sessionName, paneArtifact.paneIds, paneArtifact.leaderPaneId, { sessionMode });
+    }
+    else if (paneArtifact?.paneIds?.length) {
         await killWorkerPanes({
             paneIds: paneArtifact.paneIds,
             leaderPaneId: paneArtifact.leaderPaneId,
@@ -323,19 +317,49 @@ export async function cleanupTeamJob(jobId, graceMs = 10_000) {
         recursive: true,
         force: true,
     }).catch(() => undefined);
+    try {
+        cleanupTeamWorktrees(job.teamName, job.cwd);
+    }
+    catch {
+        // best-effort for dormant team-owned worktree infrastructure
+    }
     writeJobToDisk(jobId, {
         ...job,
         cleanedUpAt: new Date().toISOString(),
     }, jobsDir);
     return {
         jobId,
-        message: paneArtifact?.paneIds?.length
-            ? `Cleaned up ${paneArtifact.paneIds.length} worker pane(s)`
-            : 'No worker pane ids found for this job',
+        message: paneArtifact?.ownsWindow
+            ? 'Cleaned up team tmux window'
+            : paneArtifact?.paneIds?.length
+                ? `Cleaned up ${paneArtifact.paneIds.length} worker pane(s)`
+                : 'No worker pane ids found for this job',
     };
 }
 export async function teamStatusByTeamName(teamName, cwd = process.cwd()) {
     validateTeamName(teamName);
+    const runtimeV2 = await import('../team/runtime-v2.js');
+    if (runtimeV2.isRuntimeV2Enabled()) {
+        const snapshot = await runtimeV2.monitorTeamV2(teamName, cwd);
+        if (!snapshot) {
+            return {
+                teamName,
+                running: false,
+                error: 'Team state not found',
+            };
+        }
+        const config = await readTeamConfig(teamName, cwd);
+        return {
+            teamName,
+            running: true,
+            sessionName: config?.tmux_session,
+            leaderPaneId: config?.leader_pane_id,
+            workerPaneIds: Array.from(new Set((config?.workers ?? [])
+                .map((worker) => worker.pane_id)
+                .filter((paneId) => typeof paneId === 'string' && paneId.trim().length > 0))),
+            snapshot,
+        };
+    }
     const runtime = await resumeTeam(teamName, cwd);
     if (!runtime) {
         return {
@@ -376,6 +400,17 @@ export async function teamResumeByName(teamName, cwd = process.cwd()) {
 export async function teamShutdownByName(teamName, options = {}) {
     validateTeamName(teamName);
     const cwd = options.cwd ?? process.cwd();
+    const runtimeV2 = await import('../team/runtime-v2.js');
+    if (runtimeV2.isRuntimeV2Enabled()) {
+        const config = await readTeamConfig(teamName, cwd);
+        await runtimeV2.shutdownTeamV2(teamName, cwd, { force: Boolean(options.force) });
+        return {
+            teamName,
+            shutdown: true,
+            forced: Boolean(options.force),
+            sessionFound: Boolean(config),
+        };
+    }
     const runtime = await resumeTeam(teamName, cwd);
     if (!runtime) {
         if (options.force) {
@@ -389,7 +424,7 @@ export async function teamShutdownByName(teamName, options = {}) {
         }
         throw new Error(`Team ${teamName} is not running. Use --force to clear stale state.`);
     }
-    await shutdownTeam(runtime.teamName, runtime.sessionName, runtime.cwd, options.force ? 0 : 30_000, runtime.workerPaneIds, runtime.leaderPaneId);
+    await shutdownTeam(runtime.teamName, runtime.sessionName, runtime.cwd, options.force ? 0 : 30_000, runtime.workerPaneIds, runtime.leaderPaneId, runtime.ownsWindow);
     return {
         teamName,
         shutdown: true,
@@ -398,7 +433,8 @@ export async function teamShutdownByName(teamName, options = {}) {
     };
 }
 export async function executeTeamApiOperation(operation, input, cwd = process.cwd()) {
-    if (!SUPPORTED_API_OPERATIONS.has(operation)) {
+    const canonicalOperation = resolveTeamApiOperation(operation);
+    if (!canonicalOperation || !SUPPORTED_API_OPERATIONS.has(canonicalOperation)) {
         return {
             ok: false,
             operation,
@@ -408,206 +444,29 @@ export async function executeTeamApiOperation(operation, input, cwd = process.cw
             },
         };
     }
-    const teamName = readInputString(input, 'teamName', 'team_name');
-    if (!teamName) {
-        return {
-            ok: false,
-            operation,
-            error: {
-                code: 'INVALID_INPUT',
-                message: 'teamName is required in --input payload',
-            },
-        };
-    }
-    validateTeamName(teamName);
-    if (operation === 'send-message') {
-        const toWorker = readInputString(input, 'toWorker', 'to_worker');
-        const body = readInputString(input, 'body');
-        const fromWorker = readInputString(input, 'fromWorker', 'from_worker') || 'leader';
-        if (!toWorker || !body) {
-            return {
-                ok: false,
-                operation,
-                error: {
-                    code: 'INVALID_INPUT',
-                    message: 'send-message requires toWorker and body',
-                },
-            };
-        }
-        mkdirSync(dirname(mailboxPath(cwd, teamName, toWorker)), { recursive: true });
-        await appendFile(mailboxPath(cwd, teamName, toWorker), `${JSON.stringify({
-            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            from: fromWorker,
-            to: toWorker,
-            body,
-            createdAt: new Date().toISOString(),
-            notifiedAt: null,
-        })}\n`, 'utf-8');
-        return {
-            ok: true,
-            operation,
-            data: { teamName, toWorker },
-        };
-    }
-    if (operation === 'broadcast') {
-        const body = readInputString(input, 'body');
-        const fromWorker = readInputString(input, 'fromWorker', 'from_worker') || 'leader';
-        if (!body) {
-            return {
-                ok: false,
-                operation,
-                error: {
-                    code: 'INVALID_INPUT',
-                    message: 'broadcast requires body',
-                },
-            };
-        }
-        const mailboxDir = join(teamStateRoot(cwd, teamName), 'mailbox');
-        let workers = [];
-        try {
-            workers = (await readdir(mailboxDir))
-                .filter((f) => f.endsWith('.jsonl'))
-                .map((f) => f.replace(/\.jsonl$/, ''));
-        }
-        catch {
-            workers = [];
-        }
-        if (workers.length === 0) {
-            const configRaw = await readFile(join(teamStateRoot(cwd, teamName), 'config.json'), 'utf-8').catch(() => '');
-            const config = parseJsonSafe(configRaw);
-            const workerCount = Number.isFinite(config?.workerCount) && (config?.workerCount ?? 0) > 0
-                ? Number(config?.workerCount)
-                : 0;
-            workers = Array.from({ length: workerCount }, (_, i) => `worker-${i + 1}`);
-        }
-        await Promise.all(workers.map(async (worker) => {
-            mkdirSync(dirname(mailboxPath(cwd, teamName, worker)), { recursive: true });
-            await appendFile(mailboxPath(cwd, teamName, worker), `${JSON.stringify({
-                id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                from: fromWorker,
-                to: worker,
-                body,
-                createdAt: new Date().toISOString(),
-                broadcast: true,
-            })}\n`, 'utf-8');
-        }));
-        return {
-            ok: true,
-            operation,
-            data: { teamName, recipients: workers },
-        };
-    }
-    if (operation === 'mailbox-list') {
-        const mailboxDir = join(teamStateRoot(cwd, teamName), 'mailbox');
-        const workerFilter = readInputString(input, 'workerName', 'worker');
-        let files = [];
-        try {
-            files = (await readdir(mailboxDir)).filter((f) => f.endsWith('.jsonl'));
-        }
-        catch {
-            files = [];
-        }
-        const selected = workerFilter
-            ? files.filter((f) => f === `${workerFilter}.jsonl`)
-            : files;
-        const mailboxes = await Promise.all(selected.map(async (file) => {
-            const workerName = file.replace(/\.jsonl$/, '');
-            const raw = await readFile(join(mailboxDir, file), 'utf-8').catch(() => '');
-            const lines = raw.split('\n').filter((line) => line.trim().length > 0);
-            return { workerName, count: lines.length };
-        }));
-        return {
-            ok: true,
-            operation,
-            data: { teamName, mailboxes },
-        };
-    }
-    if (operation === 'mailbox-mark-delivered') {
-        const workerName = readInputString(input, 'workerName', 'worker');
-        const messageId = readInputString(input, 'messageId', 'message_id');
-        if (!workerName || !messageId) {
-            return {
-                ok: false,
-                operation,
-                error: {
-                    code: 'INVALID_INPUT',
-                    message: 'mailbox-mark-delivered requires workerName and messageId',
-                },
-            };
-        }
-        mkdirSync(dirname(mailboxPath(cwd, teamName, workerName)), { recursive: true });
-        await appendFile(mailboxPath(cwd, teamName, workerName), `${JSON.stringify({
-            id: messageId,
-            type: 'delivered',
-            deliveredAt: new Date().toISOString(),
-        })}\n`, 'utf-8');
-        return {
-            ok: true,
-            operation,
-            data: { teamName, workerName, messageId },
-        };
-    }
-    if (operation === 'list-tasks') {
-        const tasks = await readTaskFiles(cwd, teamName);
-        return {
-            ok: true,
-            operation,
-            data: { teamName, tasks },
-        };
-    }
-    if (operation === 'read-task') {
-        const taskId = readInputString(input, 'taskId', 'task_id');
-        if (!taskId) {
-            return {
-                ok: false,
-                operation,
-                error: {
-                    code: 'INVALID_INPUT',
-                    message: 'read-task requires taskId',
-                },
-            };
-        }
-        const raw = await readFile(join(teamStateRoot(cwd, teamName), 'tasks', `${taskId}.json`), 'utf-8').catch(() => '');
-        const task = raw ? parseJsonSafe(raw) : null;
-        return {
-            ok: true,
-            operation,
-            data: { teamName, taskId, task },
-        };
-    }
-    if (operation === 'read-config') {
-        const raw = await readFile(join(teamStateRoot(cwd, teamName), 'config.json'), 'utf-8').catch(() => '');
-        return {
-            ok: true,
-            operation,
-            data: { teamName, config: raw ? parseJsonSafe(raw) : null },
-        };
-    }
-    const tasks = await readTaskFiles(cwd, teamName);
-    const taskCounts = tasks.reduce((acc, task) => {
-        const status = String(task.status ?? 'unknown');
-        if (status === 'pending')
-            acc.pending += 1;
-        else if (status === 'in_progress')
-            acc.inProgress += 1;
-        else if (status === 'completed')
-            acc.completed += 1;
-        else if (status === 'failed')
-            acc.failed += 1;
-        return acc;
-    }, { pending: 0, inProgress: 0, completed: 0, failed: 0 });
-    const runtime = await resumeTeam(teamName, cwd);
-    const snapshot = runtime ? await monitorTeam(teamName, cwd, runtime.workerPaneIds) : null;
-    return {
-        ok: true,
-        operation,
-        data: {
-            teamName,
-            taskCounts,
-            workerCount: runtime?.workerPaneIds.length ?? 0,
-            phase: snapshot?.phase ?? null,
-        },
+    const normalizedInput = {
+        ...input,
+        ...(typeof input.teamName === 'string' && input.teamName.trim() !== '' && typeof input.team_name !== 'string'
+            ? { team_name: input.teamName }
+            : {}),
+        ...(typeof input.taskId === 'string' && input.taskId.trim() !== '' && typeof input.task_id !== 'string'
+            ? { task_id: input.taskId }
+            : {}),
+        ...(typeof input.workerName === 'string' && input.workerName.trim() !== '' && typeof input.worker !== 'string'
+            ? { worker: input.workerName }
+            : {}),
+        ...(typeof input.fromWorker === 'string' && input.fromWorker.trim() !== '' && typeof input.from_worker !== 'string'
+            ? { from_worker: input.fromWorker }
+            : {}),
+        ...(typeof input.toWorker === 'string' && input.toWorker.trim() !== '' && typeof input.to_worker !== 'string'
+            ? { to_worker: input.toWorker }
+            : {}),
+        ...(typeof input.messageId === 'string' && input.messageId.trim() !== '' && typeof input.message_id !== 'string'
+            ? { message_id: input.messageId }
+            : {}),
     };
+    const result = await executeCanonicalTeamApiOperation(canonicalOperation, normalizedInput, cwd);
+    return result;
 }
 export async function teamStartCommand(input, options = {}) {
     const result = await startTeamJob(input);
@@ -631,17 +490,17 @@ export async function teamCleanupCommand(jobId, cleanupOptions = {}, options = {
 }
 export const TEAM_USAGE = `
 Usage:
-  omc team start --agent <claude|codex|gemini>[,<agent>...] --task "<task>" [--count N] [--name TEAM] [--cwd DIR] [--json]
+  omc team start --agent <claude|codex|gemini|cursor>[,<agent>...] --task "<task>" [--count N] [--name TEAM] [--cwd DIR] [--new-window] [--json]
   omc team status <job_id|team_name> [--json] [--cwd DIR]
   omc team wait <job_id> [--timeout-ms MS] [--json]
   omc team cleanup <job_id> [--grace-ms MS] [--json]
   omc team resume <team_name> [--json] [--cwd DIR]
   omc team shutdown <team_name> [--force] [--json] [--cwd DIR]
   omc team api <operation> [--input '<json>'] [--json] [--cwd DIR]
-  omc team [ralph] <N:agent-type> "task" [--json] [--cwd DIR]
+  omc team [ralph] <N:agent-type[:role]> "task" [--json] [--cwd DIR] [--new-window]
 
 Examples:
-  omc team start --agent codex --count 2 --task "review auth flow"
+  omc team start --agent codex --count 2 --task "review auth flow" --new-window
   omc team status omc-abc123
   omc team status auth-review
   omc team resume auth-review
@@ -656,6 +515,7 @@ function parseStartArgs(args) {
     let cwd = process.cwd();
     let count = 1;
     let json = false;
+    let newWindow = false;
     let subjectPrefix = 'Task';
     let pollIntervalMs;
     let sentinelGateTimeoutMs;
@@ -665,6 +525,10 @@ function parseStartArgs(args) {
         const next = args[i + 1];
         if (token === '--json') {
             json = true;
+            continue;
+        }
+        if (token === '--new-window') {
+            newWindow = true;
             continue;
         }
         if (token === '--agent') {
@@ -797,6 +661,7 @@ function parseStartArgs(args) {
             agentTypes,
             tasks,
             cwd,
+            ...(newWindow ? { newWindow: true } : {}),
             ...(pollIntervalMs != null ? { pollIntervalMs } : {}),
             ...(sentinelGateTimeoutMs != null ? { sentinelGateTimeoutMs } : {}),
             ...(sentinelGatePollIntervalMs != null ? { sentinelGatePollIntervalMs } : {}),
@@ -987,22 +852,28 @@ function parseLegacyStartAlias(args) {
     const spec = args[index];
     if (!spec)
         return null;
-    const match = spec.match(/^(\d+):([a-zA-Z0-9_-]+)$/);
+    const match = spec.match(/^(\d+):([a-zA-Z0-9_-]+)(?::([a-zA-Z0-9_-]+))?$/);
     if (!match)
         return null;
     const workerCount = toInt(match[1], 'worker-count');
     if (workerCount < 1)
         throw new Error('worker-count must be >= 1');
     const agentType = normalizeAgentType(match[2]);
+    const role = match[3] || undefined;
     index += 1;
     let json = false;
     let cwd = process.cwd();
+    let newWindow = false;
     const taskParts = [];
     for (let i = index; i < args.length; i += 1) {
         const token = args[i];
         const next = args[i + 1];
         if (token === '--json') {
             json = true;
+            continue;
+        }
+        if (token === '--new-window') {
+            newWindow = true;
             continue;
         }
         if (token === '--cwd') {
@@ -1024,11 +895,13 @@ function parseLegacyStartAlias(args) {
     return {
         workerCount,
         agentType,
+        role,
         task,
         teamName: autoTeamName(task),
         ralph,
         json,
         cwd,
+        ...(newWindow ? { newWindow: true } : {}),
     };
 }
 export async function teamCommand(argv) {
@@ -1104,6 +977,7 @@ export async function teamCommand(argv) {
                 agentTypes: Array.from({ length: legacy.workerCount }, () => legacy.agentType),
                 tasks,
                 cwd: legacy.cwd,
+                ...(legacy.newWindow ? { newWindow: true } : {}),
             });
             output(result, legacy.json);
             return;

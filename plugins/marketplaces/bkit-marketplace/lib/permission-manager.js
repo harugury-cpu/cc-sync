@@ -3,26 +3,20 @@
  * Permission Hierarchy Manager (FR-05)
  * Implements deny → ask → allow permission chain
  *
- * @version 1.4.2
+ * @version 2.0.0
  * @module lib/permission-manager
  */
 
-// Import from other modules (lazy to avoid circular dependency)
-let _hierarchy = null;
-let _common = null;
+// NOTE: common.js and context-hierarchy.js were removed in v2.1.1.
+// debugLog migrated to lib/core. getHierarchicalConfig was in context-hierarchy.js
+// and is no longer available — we fall back to DEFAULT_PERMISSIONS.
+let _core = null;
 
-function getHierarchy() {
-  if (!_hierarchy) {
-    _hierarchy = require('./context-hierarchy.js');
+function getCore() {
+  if (!_core) {
+    try { _core = require('./core'); } catch(_) { _core = null; }
   }
-  return _hierarchy;
-}
-
-function getCommon() {
-  if (!_common) {
-    _common = require('./common.js');
-  }
-  return _common;
+  return _core;
 }
 
 /**
@@ -55,11 +49,11 @@ const DEFAULT_PERMISSIONS = {
  * @returns {'deny' | 'ask' | 'allow'}
  */
 function checkPermission(toolName, toolInput = '') {
-  const hierarchy = getHierarchy();
-  const common = getCommon();
+  const core = getCore();
 
-  // Get permissions from hierarchical config, falling back to defaults
-  const permissions = hierarchy.getHierarchicalConfig('permissions', DEFAULT_PERMISSIONS);
+  // v2.1.3 (#66): context-hierarchy.js was removed in commit 21d35d6.
+  // getHierarchicalConfig no longer available — fall back to DEFAULT_PERMISSIONS.
+  const permissions = DEFAULT_PERMISSIONS;
 
   // Check specific pattern first (most restrictive wins)
   const patterns = Object.keys(permissions).filter(p =>
@@ -81,7 +75,9 @@ function checkPermission(toolName, toolInput = '') {
     const matcher = new RegExp(`^${regexStr}$`, 'i');
 
     if (matcher.test(toolInput)) {
-      common.debugLog('Permission', 'Pattern matched', { pattern, toolInput, permission: permissions[pattern] });
+      if (core) {
+        core.debugLog('Permission', 'Pattern matched', { pattern, toolInput, permission: permissions[pattern] });
+      }
       return permissions[pattern];
     }
   }
@@ -101,8 +97,8 @@ function checkPermission(toolName, toolInput = '') {
  * @returns {Object} Permission rules for the tool
  */
 function getToolPermissions(toolName) {
-  const hierarchy = getHierarchy();
-  const permissions = hierarchy.getHierarchicalConfig('permissions', DEFAULT_PERMISSIONS);
+  // v2.1.3: context-hierarchy.js removed, always use DEFAULT_PERMISSIONS
+  const permissions = DEFAULT_PERMISSIONS;
   const toolPermissions = {};
 
   for (const [key, value] of Object.entries(permissions)) {
@@ -147,8 +143,8 @@ function isMoreRestrictive(permA, permB) {
  * @returns {Object}
  */
 function getAllPermissions() {
-  const hierarchy = getHierarchy();
-  return hierarchy.getHierarchicalConfig('permissions', DEFAULT_PERMISSIONS);
+  // v2.1.3: context-hierarchy.js removed, always use DEFAULT_PERMISSIONS
+  return DEFAULT_PERMISSIONS;
 }
 
 /**

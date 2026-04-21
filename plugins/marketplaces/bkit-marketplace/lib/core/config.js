@@ -1,7 +1,7 @@
 /**
  * Configuration Management
  * @module lib/core/config
- * @version 1.4.7
+ * @version 2.0.0
  */
 
 const fs = require('fs');
@@ -107,34 +107,40 @@ function getBkitConfig(forceRefresh = false) {
   const baseConfig = loadConfig();
 
   const config = {
+    ...baseConfig,
     pdca: {
+      ...baseConfig.pdca,
       matchRateThreshold: getConfig('pdca.matchRateThreshold', 90),
       maxIterations: getConfig('pdca.maxIterations', 5),
       autoIterate: getConfig('pdca.autoIterate', true),
       requireDesignDoc: getConfig('pdca.requireDesignDoc', true),
       automationLevel: process.env.BKIT_PDCA_AUTOMATION || getConfig('pdca.automationLevel', 'semi-auto'),
+      autoStartThreshold: getConfig('pdca.autoStartThreshold', 100),
       fullAuto: {
         reviewCheckpoints: getConfig('pdca.fullAuto.reviewCheckpoints', ['design']),
       },
     },
     triggers: {
+      ...baseConfig.triggers,
       implicitEnabled: getConfig('triggers.implicitEnabled', true),
       confidenceThreshold: getConfig('triggers.confidenceThreshold', 0.7),
       clarifyAmbiguity: getConfig('triggers.clarifyAmbiguity', true),
     },
     pipeline: {
+      ...baseConfig.pipeline,
       autoTransition: getConfig('pipeline.autoTransition', false),
       skipConfirmation: getConfig('pipeline.skipConfirmation', false),
     },
     multiFeature: {
+      ...baseConfig.multiFeature,
       maxActiveFeatures: getConfig('multiFeature.maxActiveFeatures', 5),
       autoSwitch: getConfig('multiFeature.autoSwitch', true),
     },
     cache: {
+      ...baseConfig.cache,
       enabled: getConfig('cache.enabled', true),
       ttl: getConfig('cache.ttl', 5000),
     },
-    ...baseConfig,
   };
 
   globalCache.set('bkit-full-config', config);
@@ -155,10 +161,52 @@ function safeJsonParse(str, fallback = null) {
   }
 }
 
+/**
+ * UI 설정 조회 (Issue #77 Phase A — ENH-226)
+ *
+ * 3-way opt-out 토글 + sessionTitle stale TTL.
+ * 모든 기본값은 호환성을 위해 enabled:true (기존 동작 보존).
+ *
+ * @returns {{
+ *   sessionTitle: { enabled: boolean, staleTTLHours: number, format: string },
+ *   dashboard:    { enabled: boolean, sections: string[] },
+ *   contextInjection: { enabled: boolean, ambiguityThreshold: number, sections: string[], maxChars: number, priorityPreserve: string[] }
+ * }}
+ */
+function getUIConfig() {
+  return {
+    sessionTitle: {
+      enabled: getConfig('ui.sessionTitle.enabled', true),
+      staleTTLHours: getConfig('ui.sessionTitle.staleTTLHours', 24),
+      format: getConfig('ui.sessionTitle.format', '[bkit] {action} {feature}'),
+    },
+    dashboard: {
+      enabled: getConfig('ui.dashboard.enabled', true),
+      sections: getConfig('ui.dashboard.sections', [
+        'progress', 'workflow', 'impact', 'agent', 'control',
+      ]),
+    },
+    contextInjection: {
+      // ENH-238/240 (Issue #81 Phase B): sections + maxChars + priorityPreserve exposed.
+      enabled: getConfig('ui.contextInjection.enabled', true),
+      ambiguityThreshold: getConfig('ui.contextInjection.ambiguityThreshold', 0.7),
+      sections: getConfig('ui.contextInjection.sections', [
+        'onboarding', 'agentTeams', 'outputStyles', 'bkendMcp',
+        'enterpriseBatch', 'pdcaCoreRules', 'automation', 'versionEnhancements',
+      ]),
+      maxChars: getConfig('ui.contextInjection.maxChars', 8000),
+      priorityPreserve: getConfig('ui.contextInjection.priorityPreserve', [
+        'MANDATORY', 'Previous Work Detected', 'AskUserQuestion',
+      ]),
+    },
+  };
+}
+
 module.exports = {
   loadConfig,
   getConfig,
   getConfigArray,
   getBkitConfig,
+  getUIConfig,
   safeJsonParse,
 };

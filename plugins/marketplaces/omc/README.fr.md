@@ -7,12 +7,13 @@
 [![GitHub stars](https://img.shields.io/github/stars/Yeachan-Heo/oh-my-claudecode?style=flat&color=yellow)](https://github.com/Yeachan-Heo/oh-my-claudecode/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Sponsor](https://img.shields.io/badge/Sponsor-❤️-red?style=flat&logo=github)](https://github.com/sponsors/Yeachan-Heo)
+[![Discord](https://img.shields.io/discord/1452487457085063218?color=5865F2&logo=discord&logoColor=white&label=Discord)](https://discord.gg/PUwSMR9XNk)
 
 **Orchestration multi-agents pour Claude Code. Aucune courbe d'apprentissage.**
 
 _N'apprenez pas Claude Code. Utilisez simplement OMC._
 
-[Démarrer](#démarrage-rapide) • [Documentation](https://yeachan-heo.github.io/oh-my-claudecode-website) • [Guide de migration](docs/MIGRATION.md)
+[Démarrer](#démarrage-rapide) • [Documentation](https://yeachan-heo.github.io/oh-my-claudecode-website) • [Guide de migration](docs/MIGRATION.md) • [Discord](https://discord.gg/PUwSMR9XNk)
 
 ---
 
@@ -30,6 +31,10 @@ _N'apprenez pas Claude Code. Utilisez simplement OMC._
 ```bash
 /oh-my-claudecode:omc-setup
 ```
+
+Si vous exécutez OMC via `omc --plugin-dir <path>` ou `claude --plugin-dir <path>`, ajoutez `--plugin-dir-mode` à `omc setup` (ou exportez `OMC_PLUGIN_ROOT` auparavant) pour éviter de dupliquer les compétences/agents que le plugin fournit déjà au moment de l'exécution. Consultez la [section Plugin directory flags dans REFERENCE.md](./docs/REFERENCE.md#plugin-directory-flags) pour une matrice de décision complète et tous les indicateurs disponibles.
+
+<!-- TODO(i18n): verify translation -->
 
 **Étape 3 : Construisez quelque chose**
 
@@ -128,8 +133,42 @@ Plusieurs stratégies pour différents cas d'utilisation — de l'orchestration 
 
 - **Mots-clés magiques** — `ralph`, `ulw`, `eco`, `plan` pour un contrôle explicite
 - **HUD statusline** — Métriques d'orchestration en temps réel dans votre barre d'état
+  - Si vous lancez Claude Code directement avec `claude --plugin-dir <path>` (en contournant le shim `omc`), exportez `OMC_PLUGIN_ROOT=<path>` dans votre shell afin que le bundle HUD se résolve vers le même checkout que le chargeur de plugin. Voir [la section Plugin directory flags dans REFERENCE.md](./docs/REFERENCE.md#plugin-directory-flags) pour les détails.
+
+  <!-- TODO(i18n): verify translation -->
 - **Apprentissage de compétences** — Extraction de patterns réutilisables depuis vos sessions
 - **Analytique et suivi des coûts** — Compréhension de l'utilisation des tokens sur toutes les sessions
+
+### Contribuer
+
+Vous souhaitez contribuer à OMC ? Voir [CONTRIBUTING.md](./CONTRIBUTING.md) pour le guide complet du développeur, incluant comment faire un fork, configurer un checkout local, le lier en tant que plugin actif, exécuter des tests et soumettre des PR.
+
+<!-- TODO(i18n): verify translation -->
+
+### Compétences Personnalisées
+
+Apprenez une fois, réutilisez à jamais. OMC extrait les connaissances durement acquises lors du débogage en fichiers de compétences portables qui s'injectent automatiquement quand pertinent.
+
+| | Portée Projet | Portée Utilisateur |
+|---|---|---|
+| **Chemin** | `.omc/skills/` | `~/.omc/skills/` |
+| **Partagé avec** | Équipe (versionné) | Tous vos projets |
+| **Priorité** | Haute (écrase la portée utilisateur) | Basse (repli) |
+
+```yaml
+# .omc/skills/fix-proxy-crash.md
+---
+name: Fix Proxy Crash
+description: aiohttp proxy crashes on ClientDisconnectedError
+triggers: ["proxy", "aiohttp", "disconnected"]
+source: extracted
+---
+Enveloppez le handler à server.py:42 dans try/except ClientDisconnectedError...
+```
+
+**Gestion des compétences :** `/skill list | add | remove | edit | search`
+**Auto-apprentissage :** `/learner` extrait des patterns réutilisables avec des critères de qualité stricts
+**Auto-injection :** Les compétences correspondantes se chargent automatiquement dans le contexte — aucun rappel manuel nécessaire
 
 [Liste complète des fonctionnalités →](docs/REFERENCE.md)
 
@@ -190,6 +229,66 @@ Comportement des tags :
 - Telegram : `alice` est normalisé en `@alice`
 - Discord : supporte `@here`, `@everyone`, les IDs utilisateur numériques et `role:<id>`
 - Les callbacks de type `file` ignorent les options de tags
+
+### Intégration OpenClaw
+
+Transmettez les événements de session Claude Code vers une passerelle [OpenClaw](https://openclaw.ai/) pour activer des réponses automatisées et des workflows via votre agent OpenClaw.
+
+**Configuration rapide (recommandé) :**
+
+```bash
+/oh-my-claudecode:configure-notifications
+# → Tapez "openclaw" quand demandé → choisir "OpenClaw Gateway"
+```
+
+**Configuration manuelle :** créez `~/.claude/omc_config.openclaw.json` :
+
+```json
+{
+  "enabled": true,
+  "gateways": {
+    "my-gateway": {
+      "url": "https://your-gateway.example.com/wake",
+      "headers": { "Authorization": "Bearer YOUR_TOKEN" },
+      "method": "POST",
+      "timeout": 10000
+    }
+  },
+  "hooks": {
+    "session-start": { "gateway": "my-gateway", "instruction": "Session started for {{projectName}}", "enabled": true },
+    "stop":          { "gateway": "my-gateway", "instruction": "Session stopping for {{projectName}}", "enabled": true }
+  }
+}
+```
+
+**Variables d'environnement :**
+
+| Variable | Description |
+|----------|-------------|
+| `OMC_OPENCLAW=1` | Activer OpenClaw |
+| `OMC_OPENCLAW_DEBUG=1` | Activer la journalisation de débogage |
+| `OMC_OPENCLAW_CONFIG=/path/to/config.json` | Chemin alternatif du fichier de configuration |
+
+**Événements hook pris en charge (6 actifs dans bridge.ts) :**
+
+| Événement | Déclencheur | Variables de template principales |
+|-----------|------------|----------------------------------|
+| `session-start` | La session démarre | `{{sessionId}}`, `{{projectName}}`, `{{projectPath}}` |
+| `stop` | La réponse de Claude est terminée | `{{sessionId}}`, `{{projectName}}` |
+| `keyword-detector` | À chaque soumission de prompt | `{{prompt}}`, `{{sessionId}}` |
+| `ask-user-question` | Claude demande une saisie utilisateur | `{{question}}`, `{{sessionId}}` |
+| `pre-tool-use` | Avant l'invocation d'outil (fréquence élevée) | `{{toolName}}`, `{{sessionId}}` |
+| `post-tool-use` | Après l'invocation d'outil (fréquence élevée) | `{{toolName}}`, `{{sessionId}}` |
+
+**Variables d'environnement du canal de réponse :**
+
+| Variable | Description |
+|----------|-------------|
+| `OPENCLAW_REPLY_CHANNEL` | Canal de réponse (ex. `discord`) |
+| `OPENCLAW_REPLY_TARGET` | ID du canal |
+| `OPENCLAW_REPLY_THREAD` | ID du thread |
+
+Voir `scripts/openclaw-gateway-demo.mjs` pour un gateway de référence qui relaie les payloads OpenClaw vers Discord via ClawdBot.
 
 ---
 

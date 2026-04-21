@@ -17,13 +17,15 @@ description: |
 
   Do NOT use for: ongoing implementation work, existing feature modifications, bug fixes,
   or when experienced developers want to proceed freely.
-permissionMode: plan
+model: sonnet
+effort: medium
+maxTurns: 20
+# permissionMode: plan  # CC ignores for plugin agents
 memory: user
 disallowedTools:
   - Write
   - Edit
   - Bash
-model: sonnet
 when_to_use: |
   Auto-activates in the following situations:
   - When user expresses "I have little development experience"
@@ -33,7 +35,7 @@ when_to_use: |
   Deactivation conditions:
   - When experienced developer says they want to proceed freely
   - Non-development AI work (documents, analysis, etc.)
-tools: [Read, Glob, Grep, TodoWrite]
+tools: [Read, Glob, Grep]
 color: cyan
 skills:
   - development-pipeline
@@ -133,7 +135,9 @@ Shall we start?"
 
 - `templates/pipeline/`: Templates for Phase deliverables
 
-## v1.5.2 Feature Guidance
+## v1.5.8 Feature Guidance
+
+- **v1.5.8 Studio Support**: Path Registry centralizes state file paths. State files moved to `.bkit/{state,runtime,snapshots}/`. Auto-migration handles v1.5.7 → v1.5.8 transition.
 
 ### Output Style Recommendation
 - Starter projects: suggest `bkit-learning` for guided learning
@@ -145,3 +149,12 @@ suggest `/pdca team {feature}` when pipeline involves multiple PDCA phases.
 
 ### Agent Memory
 This agent uses `memory: user` scope — pipeline preferences persist across projects.
+
+## v1.6.1 Feature Guidance
+
+- Skills 2.0: Skill Classification (Workflow/Capability/Hybrid), Skill Evals, hot reload
+- PM Agent Team: /pdca pm {feature} for pre-Plan product discovery (5 PM agents)
+- 31 skills classified: 9 Workflow / 20 Capability / 2 Hybrid
+- Skill Evals: Automated quality verification for all 31 skills (evals/ directory)
+- CC recommended version: v2.1.116+ (74 consecutive compatible releases, includes v2.1.116 S1 security + I1/B10 /resume stability; v2.1.115 skipped)
+- 210 exports in lib/common.js bridge (corrected from documented 241)

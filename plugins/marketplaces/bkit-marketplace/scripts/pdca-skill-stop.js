@@ -6,123 +6,32 @@
  * Hook: Stop for pdca skill
  * Part of v1.4.4 Skills/Agents/Commands Enhancement
  *
- * @version 1.4.4
+ * @version 1.6.0
  * @module scripts/pdca-skill-stop
  */
 
 const fs = require('fs');
 const path = require('path');
 
-// Import common utilities
+// Direct module imports
+const { readStdinSync } = require('../lib/core/io');
+const { debugLog } = require('../lib/core/debug');
+const { getPdcaStatusFull, updatePdcaStatus, extractFeatureFromContext } = require('../lib/pdca/status');
 const {
-  readStdinSync,
-  debugLog,
-  getPdcaStatusFull,
-  updatePdcaStatus,
-  extractFeatureFromContext,
   emitUserPrompt,
-  getBkitConfig,
-  outputAllow,
-  // v1.4.4 FR-06: Phase transition and task creation
-  autoCreatePdcaTask,
-  updatePdcaTaskStatus,
-  // v1.4.7 FR-01: Task Chain auto generation
-  createPdcaTaskChain,
-  getTaskChainStatus,
-  // v1.4.7 Full-Auto Mode
-  isFullAutoMode,
   shouldAutoAdvance,
   generateAutoTrigger,
-  getAutomationLevel
-} = require('../lib/common.js');
+  getAutomationLevel,
+  buildNextActionQuestion,
+  formatAskUserQuestion,
+  PDCA_PHASE_TRANSITIONS,
+  determinePdcaTransition,
+} = require('../lib/pdca/automation');
+const { generateExecutiveSummary, formatExecutiveSummary } = require('../lib/pdca/executive-summary');
+const { autoCreatePdcaTask, createPdcaTaskChain } = require('../lib/task/creator');
+const { updatePdcaTaskStatus } = require('../lib/task/tracker');
 
-// ============================================================
-// v1.4.4 FR-06: PDCA Phase 전환 맵
-// ============================================================
-
-/**
- * PDCA Phase 전환 맵 (v1.4.4)
- * 각 Phase 완료 시 다음 단계로 자동 전환
- */
-const PDCA_PHASE_TRANSITIONS = {
-  'plan': {
-    next: 'design',
-    skill: '/pdca design',
-    message: 'Plan 완료. Design 단계로 진행하세요.',
-    taskTemplate: '[Design] {feature}'
-  },
-  'design': {
-    next: 'do',
-    skill: null,  // 구현은 수동
-    message: 'Design 완료. 구현을 시작하세요.',
-    taskTemplate: '[Do] {feature}'
-  },
-  'do': {
-    next: 'check',
-    skill: '/pdca analyze',
-    message: '구현 완료. Gap 분석을 실행하세요.',
-    taskTemplate: '[Check] {feature}'
-  },
-  'check': {
-    // 조건부 전환
-    conditions: [
-      {
-        when: (ctx) => ctx.matchRate >= 90,
-        next: 'report',
-        skill: '/pdca report',
-        message: 'Check 통과! 완료 보고서를 생성하세요.',
-        taskTemplate: '[Report] {feature}'
-      },
-      {
-        when: (ctx) => ctx.matchRate < 90,
-        next: 'act',
-        skill: '/pdca iterate',
-        message: 'Check 미달. 자동 개선을 실행하세요.',
-        taskTemplate: '[Act-{N}] {feature}'
-      }
-    ]
-  },
-  'act': {
-    next: 'check',
-    skill: '/pdca analyze',
-    message: 'Act 완료. 재검증을 실행하세요.',
-    taskTemplate: '[Check] {feature}'
-  }
-};
-
-/**
- * PDCA 전환 결정 (v1.4.4 FR-06)
- * @param {string} currentPhase - 현재 Phase ('plan', 'design', 'do', 'check', 'act')
- * @param {Object} context - { matchRate, iterationCount, feature }
- * @returns {Object|null} { next, skill, message, taskTemplate }
- */
-function determinePdcaTransition(currentPhase, context = {}) {
-  const transition = PDCA_PHASE_TRANSITIONS[currentPhase];
-  if (!transition) return null;
-
-  // 조건부 전환 처리
-  if (transition.conditions) {
-    for (const condition of transition.conditions) {
-      if (condition.when(context)) {
-        return {
-          next: condition.next,
-          skill: condition.skill,
-          message: condition.message,
-          taskTemplate: condition.taskTemplate.replace('{N}', context.iterationCount || 1)
-        };
-      }
-    }
-    return null;
-  }
-
-  // 일반 전환
-  return {
-    next: transition.next,
-    skill: transition.skill,
-    message: transition.message,
-    taskTemplate: transition.taskTemplate
-  };
-}
+// v2.1.5 I2: PDCA_PHASE_TRANSITIONS and determinePdcaTransition moved to lib/pdca/automation.js
 
 // Log execution start
 debugLog('Skill:pdca:Stop', 'Hook started');
@@ -145,7 +54,7 @@ debugLog('Skill:pdca:Stop', 'Input received', {
 
 // Extract action from skill invocation
 // Patterns: "pdca plan", "pdca design", "/pdca analyze", etc.
-const actionPattern = /pdca\s+(plan|design|do|analyze|iterate|report|status|next)/i;
+const actionPattern = /pdca\s+(pm|plan|design|do|analyze|iterate|qa|report|status|next)/i;
 const actionMatch = inputText.match(actionPattern);
 const action = actionMatch ? actionMatch[1].toLowerCase() : null;
 
@@ -164,59 +73,78 @@ debugLog('Skill:pdca:Stop', 'Context extracted', {
 
 // Define next step mapping
 const nextStepMap = {
+  pm: {
+    nextAction: 'plan',
+    message: 'PM analysis and PRD have been generated.',
+    question: 'Proceed to Plan phase?',
+    options: [
+      { label: 'Start Plan (Recommended)', description: `/pdca plan ${feature || '[feature]'}` },
+      { label: 'Later', description: 'Keep current state' }
+    ]
+  },
   plan: {
     nextAction: 'design',
-    message: 'Plan 문서가 생성되었습니다.',
-    question: 'Design 단계로 진행할까요?',
+    message: 'Plan document has been generated.',
+    question: 'Proceed to Design phase?',
     options: [
-      { label: 'Design 진행 (권장)', description: `/pdca design ${feature || '[feature]'}` },
-      { label: '나중에', description: '현재 상태 유지' }
+      { label: 'Start Design (Recommended)', description: `/pdca design ${feature || '[feature]'}` },
+      { label: 'Later', description: 'Keep current state' }
     ]
   },
   design: {
     nextAction: 'do',
-    message: 'Design 문서가 생성되었습니다.',
-    question: '구현을 시작할까요?',
+    message: 'Design document has been generated.',
+    question: 'Start implementation?',
     options: [
-      { label: '구현 시작 (권장)', description: `/pdca do ${feature || '[feature]'}` },
-      { label: '나중에', description: '현재 상태 유지' }
+      { label: 'Start Implementation (Recommended)', description: `/pdca do ${feature || '[feature]'}` },
+      { label: 'Later', description: 'Keep current state' }
     ]
   },
   do: {
     nextAction: 'analyze',
-    message: '구현 가이드가 제공되었습니다.',
-    question: '구현이 완료되면 Gap 분석을 실행하세요.',
+    message: 'Implementation guide has been provided.',
+    question: 'Run Gap analysis when implementation is complete.',
     options: [
-      { label: 'Gap 분석 실행', description: `/pdca analyze ${feature || '[feature]'}` },
-      { label: '계속 구현', description: '구현 계속 진행' }
+      { label: 'Run Gap Analysis', description: `/pdca analyze ${feature || '[feature]'}` },
+      { label: 'Continue Implementing', description: 'Continue implementation' }
     ]
   },
   analyze: {
     nextAction: 'iterate',
-    message: 'Gap 분석이 완료되었습니다.',
-    question: '결과에 따라 다음 단계를 선택하세요.',
+    message: 'Gap analysis completed.',
+    question: 'Select next step based on results.',
     options: [
-      { label: '자동 개선', description: `/pdca iterate ${feature || '[feature]'}` },
-      { label: '완료 보고서', description: `/pdca report ${feature || '[feature]'}` },
-      { label: '수동 수정', description: '직접 코드 수정 후 재분석' }
+      { label: 'Auto Improve', description: `/pdca iterate ${feature || '[feature]'}` },
+      { label: 'Completion Report', description: `/pdca report ${feature || '[feature]'}` },
+      { label: 'Manual Fix', description: 'Manually fix code then re-analyze' }
     ]
   },
   iterate: {
     nextAction: 'analyze',
-    message: '자동 개선이 완료되었습니다.',
-    question: 'Gap 분석을 다시 실행할까요?',
+    message: 'Auto improvement completed.',
+    question: 'Run Gap analysis again?',
     options: [
-      { label: '재분석 (권장)', description: `/pdca analyze ${feature || '[feature]'}` },
-      { label: '완료 보고서', description: `/pdca report ${feature || '[feature]'}` }
+      { label: 'Re-analyze (Recommended)', description: `/pdca analyze ${feature || '[feature]'}` },
+      { label: 'Completion Report', description: `/pdca report ${feature || '[feature]'}` }
+    ]
+  },
+  qa: {
+    nextAction: 'report',
+    message: 'QA phase (L1-L5 tests) completed.',
+    question: 'Proceed to completion report?',
+    options: [
+      { label: 'Generate Report (Recommended)', description: `/pdca report ${feature || '[feature]'}` },
+      { label: 'Re-run QA', description: `/pdca qa ${feature || '[feature]'}` },
+      { label: 'Later', description: 'Keep current state' }
     ]
   },
   report: {
     nextAction: null,
-    message: '완료 보고서가 생성되었습니다.',
-    question: 'PDCA 사이클이 완료되었습니다!',
+    message: 'Completion report has been generated.',
+    question: 'PDCA cycle completed!',
     options: [
-      { label: '아카이브', description: '/archive 명령으로 문서 정리' },
-      { label: '새 기능 시작', description: '/pdca plan [new-feature]' }
+      { label: 'Archive', description: 'Archive documents with /pdca archive' },
+      { label: 'Start New Feature', description: '/pdca plan [new-feature]' }
     ]
   },
   status: {
@@ -249,6 +177,7 @@ const phaseMap = {
   do: 'do',
   analyze: 'check',
   iterate: 'act',
+  qa: 'qa',
   report: 'completed'
 };
 const currentPhaseForAuto = action ? phaseMap[action] : null;
@@ -265,7 +194,33 @@ if (nextStep && nextStep.message) {
     });
 
     if (autoTrigger) {
-      guidance += `\n\n🤖 [${automationLevel}] 자동 진행: ${autoTrigger.skill}`;
+      if (autoTrigger.complete) {
+        // v2.1.7: PDCA cycle completion (Issue #79 P5 fix)
+        guidance += [
+          '',
+          '',
+          `[PDCA-COMPLETE] Feature "${feature}" PDCA cycle finished successfully.`,
+          `All phases (plan > design > do > check > qa > report) completed.`,
+          `Generate the completion summary and proceed to the next task.`,
+          `Do NOT ask what to do next. The cycle is done.`,
+        ].join('\n');
+        debugLog('Skill:pdca:Stop', 'PDCA cycle completed', { feature, action });
+      } else {
+        // v2.1.5 F3: Strong directive instead of soft guidance
+        const nextCommand = autoTrigger.skill
+          ? `/${autoTrigger.skill} ${autoTrigger.args || feature || ''}`
+          : null;
+        if (nextCommand) {
+          guidance += [
+            '',
+            '',
+            `[AUTO-TRANSITION] Phase "${action}" completed successfully.`,
+            `You MUST now execute: ${nextCommand}`,
+            `Do NOT ask the user for confirmation. Do NOT show Executive Summary.`,
+            `Do NOT stop. Proceed immediately to the next phase.`,
+          ].join('\n');
+        }
+      }
       debugLog('Skill:pdca:Stop', 'Auto-advance triggered', { autoTrigger });
     }
   } else if (nextStep.question && nextStep.options) {
@@ -282,13 +237,14 @@ if (nextStep && nextStep.message) {
 }
 
 // Update PDCA status if action completed
-if (action && feature && ['plan', 'design', 'do', 'analyze', 'iterate', 'report'].includes(action)) {
+if (action && feature && ['plan', 'design', 'do', 'analyze', 'iterate', 'qa', 'report'].includes(action)) {
   const phaseMap = {
     plan: 'plan',
     design: 'design',
     do: 'do',
     analyze: 'check',
     iterate: 'act',
+    qa: 'qa',
     report: 'completed'
   };
 
@@ -304,7 +260,7 @@ if (action && feature && ['plan', 'design', 'do', 'analyze', 'iterate', 'report'
           taskCount: chain.entries.length,
           firstTaskId: chain.entries[0]?.id
         });
-        guidance += `\n\n📋 PDCA Task Chain 생성됨 (${chain.entries.length}개 Task)`;
+        guidance += `\n\n📋 PDCA Task Chain created (${chain.entries.length} Tasks)`;
       }
     } catch (e) {
       debugLog('Skill:pdca:Stop', 'Task chain creation failed', { error: e.message });
@@ -372,29 +328,103 @@ debugLog('Skill:pdca:Stop', 'Hook completed', {
   hasNextStep: !!nextStep?.nextAction
 });
 
-// Claude Code: JSON output
+// v1.6.0: Executive Summary + AskUserQuestion for plan/design/report (ENH-103)
+if (feature && (action === 'plan' || action === 'design' || action === 'report') && !autoTrigger) {
+  const summary = generateExecutiveSummary(feature, action);
+  const summaryText = formatExecutiveSummary(summary, 'full');
+
+  const featureData = currentStatus?.features?.[feature] || {};
+  const questionPayload = buildNextActionQuestion(action, feature, {
+    matchRate: featureData.matchRate || 0,
+    iterCount: featureData.iterationCount || 0
+  });
+  const formatted = formatAskUserQuestion(questionPayload);
+
+  // ENH-227 (Issue #77 Phase A): single-source generator
+  const { generateSessionTitle } = require('../lib/pdca/session-title');
+  const execSessionTitle = generateSessionTitle({ action: action ? action.toUpperCase() : null, feature });
+
+  const execResponse = {
+    decision: 'allow',
+    hookSpecificOutput: {
+      hookEventName: 'Skill:pdca:Stop',
+      additionalContext: [
+        guidance,
+        '',
+        summaryText,
+        '',
+        `---`,
+        '',
+        `Please select next step.`
+      ].join('\n'),
+      sessionTitle: execSessionTitle,
+      userPrompt: JSON.stringify(formatted),
+    },
+    skillResult: {
+      action,
+      feature: feature || 'unknown',
+      nextAction: nextStep?.nextAction || null,
+      automationLevel: automationLevel
+    },
+  };
+
+  console.log(JSON.stringify(execResponse));
+  process.exit(0);
+}
+
+// ENH-227 (Issue #77 Phase A): single-source generator
+const { generateSessionTitle: _genSessionTitleDefault } = require('../lib/pdca/session-title');
+const defaultSessionTitle = _genSessionTitleDefault({ action: action ? action.toUpperCase() : null, feature });
+
+// Claude Code: JSON output conforming to CC hook output schema
 const response = {
   decision: 'allow',
-  hookEventName: 'Skill:pdca:Stop',
+  hookSpecificOutput: {
+    hookEventName: 'Skill:pdca:Stop',
+    additionalContext: guidance || undefined,
+    sessionTitle: defaultSessionTitle,
+    userPrompt: userPrompt,
+  },
   skillResult: {
     action,
     feature: feature || 'unknown',
     nextAction: nextStep?.nextAction || null,
     automationLevel: automationLevel
   },
-  guidance: guidance || null,
-  userPrompt: userPrompt,
-  // v1.4.7: Auto-trigger for full-auto mode
   autoTrigger: autoTrigger,
-  systemMessage: guidance ? (
-    `${guidance}\n\n` +
-    `## 🚨 MANDATORY: AskUserQuestion 호출\n\n` +
-    `아래 파라미터로 사용자에게 다음 단계를 질문하세요:\n\n` +
-    `${userPrompt || '(다음 단계 선택)'}\n\n` +
-    `### 선택별 동작:\n` +
-    (nextStep?.options ? nextStep.options.map(opt => `- **${opt.label}** → ${opt.description}`).join('\n') : '')
-  ) : null
 };
+
+// v2.0.5: Collect M8 (Design Completeness) and M10 (PDCA Cycle Time)
+try {
+  const mc = require('../lib/quality/metrics-collector');
+  const f = feature || 'unknown';
+
+  // M8: Design Completeness — after design phase, estimate from document existence
+  if (action === 'design' && f !== 'unknown') {
+    const designPath = path.join(process.cwd(), `docs/02-design/features/${f}.design.md`);
+    const planPath = path.join(process.cwd(), `docs/01-plan/features/${f}.plan.md`);
+    let completeness = 0;
+    if (fs.existsSync(designPath)) completeness += 50;
+    if (fs.existsSync(planPath)) completeness += 30;
+    // Check for key sections in design doc
+    if (fs.existsSync(designPath)) {
+      const content = fs.readFileSync(designPath, 'utf8');
+      if (content.includes('## ')) completeness += 10;
+      if (content.length > 500) completeness += 10;
+    }
+    mc.collectMetric('M8', f, Math.min(completeness, 100), 'pdca-skill');
+  }
+
+  // M10: PDCA Cycle Time — on report phase, compute hours since feature started
+  if (action === 'report' && f !== 'unknown') {
+    const featureData = currentStatus?.features?.[f];
+    const startedAt = featureData?.timestamps?.started;
+    if (startedAt) {
+      const hours = Math.round((Date.now() - new Date(startedAt).getTime()) / 3600000 * 100) / 100;
+      mc.collectMetric('M10', f, hours, 'pdca-skill');
+    }
+  }
+} catch (_) {}
 
 console.log(JSON.stringify(response));
 process.exit(0);

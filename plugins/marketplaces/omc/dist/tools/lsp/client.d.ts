@@ -4,9 +4,11 @@
  * Manages connections to language servers using JSON-RPC 2.0 over stdio.
  * Handles server lifecycle, message buffering, and request/response matching.
  */
+import type { DevContainerContext } from './devcontainer.js';
 import type { LspServerConfig } from './servers.js';
 /** Default timeout (ms) for LSP requests. Override with OMC_LSP_TIMEOUT_MS env var. */
 export declare const DEFAULT_LSP_REQUEST_TIMEOUT_MS: number;
+export declare function getLspRequestTimeout(serverConfig: Pick<LspServerConfig, 'initializeTimeoutMs'>, method: string, baseTimeout?: number): number;
 export interface Position {
     line: number;
     character: number;
@@ -85,6 +87,7 @@ export interface CodeAction {
  * LSP Client class
  */
 export declare class LspClient {
+    private static readonly MAX_BUFFER_SIZE;
     private process;
     private requestId;
     private pendingRequests;
@@ -94,12 +97,20 @@ export declare class LspClient {
     private diagnosticWaiters;
     private workspaceRoot;
     private serverConfig;
+    private devContainerContext;
     private initialized;
-    constructor(workspaceRoot: string, serverConfig: LspServerConfig);
+    private _serverCapabilities;
+    private _supportsPullDiagnostics;
+    constructor(workspaceRoot: string, serverConfig: LspServerConfig, devContainerContext?: DevContainerContext | null);
     /**
      * Start the LSP server and initialize the connection
      */
     connect(): Promise<void>;
+    /**
+     * Synchronously kill the LSP server process.
+     * Used in process exit handlers where async operations are not possible.
+     */
+    forceKill(): void;
     /**
      * Disconnect from the LSP server
      */
@@ -174,6 +185,15 @@ export declare class LspClient {
      */
     getDiagnostics(filePath: string): Diagnostic[];
     /**
+     * Whether the server supports LSP 3.17 pull diagnostics (textDocument/diagnostic).
+     */
+    get supportsPullDiagnostics(): boolean;
+    /**
+     * Request diagnostics via the LSP 3.17 pull model (textDocument/diagnostic).
+     * Only call when supportsPullDiagnostics is true.
+     */
+    pullDiagnostics(filePath: string): Promise<Diagnostic[]>;
+    /**
      * Wait for the server to publish diagnostics for a file.
      * Resolves as soon as textDocument/publishDiagnostics fires for the URI,
      * or after `timeoutMs` milliseconds (whichever comes first).
@@ -192,6 +212,12 @@ export declare class LspClient {
      * Get code actions
      */
     codeActions(filePath: string, range: Range, diagnostics?: Diagnostic[]): Promise<CodeAction[] | null>;
+    private getServerWorkspaceRoot;
+    private getWorkspaceRootUri;
+    private toServerUri;
+    private toHostUri;
+    private translateIncomingPayload;
+    private translateIncomingValue;
 }
 /** Idle timeout: disconnect LSP clients unused for 5 minutes */
 export declare const IDLE_TIMEOUT_MS: number;
@@ -201,12 +227,19 @@ export declare const IDLE_CHECK_INTERVAL_MS: number;
  * Client manager - maintains a pool of LSP clients per workspace/server
  * with idle eviction to free resources and in-flight request protection.
  */
-declare class LspClientManager {
+export declare class LspClientManager {
     private clients;
     private lastUsed;
     private inFlightCount;
+    private idleDeadlines;
     private idleTimer;
     constructor();
+    /**
+     * Register process exit/signal handlers to kill all spawned LSP server processes.
+     * Prevents orphaned language server processes (e.g. kotlin-language-server)
+     * when the MCP bridge process exits or a claude session ends.
+     */
+    private registerCleanupHandlers;
     /**
      * Get or create a client for a file
      */
@@ -217,6 +250,9 @@ declare class LspClientManager {
      * The lastUsed timestamp is refreshed on both entry and exit.
      */
     runWithClientLease<T>(filePath: string, fn: (client: LspClient) => Promise<T>): Promise<T>;
+    private touchClient;
+    private scheduleIdleDeadline;
+    private clearIdleDeadline;
     /**
      * Find the workspace root for a file
      */
@@ -230,6 +266,7 @@ declare class LspClientManager {
      * Clients with in-flight requests are never evicted.
      */
     private evictIdleClients;
+    private evictClientIfIdle;
     /**
      * Disconnect all clients and stop idle checking.
      * Uses Promise.allSettled so one failing disconnect doesn't block others.
@@ -249,5 +286,4 @@ export declare const lspClientManager: LspClientManager;
  * Exported for use in session-end hooks.
  */
 export declare function disconnectAll(): Promise<void>;
-export {};
 //# sourceMappingURL=client.d.ts.map

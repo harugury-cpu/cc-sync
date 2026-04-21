@@ -4,8 +4,8 @@ import { LSP_SERVERS, getServerForFile, getServerForLanguage } from '../tools/ls
 describe('LSP Server Configurations', () => {
   const serverKeys = Object.keys(LSP_SERVERS);
 
-  it('should have 18 configured servers', () => {
-    expect(serverKeys).toHaveLength(18);
+  it('should have 19 configured servers', () => {
+    expect(serverKeys).toHaveLength(19);
   });
 
   it.each(serverKeys)('server "%s" should have valid config', (key) => {
@@ -15,6 +15,11 @@ describe('LSP Server Configurations', () => {
     expect(Array.isArray(config.args)).toBe(true);
     expect(config.extensions.length).toBeGreaterThan(0);
     expect(config.installHint).toBeTruthy();
+  });
+
+  it('kotlin should use stdio and an extended initialize timeout', () => {
+    expect(LSP_SERVERS.kotlin.args).toContain('--stdio');
+    expect(LSP_SERVERS.kotlin.initializeTimeoutMs).toBeGreaterThan(15_000);
   });
 
   it('should have no duplicate extension mappings across servers', () => {
@@ -33,7 +38,7 @@ describe('LSP Server Configurations', () => {
 describe('getServerForFile', () => {
   const cases: [string, string][] = [
     ['app.ts', 'TypeScript Language Server'],
-    ['app.py', 'Python Language Server (pylsp)'],
+    ['app.py', 'Python Language Server (ty)'],
     ['main.rs', 'Rust Analyzer'],
     ['main.go', 'gopls'],
     ['main.c', 'clangd'],
@@ -57,6 +62,10 @@ describe('getServerForFile', () => {
     ['Program.cs', 'OmniSharp'],
     ['main.dart', 'Dart Analysis Server'],
     ['view.erb', 'Ruby Language Server (Solargraph)'],
+    ['counter.v', 'Verible Verilog Language Server'],
+    ['defs.vh', 'Verible Verilog Language Server'],
+    ['top.sv', 'Verible Verilog Language Server'],
+    ['pkg.svh', 'Verible Verilog Language Server'],
   ];
 
   it.each(cases)('should resolve "%s" to "%s"', (file, expectedName) => {
@@ -74,7 +83,7 @@ describe('getServerForLanguage', () => {
   const cases: [string, string][] = [
     ['typescript', 'TypeScript Language Server'],
     ['javascript', 'TypeScript Language Server'],
-    ['python', 'Python Language Server (pylsp)'],
+    ['python', 'Python Language Server (ty)'],
     ['rust', 'Rust Analyzer'],
     ['go', 'gopls'],
     ['golang', 'gopls'],
@@ -107,6 +116,10 @@ describe('getServerForLanguage', () => {
     ['cs', 'OmniSharp'],
     ['dart', 'Dart Analysis Server'],
     ['flutter', 'Dart Analysis Server'],
+    ['verilog', 'Verible Verilog Language Server'],
+    ['systemverilog', 'Verible Verilog Language Server'],
+    ['sv', 'Verible Verilog Language Server'],
+    ['v', 'Verible Verilog Language Server'],
   ];
 
   it.each(cases)('should resolve language "%s" to "%s"', (lang, expectedName) => {
@@ -128,5 +141,12 @@ describe('getServerForLanguage', () => {
 describe('OmniSharp command casing', () => {
   it('should use lowercase command for cross-platform compatibility', () => {
     expect(LSP_SERVERS.csharp.command).toBe('omnisharp');
+  });
+});
+
+describe('Python server selection', () => {
+  it('should invoke ty via its LSP subcommand', () => {
+    expect(LSP_SERVERS.python.command).toBe('ty');
+    expect(LSP_SERVERS.python.args).toEqual(['server']);
   });
 });

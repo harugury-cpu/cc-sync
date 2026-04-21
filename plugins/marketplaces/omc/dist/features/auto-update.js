@@ -12,9 +12,11 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { execSync, execFileSync } from 'child_process';
-import { install as installOmc, HOOKS_DIR, isProjectScopedPlugin, isRunningAsPlugin } from '../installer/index.js';
-import { getConfigDir } from '../utils/config-dir.js';
+import { install as installOmc, HOOKS_DIR, isProjectScopedPlugin, isRunningAsPlugin, copyPluginSyncPayload, syncInstalledPluginPayload, } from '../installer/index.js';
+import { getClaudeConfigDir } from '../utils/config-dir.js';
 import { purgeStalePluginCacheVersions } from '../utils/paths.js';
+import { isAutoUpdateDisabled } from '../lib/security-config.js';
+import { OMC_CONFIG_FILE_REL } from '../lib/paths.js';
 /** GitHub repository information */
 export const REPO_OWNER = 'Yeachan-Heo';
 export const REPO_NAME = 'oh-my-claudecode';
@@ -27,45 +29,151 @@ export const GITHUB_RAW_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/$
  * and cache rebuilds reinstall old versions. (See #506)
  */
 function syncMarketplaceClone(verbose = false) {
-    const marketplacePath = join(getConfigDir(), 'plugins', 'marketplaces', 'omc');
+    const marketplacePath = join(getClaudeConfigDir(), 'plugins', 'marketplaces', 'omc');
     if (!existsSync(marketplacePath)) {
         return { ok: true, message: 'Marketplace clone not found; skipping' };
     }
     const stdio = verbose ? 'inherit' : 'pipe';
     const execOpts = { encoding: 'utf-8', stdio: stdio, timeout: 60000 };
+    const queryExecOpts = { encoding: 'utf-8', stdio: 'pipe', timeout: 60000 };
     try {
         execFileSync('git', ['-C', marketplacePath, 'fetch', '--all', '--prune'], execOpts);
     }
     catch (err) {
         return { ok: false, message: `Failed to fetch marketplace clone: ${err instanceof Error ? err.message : err}` };
     }
-    // Ensure we're on main (ignore errors for older clones on different branches)
     try {
         execFileSync('git', ['-C', marketplacePath, 'checkout', 'main'], { ...execOpts, timeout: 15000 });
     }
-    catch { /* ignore checkout errors on older clones */ }
-    // Reset to upstream state -- the marketplace clone is a managed read-only
-    // checkout, so any local modifications (e.g. regenerated dist files) can be
-    // safely discarded.  This avoids the "dirty worktree" failure that
-    // `git pull --ff-only` would hit when untracked/modified files exist (#978).
+    catch {
+        // Fall through to explicit branch verification below.
+    }
+    let currentBranch = '';
     try {
-        execFileSync('git', ['-C', marketplacePath, 'reset', '--hard', 'origin/main'], execOpts);
+        currentBranch = String(execFileSync('git', ['-C', marketplacePath, 'rev-parse', '--abbrev-ref', 'HEAD'], queryExecOpts) ?? '').trim();
     }
     catch (err) {
-        return { ok: false, message: `Failed to reset marketplace clone: ${err instanceof Error ? err.message : err}` };
+        return { ok: false, message: `Failed to inspect marketplace clone branch: ${err instanceof Error ? err.message : err}` };
+    }
+    if (currentBranch !== 'main') {
+        return {
+            ok: false,
+            message: `Skipped marketplace clone update: expected branch main but found ${currentBranch || 'unknown'}`,
+        };
+    }
+    let statusOutput = '';
+    try {
+        statusOutput = String(execFileSync('git', ['-C', marketplacePath, 'status', '--porcelain', '--untracked-files=normal'], queryExecOpts) ?? '').trim();
+    }
+    catch (err) {
+        return { ok: false, message: `Failed to inspect marketplace clone status: ${err instanceof Error ? err.message : err}` };
+    }
+    if (statusOutput.length > 0) {
+        return {
+            ok: false,
+            message: 'Skipped marketplace clone update: repo has local modifications; commit, stash, or clean it first',
+        };
+    }
+    let aheadCount = 0;
+    let behindCount = 0;
+    try {
+        const revListOutput = String(execFileSync('git', ['-C', marketplacePath, 'rev-list', '--left-right', '--count', 'HEAD...origin/main'], queryExecOpts) ?? '').trim();
+        const [aheadRaw = '0', behindRaw = '0'] = revListOutput.split(/\s+/);
+        aheadCount = Number.parseInt(aheadRaw, 10) || 0;
+        behindCount = Number.parseInt(behindRaw, 10) || 0;
+    }
+    catch (err) {
+        return { ok: false, message: `Failed to inspect marketplace clone divergence: ${err instanceof Error ? err.message : err}` };
+    }
+    if (aheadCount > 0) {
+        return {
+            ok: false,
+            message: 'Skipped marketplace clone update: repo has local commits on main; manual reconciliation required',
+        };
+    }
+    if (behindCount === 0) {
+        return { ok: true, message: 'Marketplace clone already up to date' };
     }
     try {
-        execFileSync('git', ['-C', marketplacePath, 'clean', '-fd'], execOpts);
+        execFileSync('git', ['-C', marketplacePath, 'merge', '--ff-only', 'origin/main'], execOpts);
     }
-    catch {
-        // clean is best-effort; untracked leftovers won't break anything
+    catch (err) {
+        return { ok: false, message: `Failed to fast-forward marketplace clone: ${err instanceof Error ? err.message : err}` };
     }
     return { ok: true, message: 'Marketplace clone updated' };
 }
+function syncActivePluginCache() {
+    const result = syncInstalledPluginPayload();
+    if (result.synced) {
+        console.log('[omc update] Synced plugin cache');
+    }
+    return result;
+}
+export function shouldBlockStandaloneUpdateInCurrentSession() {
+    if (!isRunningAsPlugin()) {
+        return false;
+    }
+    const entrypoint = process.env.CLAUDE_CODE_ENTRYPOINT?.trim();
+    if (entrypoint) {
+        return true;
+    }
+    const sessionId = process.env.CLAUDE_SESSION_ID?.trim() || process.env.CLAUDECODE_SESSION_ID?.trim();
+    if (sessionId) {
+        return true;
+    }
+    return false;
+}
+export function syncPluginCache(verbose = false) {
+    const pluginCacheRoot = join(getClaudeConfigDir(), 'plugins', 'cache', 'omc', 'oh-my-claudecode');
+    if (!existsSync(pluginCacheRoot)) {
+        return { synced: false, skipped: true, errors: [] };
+    }
+    try {
+        const npmRoot = String(execSync('npm root -g', {
+            encoding: 'utf-8',
+            stdio: 'pipe',
+            timeout: 10000,
+            ...(process.platform === 'win32' ? { windowsHide: true } : {}),
+        }) ?? '').trim();
+        if (!npmRoot) {
+            throw new Error('npm root -g returned an empty path');
+        }
+        const sourceRoot = join(npmRoot, 'oh-my-claude-sisyphus');
+        const packageJsonPath = join(sourceRoot, 'package.json');
+        const packageJsonRaw = String(readFileSync(packageJsonPath, 'utf-8') ?? '');
+        const packageMetadata = JSON.parse(packageJsonRaw);
+        const version = typeof packageMetadata.version === 'string' ? packageMetadata.version.trim() : '';
+        if (!version) {
+            throw new Error(`Missing version in ${packageJsonPath}`);
+        }
+        const versionedPluginCacheRoot = join(pluginCacheRoot, version);
+        mkdirSync(versionedPluginCacheRoot, { recursive: true });
+        const result = copyPluginSyncPayload(sourceRoot, [versionedPluginCacheRoot]);
+        if (result.errors.length > 0) {
+            for (const error of result.errors) {
+                console.warn(`[omc update] Plugin cache sync warning: ${error}`);
+            }
+        }
+        if (result.synced) {
+            console.log('[omc update] Plugin cache synced');
+        }
+        return { ...result, skipped: false };
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (verbose) {
+            console.warn(`[omc update] Plugin cache sync warning: ${message}`);
+        }
+        else {
+            console.warn('[omc update] Plugin cache sync warning:', message);
+        }
+        return { synced: false, skipped: false, errors: [message] };
+    }
+}
 /** Installation paths (respects CLAUDE_CONFIG_DIR env var) */
-export const CLAUDE_CONFIG_DIR = getConfigDir();
+export const CLAUDE_CONFIG_DIR = getClaudeConfigDir();
 export const VERSION_FILE = join(CLAUDE_CONFIG_DIR, '.omc-version.json');
-export const CONFIG_FILE = join(CLAUDE_CONFIG_DIR, '.omc-config.json');
+export const CONFIG_FILE = join(CLAUDE_CONFIG_DIR, OMC_CONFIG_FILE_REL);
 /**
  * Read the OMC configuration
  */
@@ -90,6 +198,7 @@ export function getOMCConfig() {
             notificationProfiles: config.notificationProfiles,
             hudEnabled: config.hudEnabled,
             autoUpgradePrompt: config.autoUpgradePrompt,
+            nodeBinary: config.nodeBinary,
         };
     }
     catch {
@@ -101,6 +210,8 @@ export function getOMCConfig() {
  * Check if silent auto-updates are enabled
  */
 export function isSilentAutoUpdateEnabled() {
+    if (isAutoUpdateDisabled())
+        return false;
     return getOMCConfig().silentAutoUpdate;
 }
 /**
@@ -273,6 +384,15 @@ export async function checkForUpdates() {
 export function reconcileUpdateRuntime(options) {
     const errors = [];
     const projectScopedPlugin = isProjectScopedPlugin();
+    // Plugin installs execute hooks from <pluginRoot>/hooks/hooks.json. Re-running
+    // the standalone settings.json hook merge during `omc update` re-injects the
+    // legacy ~/.claude/hooks/* entries and causes duplicate hook execution.
+    //
+    // Reconciliation should still refresh shared installer artifacts (CLAUDE.md,
+    // HUD, MCP registry, statusLine, etc.), but it must leave settings.json hook
+    // ownership alone for plugin installs so the plugin hook manifest remains the
+    // single source of truth.
+    const shouldRefreshPluginHooks = false;
     if (!projectScopedPlugin) {
         try {
             if (!existsSync(HOOKS_DIR)) {
@@ -289,8 +409,8 @@ export function reconcileUpdateRuntime(options) {
             force: true,
             verbose: options?.verbose ?? false,
             skipClaudeCheck: true,
-            forceHooks: true,
-            refreshHooksInPlugin: !projectScopedPlugin,
+            forceHooks: shouldRefreshPluginHooks,
+            refreshHooksInPlugin: shouldRefreshPluginHooks,
         });
         if (!installResult.success) {
             errors.push(...installResult.errors);
@@ -300,9 +420,23 @@ export function reconcileUpdateRuntime(options) {
         const message = error instanceof Error ? error.message : String(error);
         errors.push(`Failed to refresh installer artifacts: ${message}`);
     }
+    try {
+        const pluginSyncResult = syncActivePluginCache();
+        if (pluginSyncResult.errors.length > 0 && options?.verbose) {
+            for (const err of pluginSyncResult.errors) {
+                console.warn(`[omc] Plugin cache sync warning: ${err}`);
+            }
+        }
+    }
+    catch (error) {
+        if (options?.verbose) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.warn(`[omc] Plugin cache sync warning: ${message}`);
+        }
+    }
     // Purge stale plugin cache versions (non-fatal)
     try {
-        const purgeResult = purgeStalePluginCacheVersions();
+        const purgeResult = purgeStalePluginCacheVersions({ skipGracePeriod: options?.skipGracePeriod });
         if (purgeResult.removed > 0 && options?.verbose) {
             console.log(`[omc] Purged ${purgeResult.removed} stale plugin cache version(s)`);
         }
@@ -327,6 +461,31 @@ export function reconcileUpdateRuntime(options) {
         message: 'Runtime state reconciled successfully',
     };
 }
+function getFirstResolvedBinaryPath(output) {
+    const resolved = output
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .find(Boolean);
+    if (!resolved) {
+        throw new Error('Unable to resolve omc binary path for update reconciliation');
+    }
+    return resolved;
+}
+function resolveOmcBinaryPath() {
+    if (process.platform === 'win32') {
+        return getFirstResolvedBinaryPath(execFileSync('where.exe', ['omc.cmd'], {
+            encoding: 'utf-8',
+            stdio: 'pipe',
+            timeout: 5000,
+            windowsHide: true,
+        }));
+    }
+    return getFirstResolvedBinaryPath(execSync('which omc 2>/dev/null || where omc 2>NUL', {
+        encoding: 'utf-8',
+        stdio: 'pipe',
+        timeout: 5000,
+    }));
+}
 /**
  * Download and execute the install script to perform an update
  */
@@ -334,13 +493,14 @@ export async function performUpdate(options) {
     const installed = getInstalledVersion();
     const previousVersion = installed?.version ?? null;
     try {
-        // Check if running as plugin - prevent npm global update from corrupting plugin
-        if (isRunningAsPlugin() && !options?.standalone) {
+        // Block npm update only from active Claude Code/plugin sessions.
+        // Standalone terminals may inherit CLAUDE_PLUGIN_ROOT and should still update.
+        if (shouldBlockStandaloneUpdateInCurrentSession() && !options?.standalone) {
             return {
                 success: false,
                 previousVersion,
                 newVersion: 'unknown',
-                message: 'Running as a Claude Code plugin. Use "/plugin install oh-my-claudecode" to update, or pass --standalone to force npm update.',
+                message: 'Running inside an active Claude Code plugin session. Use "/plugin install oh-my-claudecode" to update, or pass --standalone to force npm update.',
             };
         }
         // Fetch the latest release to get the version
@@ -359,6 +519,7 @@ export async function performUpdate(options) {
             if (!marketplaceSync.ok && options?.verbose) {
                 console.warn(`[omc update] ${marketplaceSync.message}`);
             }
+            syncPluginCache(options?.verbose ?? false);
             // CRITICAL FIX: After npm updates the global package, the current process
             // still has OLD code loaded in memory. We must re-exec to run reconciliation
             // with the NEW code. Otherwise, installOmc() runs OLD logic against NEW files.
@@ -366,17 +527,15 @@ export async function performUpdate(options) {
                 // Set flag to prevent infinite loop
                 process.env.OMC_UPDATE_RECONCILE = '1';
                 // Find the omc binary path
-                const omcPath = execSync('which omc 2>/dev/null || where omc 2>NUL', {
-                    encoding: 'utf-8',
-                    stdio: 'pipe',
-                }).trim().split('\n')[0];
+                const omcPath = resolveOmcBinaryPath();
                 // Re-exec with reconcile subcommand
                 try {
-                    execFileSync(omcPath, ['update-reconcile'], {
+                    execFileSync(omcPath, ['update-reconcile', ...(options?.clean ? ['--skip-grace-period'] : [])], {
                         encoding: 'utf-8',
                         stdio: options?.verbose ? 'inherit' : 'pipe',
                         timeout: 60000,
-                        env: { ...process.env, OMC_UPDATE_RECONCILE: '1' }
+                        env: { ...process.env, OMC_UPDATE_RECONCILE: '1' },
+                        ...(process.platform === 'win32' ? { windowsHide: true, shell: true } : {}),
                     });
                 }
                 catch (reconcileError) {
@@ -404,7 +563,7 @@ export async function performUpdate(options) {
             }
             else {
                 // We're in the re-exec'd process - run reconciliation directly
-                const reconcileResult = reconcileUpdateRuntime({ verbose: options?.verbose });
+                const reconcileResult = reconcileUpdateRuntime({ verbose: options?.verbose, skipGracePeriod: options?.clean });
                 if (!reconcileResult.success) {
                     return {
                         success: false,

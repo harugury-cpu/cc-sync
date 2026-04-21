@@ -9,22 +9,30 @@
  * 4. PDCA 상태 자동 관리
  * 5. 다음 Skill/Agent 제안
  *
- * @version 1.4.4
+ * @version 2.0.0
  * @module lib/skill-orchestrator
  */
 
 const fs = require('fs');
 const path = require('path');
 
-// Lazy imports to avoid circular dependencies
-let _common = null;
+// NOTE: common.js was removed in v2.1.1. Functions migrated to lib/core and lib/pdca/status.
+let _core = null;
+let _pdcaStatus = null;
 let _importResolver = null;
 
-function getCommon() {
-  if (!_common) {
-    _common = require('./common.js');
+function getCore() {
+  if (!_core) {
+    try { _core = require('./core'); } catch(_) { _core = null; }
   }
-  return _common;
+  return _core;
+}
+
+function getPdcaStatusModule() {
+  if (!_pdcaStatus) {
+    try { _pdcaStatus = require('./pdca/status'); } catch(_) { _pdcaStatus = null; }
+  }
+  return _pdcaStatus;
 }
 
 function getImportResolver() {
@@ -134,8 +142,8 @@ function parseSkillFrontmatter(content) {
 
     return { frontmatter, body: match[2] };
   } catch (e) {
-    const common = getCommon();
-    common.debugLog('SkillOrchestrator', 'Frontmatter parse error', { error: e.message });
+    const core = getCore();
+    core.debugLog('SkillOrchestrator', 'Frontmatter parse error', { error: e.message });
     return { frontmatter: {}, body: content };
   }
 }
@@ -234,6 +242,56 @@ function isMultiBindingSkill(skillName) {
 }
 
 /**
+ * Parse classification fields from skill frontmatter
+ * Extracts classification, classification-reason, and deprecation-risk
+ * @param {Object} frontmatter - Parsed frontmatter object
+ * @returns {{ classification: string|null, classificationReason: string|null, deprecationRisk: string|null }}
+ */
+function parseClassification(frontmatter) {
+  return {
+    classification: frontmatter['classification'] || null,
+    classificationReason: frontmatter['classification-reason'] || null,
+    deprecationRisk: frontmatter['deprecation-risk'] || null
+  };
+}
+
+/**
+ * Get all skills matching a given classification
+ * @param {string} type - Classification type: 'workflow', 'capability', or 'hybrid'
+ * @returns {Array<{ name: string, classification: string, classificationReason: string, deprecationRisk: string }>}
+ */
+function getSkillsByClassification(type) {
+  const core = getCore();
+  const skillsDir = path.join(core.PLUGIN_ROOT, 'skills');
+
+  if (!fs.existsSync(skillsDir)) {
+    return [];
+  }
+
+  const results = [];
+  const entries = fs.readdirSync(skillsDir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+
+    const config = getSkillConfig(entry.name);
+    if (!config) continue;
+
+    const cls = parseClassification(config);
+    if (cls.classification === type) {
+      results.push({
+        name: config.name,
+        classification: cls.classification,
+        classificationReason: cls.classificationReason,
+        deprecationRisk: cls.deprecationRisk
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
  * Parse hooks section from YAML
  * @param {string} hooksYaml - Hooks section content
  * @returns {Object} Parsed hooks
@@ -257,7 +315,7 @@ function parseHooksSection(hooksYaml) {
  * @returns {Object|null} Skill configuration
  */
 function getSkillConfig(skillName) {
-  const common = getCommon();
+  const core = getCore();
 
   // Check cache
   const cached = _skillConfigCache.get(skillName);
@@ -266,10 +324,10 @@ function getSkillConfig(skillName) {
   }
 
   // Load skill file
-  const skillPath = path.join(common.PLUGIN_ROOT, 'skills', skillName, 'SKILL.md');
+  const skillPath = path.join(core.PLUGIN_ROOT, 'skills', skillName, 'SKILL.md');
 
   if (!fs.existsSync(skillPath)) {
-    common.debugLog('SkillOrchestrator', 'Skill not found', { skillName, path: skillPath });
+    core.debugLog('SkillOrchestrator', 'Skill not found', { skillName, path: skillPath });
     return null;
   }
 
@@ -293,6 +351,10 @@ function getSkillConfig(skillName) {
       hooks: frontmatter.hooks || {},
       // v1.4.4 agents multi-binding support
       agents: frontmatter.agents || null,
+      // v1.6.0 classification fields (ENH-90)
+      classification: frontmatter['classification'] || null,
+      'classification-reason': frontmatter['classification-reason'] || null,
+      'deprecation-risk': frontmatter['deprecation-risk'] || null,
       body
     };
 
@@ -304,7 +366,7 @@ function getSkillConfig(skillName) {
 
     return config;
   } catch (e) {
-    common.debugLog('SkillOrchestrator', 'Failed to load skill', { skillName, error: e.message });
+    core.debugLog('SkillOrchestrator', 'Failed to load skill', { skillName, error: e.message });
     return null;
   }
 }
@@ -318,10 +380,10 @@ function getSkillConfig(skillName) {
  * @returns {Promise<Object>} Orchestration result
  */
 async function orchestrateSkillPre(skillName, args, context) {
-  const common = getCommon();
+  const core = getCore();
   const importResolver = getImportResolver();
 
-  common.debugLog('SkillOrchestrator', 'Pre-orchestration started', { skillName, args });
+  core.debugLog('SkillOrchestrator', 'Pre-orchestration started', { skillName, args });
 
   // 1. Load skill configuration
   const config = getSkillConfig(skillName);
@@ -332,17 +394,17 @@ async function orchestrateSkillPre(skillName, args, context) {
   // 2. Load imports if available
   let templates = [];
   if (config.imports.length > 0 && importResolver) {
-    const skillPath = path.join(common.PLUGIN_ROOT, 'skills', skillName, 'SKILL.md');
+    const skillPath = path.join(core.PLUGIN_ROOT, 'skills', skillName, 'SKILL.md');
     try {
       const { content, errors } = importResolver.processMarkdownWithImports(skillPath);
       if (errors.length === 0 && content) {
         templates.push(content);
       }
       if (errors.length > 0) {
-        common.debugLog('SkillOrchestrator', 'Import errors', { errors });
+        core.debugLog('SkillOrchestrator', 'Import errors', { errors });
       }
     } catch (e) {
-      common.debugLog('SkillOrchestrator', 'Import resolution failed', { error: e.message });
+      core.debugLog('SkillOrchestrator', 'Import resolution failed', { error: e.message });
     }
   }
 
@@ -360,7 +422,8 @@ async function orchestrateSkillPre(skillName, args, context) {
     let blockedBy = [];
     if (currentIndex > 0) {
       // Get previous phase's task (would need to look up from memory)
-      const pdcaStatus = common.getPdcaStatusFull();
+      const pdcaMod = getPdcaStatusModule();
+      const pdcaStatus = pdcaMod ? pdcaMod.getPdcaStatusFull() : null;
       const featureStatus = pdcaStatus?.features?.[args.feature];
       if (featureStatus?.tasks) {
         const previousPhase = phaseOrder[currentIndex - 1];
@@ -398,9 +461,9 @@ async function orchestrateSkillPre(skillName, args, context) {
  * @returns {Promise<Object>} Post-orchestration result
  */
 async function orchestrateSkillPost(skillName, result, context) {
-  const common = getCommon();
+  const core = getCore();
 
-  common.debugLog('SkillOrchestrator', 'Post-orchestration started', { skillName });
+  core.debugLog('SkillOrchestrator', 'Post-orchestration started', { skillName });
 
   const config = getSkillConfig(skillName);
   if (!config) {
@@ -485,5 +548,8 @@ module.exports = {
   parseAgentsField,
   getAgentForAction,
   getLinkedAgents,
-  isMultiBindingSkill
+  isMultiBindingSkill,
+  // v1.6.0 classification support (ENH-90)
+  parseClassification,
+  getSkillsByClassification
 };

@@ -18,9 +18,15 @@ description: |
 
   Do NOT use for: backend-only tasks, infrastructure, database design,
   or Starter level HTML/CSS projects (use starter-guide instead).
-permissionMode: acceptEdits
-memory: project
 model: sonnet
+effort: medium
+maxTurns: 20
+# permissionMode: acceptEdits  # CC ignores for plugin agents
+memory: project
+disallowedTools:
+  - "Bash(rm -rf*)"
+  - "Bash(git push*)"
+  - "Bash(git reset --hard*)"
 tools:
   - Read
   - Write
@@ -82,3 +88,12 @@ You are a Frontend Architect specializing in modern web application architecture
 | Utils | camelCase | `formatDate.ts` |
 | Types | PascalCase | `UserTypes.ts` |
 | Styles | kebab-case | `user-profile.module.css` |
+
+## v1.6.1 Feature Guidance
+
+- Skills 2.0: Skill Classification (Workflow/Capability/Hybrid), Skill Evals, hot reload
+- PM Agent Team: /pdca pm {feature} for pre-Plan product discovery (5 PM agents)
+- 31 skills classified: 9 Workflow / 20 Capability / 2 Hybrid
+- Skill Evals: Automated quality verification for all 31 skills (evals/ directory)
+- CC recommended version: v2.1.116+ (74 consecutive compatible releases, includes v2.1.116 S1 security + I1/B10 /resume stability; v2.1.115 skipped)
+- 210 exports in lib/common.js bridge (corrected from documented 241)

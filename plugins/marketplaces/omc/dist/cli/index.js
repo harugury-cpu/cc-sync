@@ -6,31 +6,59 @@
  *
  * Commands:
  * - run: Start an interactive session
- * - init: Initialize configuration in current directory
  * - config: Show or edit configuration
  * - setup: Sync all OMC components (hooks, agents, skills)
  */
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { writeFileSync, mkdirSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { loadConfig, getConfigPaths, generateConfigSchema } from '../config/loader.js';
-import { getDefaultModelHigh, getDefaultModelMedium, getDefaultModelLow, } from '../config/models.js';
+import { join } from 'path';
+import { writeFileSync, existsSync } from 'fs';
+import { getClaudeConfigDir } from '../utils/config-dir.js';
+import { OMC_PLUGIN_ROOT_ENV } from '../lib/env-vars.js';
+import { loadConfig, getConfigPaths, } from '../config/loader.js';
 import { createOmcSession } from '../index.js';
 import { checkForUpdates, performUpdate, formatUpdateNotification, getInstalledVersion, getOMCConfig, reconcileUpdateRuntime, CONFIG_FILE, } from '../features/auto-update.js';
 import { install as installOmc, isInstalled, getInstallInfo } from '../installer/index.js';
 import { waitCommand, waitStatusCommand, waitDaemonCommand, waitDetectCommand } from './commands/wait.js';
 import { doctorConflictsCommand } from './commands/doctor-conflicts.js';
+import { doctorTeamRoutingCommand } from './commands/doctor-team-routing.js';
+import { sessionSearchCommand } from './commands/session-search.js';
 import { teamCommand } from './commands/team.js';
+import { ralphthonCommand } from './commands/ralphthon.js';
 import { teleportCommand, teleportListCommand, teleportRemoveCommand } from './commands/teleport.js';
 import { getRuntimePackageVersion } from '../lib/version.js';
+import { resolvePluginDirArg } from '../lib/plugin-dir.js';
 import { launchCommand } from './launch.js';
 import { interopCommand } from './interop.js';
 import { askCommand, ASK_USAGE } from './ask.js';
 import { warnIfWin32 } from './win32-warning.js';
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { autoresearchCommand } from './autoresearch.js';
+import { runHudWatchLoop } from './hud-watch.js';
 const version = getRuntimePackageVersion();
+/**
+ * Apply a --plugin-dir option value: resolve to absolute path, warn if it
+ * disagrees with a pre-existing OMC_PLUGIN_ROOT env var, then set the env var
+ * so all subsequent code in this process sees the correct plugin root.
+ *
+ * No-op when `rawPath` is undefined/empty (option was not passed).
+ */
+export function applyPluginDirOption(rawPath) {
+    if (!rawPath)
+        return;
+    let resolved;
+    try {
+        resolved = resolvePluginDirArg(rawPath);
+    }
+    catch (err) {
+        console.error(chalk.red(`Error: ${err instanceof Error ? err.message : String(err)}`));
+        process.exit(1);
+    }
+    const existing = process.env[OMC_PLUGIN_ROOT_ENV];
+    if (existing && existing !== resolved) {
+        console.warn(chalk.yellow(`Warning: --plugin-dir "${resolved}" overrides ${OMC_PLUGIN_ROOT_ENV}="${existing}"`));
+    }
+    process.env[OMC_PLUGIN_ROOT_ENV] = resolved;
+}
 const program = new Command();
 // Win32 platform warning - OMC requires tmux which is not available on native Windows
 warnIfWin32();
@@ -39,6 +67,12 @@ warnIfWin32();
 async function defaultAction() {
     // Pass all CLI args through to launch (strip node + script path)
     const args = process.argv.slice(2);
+    // Defensive fallback: wrapper/bridge invocations must preserve explicit ask routing
+    // so nested Claude launch checks only apply to actual Claude launches.
+    if (args[0] === 'ask') {
+        await askCommand(args.slice(1));
+        return;
+    }
     await launchCommand(args);
 }
 program
@@ -98,171 +132,6 @@ program
     .addHelpText('after', `\n${ASK_USAGE}`)
     .action(async (args) => {
     await askCommand(args || []);
-});
-/**
- * Init command - Initialize configuration
- */
-program
-    .command('init')
-    .description('Initialize OMC configuration in the current directory')
-    .option('-g, --global', 'Initialize global user configuration')
-    .option('-f, --force', 'Overwrite existing configuration')
-    .addHelpText('after', `
-Examples:
-  $ omc init                     Initialize in current directory
-  $ omc init --global            Initialize global configuration
-  $ omc init --force             Overwrite existing config`)
-    .action(async (options) => {
-    console.log(chalk.yellow('⚠️  DEPRECATED: The init command is deprecated.'));
-    console.log(chalk.gray('Configuration is now managed automatically. Use /oh-my-claudecode:omc-setup instead.\n'));
-    const paths = getConfigPaths();
-    const targetPath = options.global ? paths.user : paths.project;
-    const targetDir = dirname(targetPath);
-    console.log(chalk.blue('Oh-My-ClaudeCode Configuration Setup\n'));
-    // Check if config already exists
-    if (existsSync(targetPath) && !options.force) {
-        console.log(chalk.yellow(`Configuration already exists at ${targetPath}`));
-        console.log(chalk.gray('Use --force to overwrite'));
-        return;
-    }
-    // Create directory if needed
-    if (!existsSync(targetDir)) {
-        mkdirSync(targetDir, { recursive: true });
-        console.log(chalk.green(`Created directory: ${targetDir}`));
-    }
-    // Resolve current default model IDs (respects OMC_MODEL_* env vars)
-    const modelHigh = getDefaultModelHigh();
-    const modelMedium = getDefaultModelMedium();
-    const modelLow = getDefaultModelLow();
-    // Generate config content
-    const configContent = `// Oh-My-ClaudeCode Configuration
-// See: https://github.com/Yeachan-Heo/oh-my-claudecode for documentation
-//
-// Model IDs can be overridden via environment variables:
-//   OMC_MODEL_HIGH   (opus-class)
-//   OMC_MODEL_MEDIUM (sonnet-class)
-//   OMC_MODEL_LOW    (haiku-class)
-{
-  "$schema": "./omc-schema.json",
-
-  // Agent model configurations
-  "agents": {
-    "omc": {
-      // Main orchestrator - uses the most capable model
-      "model": "${modelHigh}"
-    },
-    "explore": {
-      // Fast pattern matching - uses fastest model
-      "model": "${modelLow}"
-    },
-    "analyst": {
-      // Requirements analysis and acceptance criteria
-      "model": "${modelHigh}"
-    },
-    "planner": {
-      // Strategic task sequencing and execution plans
-      "model": "${modelHigh}"
-    },
-    "architect": {
-      // System design, boundaries, interfaces
-      "model": "${modelHigh}"
-    },
-    "debugger": {
-      // Root-cause analysis, regression isolation
-      "model": "${modelMedium}"
-    },
-    "executor": {
-      // Code implementation, refactoring
-      "model": "${modelMedium}"
-    },
-    "verifier": {
-      // Completion evidence, claim validation
-      "model": "${modelMedium}"
-    },
-    "critic": {
-      // Plan/design critical challenge
-      "model": "${modelHigh}"
-    },
-    "writer": {
-      // Docs, migration notes, user guidance
-      "model": "${modelLow}"
-    }
-  },
-
-  // Feature toggles
-  "features": {
-    "parallelExecution": true,
-    "lspTools": true,
-    "astTools": true,
-    "continuationEnforcement": true,
-    "autoContextInjection": true
-  },
-
-  // MCP server integrations
-  "mcpServers": {
-    "exa": {
-      "enabled": true
-      // Set EXA_API_KEY environment variable for API key
-    },
-    "context7": {
-      "enabled": true
-    }
-  },
-
-  // Permission settings
-  "permissions": {
-    "allowBash": true,
-    "allowEdit": true,
-    "allowWrite": true,
-    "maxBackgroundTasks": 5
-  },
-
-  // Magic keyword triggers (customize if desired)
-  "magicKeywords": {
-    "ultrawork": ["ultrawork", "ulw", "uw"],
-    "search": ["search", "find", "locate"],
-    "analyze": ["analyze", "investigate", "examine"]
-  }
-}
-`;
-    writeFileSync(targetPath, configContent);
-    console.log(chalk.green(`Created configuration: ${targetPath}`));
-    // Also create the JSON schema for editor support
-    const schemaPath = join(targetDir, 'omc-schema.json');
-    writeFileSync(schemaPath, JSON.stringify(generateConfigSchema(), null, 2));
-    console.log(chalk.green(`Created JSON schema: ${schemaPath}`));
-    console.log(chalk.blue('\nSetup complete!'));
-    console.log(chalk.gray('Edit the configuration file to customize your setup.'));
-    // Create AGENTS.md template if it doesn't exist
-    const agentsMdPath = join(process.cwd(), 'AGENTS.md');
-    if (!existsSync(agentsMdPath) && !options.global) {
-        const agentsMdContent = `# Project Agents Configuration
-
-This file provides context and instructions to AI agents working on this project.
-
-## Project Overview
-
-<!-- Describe your project here -->
-
-## Architecture
-
-<!-- Describe the architecture and key components -->
-
-## Conventions
-
-<!-- List coding conventions, naming patterns, etc. -->
-
-## Important Files
-
-<!-- List key files agents should know about -->
-
-## Common Tasks
-
-<!-- Describe common development tasks and how to perform them -->
-`;
-        writeFileSync(agentsMdPath, agentsMdContent);
-        console.log(chalk.green(`Created AGENTS.md template`));
-    }
 });
 /**
  * Config command - Show or validate configuration
@@ -351,7 +220,7 @@ Profile types (use with --profile):
   webhook      Generic webhook (POST with JSON body)
 
 Examples:
-  $ omc config-stop-callback file --enable --path ~/.claude/logs/{date}.md
+  $ omc config-stop-callback file --enable --path ${join(getClaudeConfigDir(), 'logs/{date}.md')}
   $ omc config-stop-callback telegram --enable --token <token> --chat <id>
   $ omc config-stop-callback discord --enable --webhook <url>
   $ omc config-stop-callback file --disable
@@ -558,7 +427,7 @@ Examples:
             const current = config.stopHookCallbacks.file;
             config.stopHookCallbacks.file = {
                 enabled: enabled ?? current?.enabled ?? false,
-                path: options.path ?? current?.path ?? '~/.claude/session-logs/{session_id}.md',
+                path: options.path ?? current?.path ?? join(getClaudeConfigDir(), 'session-logs/{session_id}.md'),
                 format: options.format ?? current?.format ?? 'markdown',
             };
             break;
@@ -780,6 +649,7 @@ program
     .option('-f, --force', 'Force reinstall even if up to date')
     .option('-q, --quiet', 'Suppress output except for errors')
     .option('--standalone', 'Force npm update even in plugin context')
+    .option('--clean', 'Purge old plugin cache versions immediately (bypass 24h grace period)')
     .addHelpText('after', `
 Examples:
   $ omc update                   Check and install updates
@@ -823,7 +693,7 @@ Examples:
         if (!options.quiet) {
             console.log(chalk.blue('\nStarting update...\n'));
         }
-        const result = await performUpdate({ verbose: !options.quiet, standalone: options.standalone });
+        const result = await performUpdate({ verbose: !options.quiet, standalone: options.standalone, clean: options.clean });
         if (result.success) {
             if (!options.quiet) {
                 console.log(chalk.green(`\n✓ ${result.message}`));
@@ -853,9 +723,10 @@ program
     .command('update-reconcile')
     .description('Internal: Reconcile runtime state after update (called by update command)')
     .option('-v, --verbose', 'Show detailed output')
+    .option('--skip-grace-period', 'Bypass 24h grace period for cache purge')
     .action(async (options) => {
     try {
-        const reconcileResult = reconcileUpdateRuntime({ verbose: options.verbose });
+        const reconcileResult = reconcileUpdateRuntime({ verbose: options.verbose, skipGracePeriod: options.skipGracePeriod });
         if (!reconcileResult.success) {
             console.error(chalk.red('Reconciliation failed:'));
             if (reconcileResult.errors) {
@@ -906,19 +777,20 @@ Examples:
     console.log(chalk.gray('\nTo check for updates, run: oh-my-claudecode update --check'));
 });
 /**
- * Install command - Install agents and commands to ~/.claude/
+ * Install command - Install agents and commands (default: ~/.claude/)
  */
 program
     .command('install')
-    .description('Install OMC agents and commands to Claude Code config (~/.claude/)')
+    .description('Install OMC agents and commands to Claude Code config directory (default: ~/.claude/)')
     .option('-f, --force', 'Overwrite existing files')
     .option('-q, --quiet', 'Suppress output except for errors')
     .option('--skip-claude-check', 'Skip checking if Claude Code is installed')
     .addHelpText('after', `
 Examples:
-  $ omc install                  Install to ~/.claude/
+  $ omc install                  Install to config directory (default: ~/.claude/)
   $ omc install --force          Reinstall, overwriting existing files
-  $ omc install --quiet          Silent install for scripts`)
+  $ omc install --quiet          Silent install for scripts
+  $ CLAUDE_CONFIG_DIR=$HOME/.claude-isolated-workspace omc install  Isolated config directory`)
     .action(async (options) => {
     if (!options.quiet) {
         console.log(chalk.blue('╔═══════════════════════════════════════════════════════════╗'));
@@ -953,7 +825,7 @@ Examples:
             console.log(chalk.green('║         Installation Complete!                            ║'));
             console.log(chalk.green('╚═══════════════════════════════════════════════════════════╝'));
             console.log('');
-            console.log(chalk.gray(`Installed to: ~/.claude/`));
+            console.log(chalk.gray(`Installed to: ${getClaudeConfigDir()}`));
             console.log('');
             console.log(chalk.yellow('Usage:'));
             console.log('  claude                        # Start Claude Code normally');
@@ -1151,23 +1023,89 @@ teleportCmd
         process.exit(exitCode);
 });
 /**
+ * Session command - Search prior local session history
+ */
+const sessionCmd = program
+    .command('session')
+    .alias('sessions')
+    .description('Inspect prior local session history')
+    .addHelpText('after', `
+Examples:
+  $ omc session search "team leader stale"
+  $ omc session search notify-hook --since 7d
+  $ omc session search provider-routing --project all --json`);
+sessionCmd
+    .command('search <query>')
+    .description('Search prior local session transcripts and OMC session artifacts')
+    .option('-l, --limit <number>', 'Maximum number of matches to return', '10')
+    .option('-s, --session <id>', 'Restrict search to a specific session id')
+    .option('--since <duration|date>', 'Only include matches since a duration (e.g. 7d, 24h) or absolute date')
+    .option('--project <scope>', 'Project scope. Defaults to current project. Use "all" to search all local projects')
+    .option('--json', 'Output results as JSON')
+    .option('--case-sensitive', 'Match query case-sensitively')
+    .option('--context <chars>', 'Approximate snippet context on each side of a match', '120')
+    .action(async (query, options) => {
+    await sessionSearchCommand(query, {
+        limit: parseInt(options.limit, 10),
+        session: options.session,
+        since: options.since,
+        project: options.project,
+        json: options.json,
+        caseSensitive: options.caseSensitive,
+        context: parseInt(options.context, 10),
+        workingDirectory: process.cwd(),
+    });
+});
+/**
  * Doctor command - Diagnostic tools
  */
 const doctorCmd = program
     .command('doctor')
     .description('Diagnostic tools for troubleshooting OMC installation')
+    .option('--plugin-dir <path>', 'Override OMC plugin root directory (sets OMC_PLUGIN_ROOT)')
+    .option('--team-routing', 'Probe CLI presence for every provider referenced by team.roleRouting')
+    .option('--json', 'Output as JSON (used with --team-routing)')
     .addHelpText('after', `
 Examples:
-  $ omc doctor conflicts         Check for plugin conflicts`);
+  $ omc doctor conflicts                        Check for plugin conflicts
+  $ omc doctor team-routing                     Probe /team role-routing provider CLIs
+  $ omc doctor --team-routing                   Same as above (flag form)
+  $ omc doctor --plugin-dir /path/to/plugin     Run diagnostics against a specific plugin dir`)
+    .hook('preAction', (thisCommand) => {
+    applyPluginDirOption(thisCommand.opts().pluginDir);
+})
+    .action(async (options) => {
+    if (options.teamRouting) {
+        const exitCode = await doctorTeamRoutingCommand({ json: options.json ?? false });
+        process.exit(exitCode);
+    }
+    // Without --team-routing, show help text for the parent command.
+    doctorCmd.help();
+});
+doctorCmd
+    .command('team-routing')
+    .description('Probe CLI presence for every provider referenced by team.roleRouting')
+    .option('--json', 'Output as JSON')
+    .addHelpText('after', `
+Examples:
+  $ omc doctor team-routing                     Probe configured providers
+  $ omc doctor team-routing --json              Output results as JSON`)
+    .action(async (options) => {
+    const exitCode = await doctorTeamRoutingCommand({ json: options.json ?? false });
+    process.exit(exitCode);
+});
 doctorCmd
     .command('conflicts')
     .description('Check for plugin coexistence issues and configuration conflicts')
     .option('--json', 'Output as JSON')
+    .option('--plugin-dir <path>', 'Override OMC plugin root directory (sets OMC_PLUGIN_ROOT)')
     .addHelpText('after', `
 Examples:
-  $ omc doctor conflicts         Check for configuration issues
-  $ omc doctor conflicts --json  Output results as JSON`)
+  $ omc doctor conflicts                        Check for configuration issues
+  $ omc doctor conflicts --json                 Output results as JSON
+  $ omc doctor conflicts --plugin-dir /tmp/foo  Check against a specific plugin dir`)
     .action(async (options) => {
+    applyPluginDirOption(options.pluginDir);
     const exitCode = await doctorConflictsCommand(options);
     process.exit(exitCode);
 });
@@ -1184,12 +1122,16 @@ program
     .description('Run OMC setup to sync all components (hooks, agents, skills)')
     .option('-f, --force', 'Force reinstall even if already up to date')
     .option('-q, --quiet', 'Suppress output except for errors')
+    .option('--no-plugin', 'Install bundled skills from the current package instead of relying on plugin-provided skills')
+    .option('--plugin-dir-mode', 'Treat OMC as launched via --plugin-dir at runtime (skip agent/skill copy; HUD + hooks + CLAUDE.md still installed)')
     .option('--skip-hooks', 'Skip hook installation')
     .option('--force-hooks', 'Force reinstall hooks even if unchanged')
     .addHelpText('after', `
 Examples:
   $ omc setup                     Sync all OMC components
   $ omc setup --force             Force reinstall everything
+  $ omc setup --no-plugin         Force local bundled skill installation
+  $ omc setup --plugin-dir-mode   Skip agent/skill copy (used with claude --plugin-dir)
   $ omc setup --quiet             Silent setup for scripts
   $ omc setup --skip-hooks        Install without hooks
   $ omc setup --force-hooks       Force reinstall hooks`)
@@ -1201,11 +1143,35 @@ Examples:
     if (!options.quiet) {
         console.log(chalk.gray('Syncing OMC components...'));
     }
+    // Commander exposes negated flags like `--no-plugin` as `options.plugin === false`
+    // rather than `options.noPlugin`. Keep the installer API explicit.
+    const useLocalBundledSkills = options.plugin === false;
+    // Dev plugin-dir mode: skip agent/skill copy because the plugin already
+    // provides them at runtime via `claude --plugin-dir <path>` (or `omc --plugin-dir`).
+    // Auto-detected from OMC_PLUGIN_ROOT (set by `omc --plugin-dir` in src/cli/launch.ts).
+    let pluginDirMode = !!options.pluginDirMode;
+    if (!pluginDirMode && process.env[OMC_PLUGIN_ROOT_ENV]) {
+        pluginDirMode = true;
+        if (!options.quiet) {
+            console.log(chalk.gray(`Detected ${OMC_PLUGIN_ROOT_ENV} — entering dev plugin-dir mode`));
+        }
+    }
+    if (pluginDirMode && useLocalBundledSkills) {
+        if (!options.quiet) {
+            console.log(chalk.yellow('Warning: --plugin-dir-mode and --no-plugin conflict; --no-plugin takes precedence'));
+        }
+        pluginDirMode = false;
+    }
+    if (pluginDirMode && !options.quiet) {
+        console.log(chalk.gray('Dev plugin-dir mode: skipping agent/skill sync (plugin provides them via --plugin-dir)'));
+    }
     const result = installOmc({
         force: !!options.force,
         verbose: !options.quiet,
         skipClaudeCheck: true,
         forceHooks: !!options.forceHooks,
+        noPlugin: useLocalBundledSkills,
+        pluginDirMode,
     });
     if (!result.success) {
         console.error(chalk.red(`Setup failed: ${result.message}`));
@@ -1238,8 +1204,13 @@ Examples:
                 console.log(chalk.yellow(`    - ${c.eventType}: ${c.existingCommand}`));
             });
         }
+        const installed = getInstalledVersion();
+        const reportedVersion = installed?.version ?? version;
         console.log('');
-        console.log(chalk.gray(`Version: ${version}`));
+        console.log(chalk.gray(`Version: ${reportedVersion}`));
+        if (reportedVersion !== version) {
+            console.log(chalk.gray(`CLI package version: ${version}`));
+        }
         console.log(chalk.gray('Start Claude Code and use /oh-my-claudecode:omc-setup for interactive setup.'));
     }
 });
@@ -1280,14 +1251,31 @@ program
     const { main: hudMain } = await import('../hud/index.js');
     if (options.watch) {
         const intervalMs = parseInt(options.interval, 10);
-        while (true) {
-            await hudMain(true);
-            await new Promise(resolve => setTimeout(resolve, intervalMs));
-        }
+        await runHudWatchLoop({ intervalMs, hudMain });
     }
     else {
         await hudMain();
     }
+});
+program
+    .command('mission-board')
+    .description('Render the opt-in mission board snapshot for the current workspace')
+    .option('--json', 'Print raw mission-board JSON')
+    .action(async (options) => {
+    const { refreshMissionBoardState, renderMissionBoard } = await import('../hud/mission-board.js');
+    const state = refreshMissionBoardState(process.cwd());
+    if (options.json) {
+        console.log(JSON.stringify(state, null, 2));
+        return;
+    }
+    const lines = renderMissionBoard(state, {
+        enabled: true,
+        maxMissions: 5,
+        maxAgentsPerMission: 8,
+        maxTimelineEvents: 8,
+        persistCompletedForMinutes: 20,
+    });
+    console.log(lines.length > 0 ? lines.join('\n') : '(no active missions)');
 });
 /**
  * Team command - CLI API for team worker lifecycle operations
@@ -1306,6 +1294,53 @@ program
     .action(async (args) => {
     await teamCommand(args);
 });
-// Parse arguments
-program.parse();
+/**
+ * Autoresearch command - hard-deprecated shim preserved only for migration messaging
+ */
+program
+    .command('autoresearch')
+    .description('Hard-deprecated shim that redirects users to deep-interview + autoresearch skill')
+    .helpOption(false)
+    .allowUnknownOption(true)
+    .allowExcessArguments(true)
+    .argument('[args...]', 'autoresearch subcommand arguments')
+    .action(async (args) => {
+    await autoresearchCommand(args);
+});
+/**
+ * Ralphthon command - Autonomous hackathon lifecycle
+ *
+ * Deep-interview generates PRD, ralph loop executes tasks,
+ * auto-hardening phase, terminates after clean waves.
+ */
+program
+    .command('ralphthon')
+    .description('Autonomous hackathon lifecycle: interview -> execute -> harden -> done')
+    .helpOption(false)
+    .allowUnknownOption(true)
+    .allowExcessArguments(true)
+    .argument('[args...]', 'ralphthon arguments')
+    .action(async (args) => {
+    await ralphthonCommand(args);
+});
+/**
+ * Returns the fully-configured commander program.
+ *
+ * Exported so tests can drive the real CLI pipeline (e.g.
+ * `await buildProgram().parseAsync(['node','omc','setup','--plugin-dir-mode'], { from: 'user' })`)
+ * without spawning a subprocess. The program is built once at module load
+ * (commander does not support re-registration), so this just returns the
+ * singleton.
+ */
+export function buildProgram() {
+    return program;
+}
+// Parse arguments — skipped only when an importing test explicitly opts out
+// via OMC_CLI_SKIP_PARSE. We do NOT key off process.env.VITEST because the
+// CLI is also spawned as a child process from tests (e.g. cli-boot.test.ts),
+// and child processes inherit VITEST from the parent vitest worker, which
+// would cause the CLI to silently exit with no output.
+if (!process.env.OMC_CLI_SKIP_PARSE) {
+    program.parse();
+}
 //# sourceMappingURL=index.js.map

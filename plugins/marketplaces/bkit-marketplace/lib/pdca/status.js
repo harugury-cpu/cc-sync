@@ -1,7 +1,7 @@
 /**
  * PDCA Status Management Module
  * @module lib/pdca/status
- * @version 1.4.7
+ * @version 2.0.0
  */
 
 const fs = require('fs');
@@ -25,12 +25,25 @@ function getPhase() {
 }
 
 /**
+ * v2.0.1: Get project-scoped cache key for PDCA status (#48)
+ * @returns {string} Cache key like 'pdca-status:/path/to/project'
+ */
+function _getCacheKey() {
+  try {
+    const { PROJECT_DIR } = require('../core/platform');
+    return `pdca-status:${PROJECT_DIR}`;
+  } catch (_) {
+    return 'pdca-status';
+  }
+}
+
+/**
  * Get PDCA status file path
  * @returns {string}
  */
 function getPdcaStatusPath() {
-  const { PROJECT_DIR } = getCore();
-  return path.join(PROJECT_DIR, 'docs/.pdca-status.json');
+  const { STATE_PATHS } = require('../core/paths');
+  return STATE_PATHS.pdcaStatus();
 }
 
 /**
@@ -109,6 +122,65 @@ function migrateStatusToV2(oldStatus) {
 }
 
 /**
+ * Migrate v2.0 schema to v3.0
+ * Adds: stateMachine, metrics, phaseTimestamps, automationLevel per feature
+ * Adds: global stateMachine, automation, team sections
+ * All v2.0 fields are preserved unchanged.
+ * @param {Object} v2 - v2.0 status object
+ * @returns {Object} v3.0 status object
+ */
+function migrateStatusV2toV3(v2) {
+  if (v2.version === '3.0') return v2;
+
+  const { debugLog } = getCore();
+  const v3 = { ...v2, version: '3.0' };
+
+  // Migrate each feature
+  for (const [key, feat] of Object.entries(v3.features || {})) {
+    feat.stateMachine = feat.stateMachine || {
+      currentState: feat.phase || 'idle',
+      previousState: null,
+      stateHistory: [],
+      retryCount: 0,
+      maxRetries: 5,
+      circuitBreakerOpen: false,
+    };
+    feat.metrics = feat.metrics || {
+      qualityScore: null,
+      conventionCompliance: null,
+      apiCompliance: null,
+      cycleTimeMs: null,
+      iterationEfficiency: null,
+    };
+    feat.phaseTimestamps = feat.phaseTimestamps || {};
+    feat.automationLevel = feat.automationLevel || 2; // L2 default
+  }
+
+  // Add global sections
+  v3.stateMachine = v3.stateMachine || {
+    defaultWorkflow: 'default',
+    activeWorkflows: {},
+    totalTransitions: 0,
+  };
+  let _ts = 40;
+  try { _ts = require('../control/trust-engine').getScore(); } catch (_) {}
+  v3.automation = v3.automation || {
+    globalLevel: 2,
+    trustScore: _ts,
+    pendingApprovals: 0,
+    lastGateResult: null,
+  };
+  v3.team = v3.team || {
+    enabled: true,
+    stateFile: '.bkit/runtime/agent-state.json',
+    eventsFile: '.bkit/runtime/agent-events.jsonl',
+  };
+
+  debugLog('PDCA', 'Migrated status from v2.0 to v3.0');
+  return v3;
+}
+
+/**
  * Initialize PDCA status file if not exists
  */
 function initPdcaStatusIfNotExists() {
@@ -124,7 +196,7 @@ function initPdcaStatusIfNotExists() {
 
   const initialStatus = createInitialStatusV2();
   fs.writeFileSync(statusPath, JSON.stringify(initialStatus, null, 2));
-  globalCache.set('pdca-status', initialStatus);
+  globalCache.set(_getCacheKey(), initialStatus);
   debugLog('PDCA', 'Status file initialized (v2.0)', { path: statusPath });
 }
 
@@ -139,7 +211,7 @@ function getPdcaStatusFull(forceRefresh = false) {
 
   try {
     if (!forceRefresh) {
-      const cached = globalCache.get('pdca-status', 3000);
+      const cached = globalCache.get(_getCacheKey(), 3000);
       if (cached) return cached;
     }
 
@@ -147,12 +219,17 @@ function getPdcaStatusFull(forceRefresh = false) {
 
     let status = JSON.parse(fs.readFileSync(statusPath, 'utf8'));
 
+    // Auto-migrate: v1.0 -> v2.0 -> v3.0
     if (!status.version || status.version === "1.0") {
       status = migrateStatusToV2(status);
+      status = migrateStatusV2toV3(status);
+      savePdcaStatus(status);
+    } else if (status.version === "2.0") {
+      status = migrateStatusV2toV3(status);
       savePdcaStatus(status);
     }
 
-    globalCache.set('pdca-status', status);
+    globalCache.set(_getCacheKey(), status);
     return status;
   } catch (e) {
     debugLog('PDCA', 'Failed to read status', { error: e.message });
@@ -188,8 +265,14 @@ function savePdcaStatus(status) {
     }
 
     fs.writeFileSync(statusPath, JSON.stringify(status, null, 2));
-    globalCache.set('pdca-status', status);
+    globalCache.set(_getCacheKey(), status);
     debugLog('PDCA', 'Status saved', { version: status.version });
+
+    // v1.6.2: Backup to ${CLAUDE_PLUGIN_DATA} (ENH-119)
+    try {
+      const { backupToPluginData } = require('../core/paths');
+      backupToPluginData();
+    } catch (_) { /* non-critical */ }
   } catch (e) {
     debugLog('PDCA', 'Failed to save status', { error: e.message });
   }
@@ -239,6 +322,20 @@ function updatePdcaStatus(feature, phase, data = {}) {
     }
   });
 
+  // v2.0.5: Sync quality metrics from metrics-collector → pdca-status.metrics
+  try {
+    const mc = require('../quality/metrics-collector');
+    const metricsData = mc.toPdcaStatusFormat(feature);
+    if (metricsData) {
+      status.features[feature].metrics = {
+        ...(status.features[feature].metrics || {}),
+        ...metricsData,
+      };
+    }
+  } catch (_) {
+    // metrics-collector may not be available in all contexts
+  }
+
   // Add to active features if not already
   if (!status.activeFeatures.includes(feature)) {
     status.activeFeatures.push(feature);
@@ -267,6 +364,10 @@ function updatePdcaStatus(feature, phase, data = {}) {
 function addPdcaHistory(entry) {
   const status = getPdcaStatusFull(true);
   if (!status) return;
+
+  if (!Array.isArray(status.history)) {
+    status.history = [];
+  }
 
   status.history.push({
     timestamp: new Date().toISOString(),
@@ -697,12 +798,13 @@ function extractFeatureFromContext(sources = {}) {
 }
 
 /**
- * Read bkit memory state from docs/.bkit-memory.json
+ * Read bkit memory state from .bkit/state/memory.json
  * @returns {Object|null} Memory object or null if not found
  */
 function readBkitMemory() {
-  const { PROJECT_DIR, safeJsonParse } = getCore();
-  const memoryPath = path.join(PROJECT_DIR, 'docs', '.bkit-memory.json');
+  const { safeJsonParse } = getCore();
+  const { STATE_PATHS } = require('../core/paths');
+  const memoryPath = STATE_PATHS.memory();
   try {
     if (fs.existsSync(memoryPath)) {
       const content = fs.readFileSync(memoryPath, 'utf8');
@@ -715,15 +817,22 @@ function readBkitMemory() {
 }
 
 /**
- * Write bkit memory state to docs/.bkit-memory.json
+ * Write bkit memory state to .bkit/state/memory.json
  * @param {Object} memory - Memory object to write
  * @returns {boolean} Success
  */
 function writeBkitMemory(memory) {
-  const { PROJECT_DIR } = getCore();
-  const memoryPath = path.join(PROJECT_DIR, 'docs', '.bkit-memory.json');
+  const { STATE_PATHS } = require('../core/paths');
+  const memoryPath = STATE_PATHS.memory();
   try {
     fs.writeFileSync(memoryPath, JSON.stringify(memory, null, 2) + '\n', 'utf8');
+
+    // v1.6.2: Backup to ${CLAUDE_PLUGIN_DATA} (ENH-119)
+    try {
+      const { backupToPluginData } = require('../core/paths');
+      backupToPluginData();
+    } catch (_) { /* non-critical */ }
+
     return true;
   } catch (e) {
     return false;
@@ -734,6 +843,7 @@ module.exports = {
   getPdcaStatusPath,
   createInitialStatusV2,
   migrateStatusToV2,
+  migrateStatusV2toV3,
   initPdcaStatusIfNotExists,
   getPdcaStatusFull,
   loadPdcaStatus,

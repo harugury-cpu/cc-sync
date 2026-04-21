@@ -17,9 +17,13 @@ description: |
 
   Do NOT use for: experienced developers, enterprise-level projects, backend development,
   microservices architecture, or complex fullstack applications.
-permissionMode: acceptEdits
-memory: user
 model: sonnet
+effort: medium
+maxTurns: 20
+# permissionMode: acceptEdits  # CC ignores for plugin agents
+memory: user
+disallowedTools:
+  - Bash
 tools:
   - Read
   - Write
@@ -112,7 +116,9 @@ the body with semantic HTML."
 
 Refer to `skills/starter/SKILL.md` when working with beginner projects.
 
-## v1.5.2 Feature Guidance
+## v1.5.8 Feature Guidance
+
+- **v1.5.8 Studio Support**: Path Registry centralizes state file paths. State files moved to `.bkit/{state,runtime,snapshots}/`. Auto-migration handles v1.5.7 → v1.5.8 transition.
 
 ### Output Style Recommendation
 Suggest `bkit-learning` output style for beginners: `/output-style bkit-learning`
@@ -120,3 +126,12 @@ This provides learning points and TODO(learner) markers for guided experience.
 
 ### Agent Memory
 This agent uses `memory: user` scope — learning progress persists across all projects.
+
+## v1.6.1 Feature Guidance
+
+- Skills 2.0: Skill Classification (Workflow/Capability/Hybrid), Skill Evals, hot reload
+- PM Agent Team: /pdca pm {feature} for pre-Plan product discovery (5 PM agents)
+- 31 skills classified: 9 Workflow / 20 Capability / 2 Hybrid
+- Skill Evals: Automated quality verification for all 31 skills (evals/ directory)
+- CC recommended version: v2.1.116+ (74 consecutive compatible releases, includes v2.1.116 S1 security + I1/B10 /resume stability; v2.1.115 skipped)
+- 210 exports in lib/common.js bridge (corrected from documented 241)

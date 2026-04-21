@@ -12,6 +12,8 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, } from 
 import { join } from "path";
 import { getOmcRoot } from '../../lib/worktree-paths.js';
 import { recordAgentStart, recordAgentStop } from './session-replay.js';
+import { recordMissionAgentStart, recordMissionAgentStop } from '../../hud/mission-board.js';
+import { isProcessAlive } from '../../platform/index.js';
 export const COST_LIMIT_USD = 1.0;
 export const DEADLOCK_CHECK_THRESHOLD = 3;
 // ============================================================================
@@ -20,7 +22,11 @@ export const DEADLOCK_CHECK_THRESHOLD = 3;
 const STATE_FILE = "subagent-tracking.json";
 const STALE_THRESHOLD_MS = 5 * 60 * 1000;
 const MAX_COMPLETED_AGENTS = 100;
-const LOCK_TIMEOUT_MS = 5000;
+// Split lock timings: acquisition stays short to avoid long Atomics.wait
+// stalls, while stale detection stays generous so healthy writers are not
+// treated as abandoned during slow disk read/merge/write sequences.
+const LOCK_ACQUIRE_TIMEOUT_MS = 500;
+const LOCK_STALE_MS = 30_000;
 const LOCK_RETRY_MS = 50;
 const WRITE_DEBOUNCE_MS = 100;
 const MAX_FLUSH_RETRIES = 3;
@@ -30,26 +36,20 @@ const pendingWrites = new Map();
 // Guard against duplicate concurrent flushes per directory
 const flushInProgress = new Set();
 /**
- * Check if a process is still alive
- * Signal 0 doesn't kill the process, just checks if it exists
- */
-function isProcessAlive(pid) {
-    try {
-        process.kill(pid, 0);
-        return true;
-    }
-    catch {
-        return false;
-    }
-}
-/**
  * Synchronous sleep using Atomics.wait
  * Avoids CPU-spinning busy-wait loops
  */
 function syncSleep(ms) {
     const buffer = new SharedArrayBuffer(4);
     const view = new Int32Array(buffer);
-    Atomics.wait(view, 0, 0, ms);
+    try {
+        Atomics.wait(view, 0, 0, ms);
+    }
+    catch {
+        // Main thread: Atomics.wait throws on Node <22
+        const waitUntil = Date.now() + ms;
+        while (Date.now() < waitUntil) { /* spin */ }
+    }
 }
 // ============================================================================
 // Merge Logic
@@ -117,7 +117,7 @@ function acquireLock(directory) {
         mkdirSync(lockDir, { recursive: true });
     }
     const startTime = Date.now();
-    while (Date.now() - startTime < LOCK_TIMEOUT_MS) {
+    while (Date.now() - startTime < LOCK_ACQUIRE_TIMEOUT_MS) {
         try {
             // Check for stale lock (older than timeout or dead process)
             if (existsSync(lockPath)) {
@@ -148,7 +148,7 @@ function acquireLock(directory) {
                     syncSleep(LOCK_RETRY_MS);
                     continue;
                 }
-                const isStale = Date.now() - lockTime > LOCK_TIMEOUT_MS;
+                const isStale = Date.now() - lockTime > LOCK_STALE_MS;
                 const isDeadProcess = !isNaN(lockPid) && !isProcessAlive(lockPid);
                 if (isStale || isDeadProcess) {
                     // Stale lock or dead process, remove it
@@ -412,26 +412,62 @@ export function processSubagentStart(input) {
     try {
         const state = readTrackingState(input.cwd);
         const parentMode = detectParentMode(input.cwd);
-        // Create new agent entry
-        const agentInfo = {
-            agent_id: input.agent_id,
-            agent_type: input.agent_type,
-            started_at: new Date().toISOString(),
-            parent_mode: parentMode,
-            task_description: input.prompt?.substring(0, 200), // Truncate for storage
-            status: "running",
-            model: input.model,
-        };
-        // Add to state
-        state.agents.push(agentInfo);
-        state.total_spawned++;
+        const startedAt = new Date().toISOString();
+        const taskDescription = input.prompt?.substring(0, 200); // Truncate for storage
+        const existingAgent = state.agents.find((agent) => agent.agent_id === input.agent_id);
+        const isDuplicateRunningStart = existingAgent?.status === "running";
+        let trackedAgent;
+        if (existingAgent) {
+            existingAgent.agent_type = input.agent_type;
+            existingAgent.parent_mode = parentMode;
+            existingAgent.task_description = taskDescription;
+            existingAgent.model = input.model;
+            if (existingAgent.status !== "running") {
+                existingAgent.status = "running";
+                existingAgent.started_at = startedAt;
+                existingAgent.completed_at = undefined;
+                existingAgent.duration_ms = undefined;
+                existingAgent.output_summary = undefined;
+                state.total_spawned++;
+            }
+            trackedAgent = existingAgent;
+        }
+        else {
+            // Create new agent entry
+            const agentInfo = {
+                agent_id: input.agent_id,
+                agent_type: input.agent_type,
+                started_at: startedAt,
+                parent_mode: parentMode,
+                task_description: taskDescription,
+                status: "running",
+                model: input.model,
+            };
+            // Add to state
+            state.agents.push(agentInfo);
+            state.total_spawned++;
+            trackedAgent = agentInfo;
+        }
         // Write updated state
         writeTrackingState(input.cwd, state);
-        // Record to session replay JSONL for /trace
-        try {
-            recordAgentStart(input.cwd, input.session_id, input.agent_id, input.agent_type, input.prompt, parentMode, input.model);
+        if (!isDuplicateRunningStart) {
+            // Record to session replay JSONL for /trace
+            try {
+                recordAgentStart(input.cwd, input.session_id, input.agent_id, input.agent_type, input.prompt, parentMode, input.model);
+            }
+            catch { /* best-effort */ }
+            try {
+                recordMissionAgentStart(input.cwd, {
+                    sessionId: input.session_id,
+                    agentId: input.agent_id,
+                    agentType: input.agent_type,
+                    parentMode,
+                    taskDescription: input.prompt,
+                    at: trackedAgent.started_at,
+                });
+            }
+            catch { /* best-effort */ }
         }
-        catch { /* best-effort */ }
         // Check for stale agents
         const staleAgents = getStaleAgents(state);
         return {
@@ -503,6 +539,16 @@ export function processSubagentStop(input) {
             recordAgentStop(input.cwd, input.session_id, input.agent_id, agentType, succeeded, trackedAgent?.duration_ms);
         }
         catch { /* best-effort */ }
+        try {
+            recordMissionAgentStop(input.cwd, {
+                sessionId: input.session_id,
+                agentId: input.agent_id,
+                success: succeeded,
+                outputSummary: agentIndex !== -1 ? state.agents[agentIndex]?.output_summary : input.output,
+                at: agentIndex !== -1 ? state.agents[agentIndex]?.completed_at : new Date().toISOString(),
+            });
+        }
+        catch { /* best-effort */ }
         const runningCount = state.agents.filter((a) => a.status === "running").length;
         return {
             continue: true,
@@ -550,15 +596,15 @@ export function cleanupStaleAgents(directory) {
         releaseLock(directory);
     }
 }
-// ============================================================================
-// Query Functions
-// ============================================================================
-/**
- * Get count of active (running) agents
- */
-export function getActiveAgentCount(directory) {
+export function getActiveAgentSnapshot(directory) {
     const state = readTrackingState(directory);
-    return state.agents.filter((a) => a.status === "running").length;
+    return {
+        count: state.agents.filter((a) => a.status === "running").length,
+        lastUpdatedAt: state.last_updated,
+    };
+}
+export function getActiveAgentCount(directory) {
+    return getActiveAgentSnapshot(directory).count;
 }
 /**
  * Get agents by type

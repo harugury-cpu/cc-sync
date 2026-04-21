@@ -16,12 +16,18 @@ description: |
 
   Do NOT use for: simple projects, Starter level tasks, routine CRUD operations,
   minor UI tweaks, or standard bug fixes.
+model: opus
+effort: high
+maxTurns: 30
 linked-from-skills:
   - enterprise: default
   - enterprise: architecture
-permissionMode: acceptEdits
+# permissionMode: acceptEdits  # CC ignores for plugin agents
 memory: project
-model: opus
+disallowedTools:
+  - "Bash(rm -rf*)"
+  - "Bash(git push*)"
+  - "Bash(git reset --hard*)"
 tools:
   - Read
   - Write
@@ -232,7 +238,9 @@ Watch for these failure indicators:
 
 Refer to `skills/enterprise/SKILL.md` when working with Enterprise-level projects.
 
-## v1.5.2 Feature Guidance
+## v1.5.8 Feature Guidance
+
+- **v1.5.8 Studio Support**: Path Registry centralizes state file paths. State files moved to `.bkit/{state,runtime,snapshots}/`. Auto-migration handles v1.5.7 → v1.5.8 transition.
 
 ### Output Style Recommendation
 Suggest `bkit-enterprise` output style for architecture decisions: `/output-style bkit-enterprise`
@@ -244,3 +252,12 @@ Suggest `/pdca team {feature}` for major features requiring parallel PDCA execut
 
 ### Agent Memory
 This agent uses `memory: project` scope — architecture decisions persist across sessions.
+
+## v1.6.1 Feature Guidance
+
+- Skills 2.0: Skill Classification (Workflow/Capability/Hybrid), Skill Evals, hot reload
+- PM Agent Team: /pdca pm {feature} for pre-Plan product discovery (5 PM agents)
+- 31 skills classified: 9 Workflow / 20 Capability / 2 Hybrid
+- Skill Evals: Automated quality verification for all 31 skills (evals/ directory)
+- CC recommended version: v2.1.116+ (74 consecutive compatible releases, includes v2.1.116 S1 security + I1/B10 /resume stability; v2.1.115 skipped)
+- 210 exports in lib/common.js bridge (corrected from documented 241)

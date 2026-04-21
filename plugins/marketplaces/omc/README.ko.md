@@ -7,6 +7,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/Yeachan-Heo/oh-my-claudecode?style=flat&color=yellow)](https://github.com/Yeachan-Heo/oh-my-claudecode/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Sponsor](https://img.shields.io/badge/Sponsor-❤️-red?style=flat&logo=github)](https://github.com/sponsors/Yeachan-Heo)
+[![Discord](https://img.shields.io/discord/1452487457085063218?color=5865F2&logo=discord&logoColor=white&label=Discord)](https://discord.gg/PUwSMR9XNk)
 
 > **Codex 사용자분들께:** [oh-my-codex](https://github.com/Yeachan-Heo/oh-my-codex)를 확인해보세요 — OpenAI Codex CLI를 위한 동일한 오케스트레이션 경험을 제공합니다.
 
@@ -14,7 +15,7 @@
 
 *Claude Code를 배우지 마세요. 그냥 OMC를 쓰세요.*
 
-[시작하기](#빠른-시작) • [문서](https://yeachan-heo.github.io/oh-my-claudecode-website) • [CLI 레퍼런스](https://yeachan-heo.github.io/oh-my-claudecode-website/docs.html#cli-reference) • [워크플로우](https://yeachan-heo.github.io/oh-my-claudecode-website/docs.html#workflows) • [마이그레이션 가이드](docs/MIGRATION.md)
+[시작하기](#빠른-시작) • [문서](https://yeachan-heo.github.io/oh-my-claudecode-website) • [CLI 레퍼런스](https://yeachan-heo.github.io/oh-my-claudecode-website/docs.html#cli-reference) • [워크플로우](https://yeachan-heo.github.io/oh-my-claudecode-website/docs.html#workflows) • [마이그레이션 가이드](docs/MIGRATION.md) • [Discord](https://discord.gg/PUwSMR9XNk)
 
 ---
 
@@ -30,6 +31,10 @@
 ```bash
 /omc-setup
 ```
+
+`omc --plugin-dir <path>` 또는 `claude --plugin-dir <path>`를 통해 OMC를 실행하는 경우 `omc setup`에 `--plugin-dir-mode`를 추가합니다(또는 미리 `OMC_PLUGIN_ROOT` 내보내기). 이렇게 하면 플러그인이 이미 런타임에 제공하는 스킬/에이전트가 중복되지 않습니다. 완전한 결정 매트릭스 및 사용 가능한 모든 플래그는 [REFERENCE.md의 Plugin directory flags 섹션](./docs/REFERENCE.md#plugin-directory-flags)을 참조하세요.
+
+<!-- TODO(i18n): verify translation -->
 
 **Step 3: 무언가 만들기**
 ```
@@ -168,8 +173,42 @@ omc team shutdown auth-review
 
 - **매직 키워드** - 명시적 제어를 위한 `ralph`, `ulw`, `team`
 - **HUD 상태바** - 상태바에서 실시간 오케스트레이션 메트릭 확인
+  - Claude Code를 `claude --plugin-dir <path>`로 직접 시작하는 경우 (OMC shim 우회), shell에서 `OMC_PLUGIN_ROOT=<path>`를 내보내 HUD 번들이 plugin 로더와 동일한 checkout으로 확인되도록 하세요. 자세한 내용은 [REFERENCE.md의 Plugin directory flags 섹션](./docs/REFERENCE.md#plugin-directory-flags)을 참조하세요.
+
+  <!-- TODO(i18n): verify translation -->
 - **스킬 학습** - 세션에서 재사용 가능한 패턴 추출
 - **분석 및 비용 추적** - 모든 세션의 토큰 사용량 이해
+
+### 기여
+
+OMC에 기여하고 싶으신가요? [CONTRIBUTING.md](./CONTRIBUTING.md)에서 포킹, 로컬 checkout 설정, 활성 플러그인으로 연결, 테스트 실행, PR 제출 등을 포함한 완전한 개발자 가이드를 참조하세요.
+
+<!-- TODO(i18n): verify translation -->
+
+### 커스텀 스킬
+
+한 번 배운 것을 영원히 재사용합니다. OMC는 디버깅 과정에서 얻은 실전 지식을 이식 가능한 스킬 파일로 추출하고, 관련 상황에서 자동으로 주입합니다.
+
+| | 프로젝트 스코프 | 사용자 스코프 |
+|---|---|---|
+| **경로** | `.omc/skills/` | `~/.omc/skills/` |
+| **공유 대상** | 팀 (버전 관리됨) | 모든 프로젝트에서 사용 |
+| **우선순위** | 높음 (사용자 스코프를 오버라이드) | 낮음 (폴백) |
+
+```yaml
+# .omc/skills/fix-proxy-crash.md
+---
+name: Fix Proxy Crash
+description: aiohttp proxy crashes on ClientDisconnectedError
+triggers: ["proxy", "aiohttp", "disconnected"]
+source: extracted
+---
+server.py:42의 핸들러를 try/except ClientDisconnectedError로 감싸세요...
+```
+
+**스킬 관리:** `/skill list | add | remove | edit | search`
+**자동 학습:** `/learner`가 엄격한 품질 기준으로 재사용 가능한 패턴을 추출합니다
+**자동 주입:** 매칭되는 스킬이 컨텍스트에 자동으로 로드됩니다 — 수동 호출 불필요
 
 [전체 기능 목록 →](docs/REFERENCE.md)
 
@@ -235,6 +274,66 @@ omc config-stop-callback discord --clear-tags
 - Discord: `@here`, `@everyone`, 숫자 사용자 ID, `role:<id>` 지원
 - Slack: `<@MEMBER_ID>`, `<!channel>`, `<!here>`, `<!everyone>`, `<!subteam^GROUP_ID>` 지원
 - `file` 콜백은 태그 옵션을 무시합니다
+
+### OpenClaw 연동
+
+Claude Code 세션 이벤트를 [OpenClaw](https://openclaw.ai/) 게이트웨이로 전달하여 OpenClaw 에이전트를 통한 자동화된 응답 및 워크플로우를 구성할 수 있습니다.
+
+**빠른 설정 (권장):**
+
+```bash
+/oh-my-claudecode:configure-notifications
+# → 프롬프트에서 "openclaw" 입력 → "OpenClaw Gateway" 선택
+```
+
+**수동 설정:** `~/.claude/omc_config.openclaw.json` 파일을 생성합니다:
+
+```json
+{
+  "enabled": true,
+  "gateways": {
+    "my-gateway": {
+      "url": "https://your-gateway.example.com/wake",
+      "headers": { "Authorization": "Bearer YOUR_TOKEN" },
+      "method": "POST",
+      "timeout": 10000
+    }
+  },
+  "hooks": {
+    "session-start": { "gateway": "my-gateway", "instruction": "Session started for {{projectName}}", "enabled": true },
+    "stop":          { "gateway": "my-gateway", "instruction": "Session stopping for {{projectName}}", "enabled": true }
+  }
+}
+```
+
+**환경 변수:**
+
+| 변수 | 설명 |
+|------|------|
+| `OMC_OPENCLAW=1` | OpenClaw 활성화 |
+| `OMC_OPENCLAW_DEBUG=1` | 디버그 로그 활성화 |
+| `OMC_OPENCLAW_CONFIG=/path/to/config.json` | 설정 파일 경로 변경 |
+
+**지원되는 훅 이벤트 (bridge.ts에서 6개 활성):**
+
+| 이벤트 | 트리거 시점 | 주요 템플릿 변수 |
+|--------|------------|-----------------|
+| `session-start` | 세션 시작 시 | `{{sessionId}}`, `{{projectName}}`, `{{projectPath}}` |
+| `stop` | Claude 응답 완료 시 | `{{sessionId}}`, `{{projectName}}` |
+| `keyword-detector` | 프롬프트 제출마다 | `{{prompt}}`, `{{sessionId}}` |
+| `ask-user-question` | Claude가 사용자 입력 요청 시 | `{{question}}`, `{{sessionId}}` |
+| `pre-tool-use` | 툴 호출 전 (빈도 높음) | `{{toolName}}`, `{{sessionId}}` |
+| `post-tool-use` | 툴 호출 후 (빈도 높음) | `{{toolName}}`, `{{sessionId}}` |
+
+**Reply Channel 환경 변수:**
+
+| 변수 | 설명 |
+|------|------|
+| `OPENCLAW_REPLY_CHANNEL` | 응답 채널 (예: `discord`) |
+| `OPENCLAW_REPLY_TARGET` | 채널 ID |
+| `OPENCLAW_REPLY_THREAD` | 스레드 ID |
+
+OpenClaw 페이로드를 ClawdBot을 통해 Discord에 전달하는 레퍼런스 게이트웨이는 `scripts/openclaw-gateway-demo.mjs`를 참고하세요.
 
 ---
 

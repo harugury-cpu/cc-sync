@@ -1,7 +1,7 @@
 /**
  * Multi-language Support Module
  * @module lib/intent/language
- * @version 1.4.7
+ * @version 2.0.0
  */
 
 /**
@@ -73,6 +73,16 @@ const AGENT_TRIGGER_PATTERNS = {
     de: ['Team', 'Teamleiter', 'CTO', 'Team-Modus'],
     it: ['team', 'leader del team', 'CTO', 'modalità team']
   },
+  'pm-lead': {
+    en: ['pm', 'product discovery', 'PRD', 'market analysis', 'product management'],
+    ko: ['PM 분석', '제품 기획', '제품 발견', 'PM팀', 'PRD 작성'],
+    ja: ['PM分析', 'プロダクト分析', '製品企画', 'PRD作成'],
+    zh: ['产品分析', '产品发现', '产品管理', 'PRD编写'],
+    es: ['análisis PM', 'descubrimiento de producto', 'gestión de producto'],
+    fr: ['analyse PM', 'découverte produit', 'gestion de produit'],
+    de: ['PM-Analyse', 'Produktentdeckung', 'Produktmanagement'],
+    it: ['analisi PM', 'scoperta prodotto', 'gestione prodotto']
+  },
   'bkend-expert': {
     en: ['bkend', 'BaaS', 'backend service', 'database setup', 'user auth', 'file upload', 'REST API', 'signup feature', 'login feature'],
     ko: ['bkend', '백엔드 서비스', '데이터베이스 설정', '사용자 인증', '파일 업로드', '회원가입 기능', '로그인 기능'],
@@ -82,6 +92,30 @@ const AGENT_TRIGGER_PATTERNS = {
     fr: ['bkend', 'service backend', 'base de données', 'authentification', 'téléchargement'],
     de: ['bkend', 'Backend-Dienst', 'Datenbank-Setup', 'Authentifizierung', 'Datei-Upload'],
     it: ['bkend', 'servizio backend', 'database', 'autenticazione', 'caricamento file']
+  }
+};
+
+// v1.5.7: CC Built-in Command Awareness Patterns
+const CC_COMMAND_PATTERNS = {
+  'simplify': {
+    en: ['simplify', 'clean up code', 'refactor', 'code cleanup', 'reduce complexity'],
+    ko: ['정리', '코드 정리', '리팩터', '복잡도 줄이기', '간소화'],
+    ja: ['簡素化', 'コード整理', 'リファクタ', '複雑度削減'],
+    zh: ['简化', '代码整理', '重构', '降低复杂度'],
+    es: ['simplificar', 'limpiar código', 'refactorizar'],
+    fr: ['simplifier', 'nettoyer le code', 'refactoriser'],
+    de: ['vereinfachen', 'Code aufräumen', 'refaktorieren'],
+    it: ['semplificare', 'pulire codice', 'rifattorizzare']
+  },
+  'batch': {
+    en: ['batch', 'multiple features', 'bulk process', 'parallel PDCA'],
+    ko: ['배치', '다중 피처', '일괄 처리', '병렬 PDCA'],
+    ja: ['バッチ', '複数機能', '一括処理', '並列PDCA'],
+    zh: ['批量', '多功能', '批处理', '并行PDCA'],
+    es: ['lote', 'múltiples funciones', 'procesamiento masivo'],
+    fr: ['lot', 'fonctionnalités multiples', 'traitement par lots'],
+    de: ['Batch', 'mehrere Funktionen', 'Massenverarbeitung'],
+    it: ['batch', 'funzionalità multiple', 'elaborazione in blocco']
   }
 };
 
@@ -132,6 +166,28 @@ const SKILL_TRIGGER_PATTERNS = {
 };
 
 /**
+ * Latin-script stopword dictionaries for language disambiguation.
+ * Chosen to be language-exclusive within the 4 target languages (ES/FR/DE/IT)
+ * so single-hit matches are meaningful signals.
+ */
+const LATIN_STOPWORDS = {
+  es: ['por', 'para', 'este', 'esta', 'esto', 'pero', 'cómo', 'qué', 'muy', 'está', 'código', 'ayúdame', 'gracias'],
+  fr: ['vous', 'pour', 'avec', 'sans', 'mais', 'où', 'plaît', 'aidez', 'moi', "s'il", 'déboguer', 'nous', 'avons'],
+  de: ['bitte', 'hilf', 'mir', 'diesen', 'dieser', 'sein', 'ich', 'und', 'nicht', 'auch', 'mit', 'zum', 'für'],
+  it: ['favore', 'aiutami', 'questo', 'questa', 'eseguire', 'sono', 'anche', 'della', 'degli', 'molto', 'ogni', 'fino']
+};
+
+/**
+ * Diacritic/sequence hints. Ordered from most language-specific to general.
+ */
+const LATIN_DIACRITIC_HINTS = [
+  { lang: 'es', re: /[ñ¿¡]/ },
+  { lang: 'de', re: /[äöüß]/i },
+  { lang: 'fr', re: /[çœæ]|\bs'[a-zàâäéèêëîïôöùûüÿ]/i },
+  { lang: 'it', re: /\b(gli|della|dello|degli|delle)\b/i }
+];
+
+/**
  * Detect language from text
  * @param {string} text
  * @returns {string}
@@ -147,6 +203,31 @@ function detectLanguage(text) {
 
   // Chinese detection (CJK Unified Ideographs, not Korean/Japanese)
   if (/[\u4E00-\u9FFF]/.test(text) && !/[\uAC00-\uD7AF\u3040-\u30FF]/.test(text)) return 'zh';
+
+  // Latin-script disambiguation (ES/FR/DE/IT) via stopword + diacritic scoring
+  const lower = text.toLowerCase();
+  const tokens = lower.split(/[^a-zàâäáãåāéèêëēíìîïīñóòôöõøœúùûüūÿçß'-]+/).filter(Boolean);
+  if (tokens.length > 0) {
+    const scores = { es: 0, fr: 0, de: 0, it: 0 };
+    for (const token of tokens) {
+      for (const lang of Object.keys(scores)) {
+        if (LATIN_STOPWORDS[lang].includes(token)) scores[lang]++;
+      }
+    }
+    for (const hint of LATIN_DIACRITIC_HINTS) {
+      if (hint.re.test(lower)) scores[hint.lang]++;
+    }
+    let bestLang = 'en';
+    let bestScore = 0;
+    for (const lang of ['es', 'fr', 'de', 'it']) {
+      if (scores[lang] > bestScore) {
+        bestScore = scores[lang];
+        bestLang = lang;
+      }
+    }
+    // Require ≥1 hit to avoid false positives on neutral English text
+    if (bestScore >= 1) return bestLang;
+  }
 
   // Default to English
   return 'en';
@@ -194,6 +275,7 @@ module.exports = {
   SUPPORTED_LANGUAGES,
   AGENT_TRIGGER_PATTERNS,
   SKILL_TRIGGER_PATTERNS,
+  CC_COMMAND_PATTERNS,
   detectLanguage,
   getAllPatterns,
   matchMultiLangPattern,

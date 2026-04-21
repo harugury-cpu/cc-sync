@@ -11,7 +11,7 @@
  * @see https://github.com/anthropics/oh-my-claudecode/issues/1047
  */
 
-import { execFile } from 'child_process';
+import { tmuxExecAsync } from '../cli/tmux-utils.js';
 import { paneLooksReady, paneHasActiveTask, sendToWorker } from './tmux-session.js';
 
 // ---------------------------------------------------------------------------
@@ -30,7 +30,7 @@ export interface NudgeConfig {
 export const DEFAULT_NUDGE_CONFIG: NudgeConfig = {
   delayMs: 30_000,
   maxCount: 3,
-  message: 'Continue working on your assigned task.',
+  message: 'Continue working on your assigned task and report concrete progress (not ACK-only).',
 };
 
 // ---------------------------------------------------------------------------
@@ -38,13 +38,13 @@ export const DEFAULT_NUDGE_CONFIG: NudgeConfig = {
 // ---------------------------------------------------------------------------
 
 /** Capture the last 80 lines of a tmux pane. Returns '' on error. */
-export function capturePane(paneId: string): Promise<string> {
-  return new Promise((resolve) => {
-    execFile('tmux', ['capture-pane', '-t', paneId, '-p', '-S', '-80'], (err, stdout) => {
-      if (err) resolve('');
-      else resolve(stdout ?? '');
-    });
-  });
+export async function capturePane(paneId: string): Promise<string> {
+  try {
+    const result = await tmuxExecAsync(['capture-pane', '-t', paneId, '-p', '-S', '-80']);
+    return result.stdout ?? '';
+  } catch {
+    return '';
+  }
 }
 
 /**

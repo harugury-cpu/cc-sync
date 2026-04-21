@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Insane Design — Design System Gallery</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+  :root {
+    --font-sans: "Pretendard Variable", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --bg:#fafafa; --fg:#09090b; --card:#fff;
+    --muted:#f4f4f5; --muted-fg:#71717a; --subtle:#52525b;
+    --border:#e4e4e7; --border-str:#d4d4d8;
+    --accent:#18181b;
+    --radius:.5rem; --radius-lg:.75rem;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    font-family:var(--font-sans);
+    font-feature-settings:"ss01" 1,"ss02" 1;
+    font-size:14px;font-weight:400;line-height:1.6;
+    color:var(--fg);background:var(--bg);
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    word-break:keep-all;overflow-wrap:break-word;
+  }
+  ::selection{background:var(--accent);color:#fafafa;}
+  a{color:inherit;text-decoration:none;}
+  code{font-family:var(--font-mono);font-size:.85em;}
+
+  .header{
+    max-width:1280px;margin:0 auto;
+    padding:80px 48px 48px;
+  }
+  .header__eye{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:5px 12px;background:var(--muted);border:1px solid var(--border);
+    border-radius:999px;font-family:var(--font-mono);font-size:11px;
+    color:var(--subtle);margin-bottom:24px;
+  }
+  .header__eye .dot{width:6px;height:6px;border-radius:99px;background:var(--accent);}
+  .header__title{
+    font-size:40px;font-weight:600;letter-spacing:-.03em;
+    line-height:1.15;margin-bottom:14px;
+  }
+  .header__title .sub{color:var(--muted-fg);font-weight:400;}
+  .header__desc{
+    font-size:16px;color:var(--subtle);line-height:1.7;
+    max-width:640px;margin-bottom:40px;
+  }
+  .header__stats{
+    display:grid;grid-template-columns:repeat(3,auto);gap:0;
+    width:fit-content;
+    border:1px solid var(--border);border-radius:var(--radius-lg);
+    background:var(--card);overflow:hidden;margin-bottom:40px;
+  }
+  .stat{padding:16px 28px;border-right:1px solid var(--border);}
+  .stat:last-child{border-right:none;}
+  .stat__label{
+    font-family:var(--font-mono);font-size:10px;
+    color:var(--muted-fg);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:6px;
+  }
+  .stat__val{font-size:20px;font-weight:600;letter-spacing:-.01em;}
+
+  .search-bar{
+    max-width:1280px;margin:0 auto;
+    padding:0 48px 32px;
+  }
+  .search-bar input{
+    width:100%;max-width:400px;
+    padding:10px 16px;
+    font-family:var(--font-sans);font-size:14px;
+    color:var(--fg);background:var(--card);
+    border:1px solid var(--border);border-radius:var(--radius);
+    outline:none;transition:border-color 140ms;
+  }
+  .search-bar input:focus{border-color:var(--border-str);}
+  .search-bar input::placeholder{color:var(--muted-fg);}
+
+  .grid{
+    max-width:1280px;margin:0 auto;
+    padding:0 48px 80px;
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:16px;
+  }
+
+  .card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:var(--radius-lg);
+    overflow:hidden;
+    transition:border-color 200ms,box-shadow 200ms;
+    display:flex;flex-direction:column;
+  }
+  .card:hover{
+    border-color:var(--border-str);
+    box-shadow:0 4px 24px rgba(0,0,0,.06);
+  }
+  .card__img{
+    aspect-ratio:16/10;
+    overflow:hidden;
+    background:var(--muted);
+    border-bottom:1px solid var(--border);
+    position:relative;
+  }
+  .card__img img{
+    width:100%;height:100%;object-fit:cover;
+    transition:transform 300ms ease;
+  }
+  .card:hover .card__img img{transform:scale(1.03);}
+  .card__overlay{
+    position:absolute;inset:0;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(9,9,11,.5);
+    opacity:0;transition:opacity 200ms;
+  }
+  .card:hover .card__overlay{opacity:1;}
+  .card__overlay-btn{
+    padding:8px 20px;
+    background:var(--card);color:var(--fg);
+    border-radius:999px;font-size:13px;font-weight:500;
+    border:1px solid var(--border);
+    letter-spacing:-.01em;
+  }
+  .card__body{padding:16px 20px 20px;}
+  .card__name{font-size:15px;font-weight:600;letter-spacing:-.01em;margin-bottom:4px;}
+  .card__meta{
+    font-family:var(--font-mono);font-size:11px;
+    color:var(--muted-fg);
+  }
+
+  .empty{
+    grid-column:1/-1;
+    text-align:center;padding:80px 20px;
+    color:var(--muted-fg);
+  }
+  .empty__icon{font-size:32px;margin-bottom:12px;opacity:.4;}
+  .empty__text{font-size:14px;}
+
+  .footer{
+    max-width:1280px;margin:0 auto;
+    padding:32px 48px;
+    border-top:1px solid var(--border);
+    display:flex;align-items:center;justify-content:space-between;
+    font-family:var(--font-mono);font-size:11px;
+    color:var(--muted-fg);
+  }
+  .footer a{transition:color 140ms;}
+  .footer a:hover{color:var(--fg);}
+
+  @media(max-width:960px){
+    .grid{grid-template-columns:repeat(2,1fr);}
+    .header{padding:48px 24px 32px;}
+    .search-bar{padding:0 24px 24px;}
+    .grid{padding:0 24px 48px;}
+    .footer{padding:24px;}
+    .header__title{font-size:28px;}
+    .header__stats{grid-template-columns:repeat(3,auto);}
+  }
+  @media(max-width:560px){
+    .grid{grid-template-columns:1fr;}
+    .header__stats{grid-template-columns:1fr;}
+    .stat{border-right:none;border-bottom:1px solid var(--border);}
+    .stat:last-child{border-bottom:none;}
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header__eye"><span class="dot"></span>insane-design</div>
+  <h1 class="header__title">Design System Gallery <span class="sub">— 36 Services</span></h1>
+  <p class="header__desc">실제 서비스의 CSS를 분석해 추출한 디자인 시스템 리포트입니다. 각 리포트에는 색상 팔레트, 타이포그래피 스케일, 스페이싱 토큰, 컴포넌트 클래스가 포함되어 있습니다.</p>
+  <div class="header__stats">
+    <div class="stat">
+      <div class="stat__label">Services</div>
+      <div class="stat__val">36</div>
+    </div>
+    <div class="stat">
+      <div class="stat__label">Method</div>
+      <div class="stat__val" style="font-family:var(--font-mono);font-size:15px;">Real CSS</div>
+    </div>
+    <div class="stat">
+      <div class="stat__label">Output</div>
+      <div class="stat__val" style="font-family:var(--font-mono);font-size:15px;">design.md</div>
+    </div>
+  </div>
+</header>
+
+<div class="search-bar">
+  <input type="text" id="search" placeholder="서비스 검색..." />
+</div>
+
+<div class="grid" id="gallery"></div>
+
+<footer class="footer">
+  <span>insane-design — URL 하나 넣으면 디자인 시스템이 나온다</span>
+  <a href="https://github.com/fivetaku/insane-design" target="_blank" rel="noopener">github.com/fivetaku/insane-design</a>
+</footer>
+
+<script>
+const SERVICES = [
+  {slug:"atlassian",name:"Atlassian",img:"hero-cropped.png"},
+  {slug:"axiom",name:"Axiom",img:"hero-cropped.png"},
+  {slug:"cal",name:"Cal",img:"hero-cropped.png"},
+  {slug:"clerk",name:"Clerk",img:"hero-cropped.png"},
+  {slug:"contentful",name:"Contentful",img:"hero-cropped.png"},
+  {slug:"convex",name:"Convex",img:"hero-cropped.png"},
+  {slug:"discord",name:"Discord",img:"hero-cropped.png"},
+  {slug:"dub",name:"Dub",img:"hero-cropped.png"},
+  {slug:"figma",name:"Figma",img:"hero-cropped.png"},
+  {slug:"framer",name:"Framer",img:"hero-cropped.png"},
+  {slug:"github",name:"GitHub",img:"hero-cropped.png"},
+  {slug:"hashnode",name:"Hashnode",img:"hero-cropped.png"},
+  {slug:"lemon-squeezy",name:"Lemon Squeezy",img:"hero-cropped.png"},
+  {slug:"linear",name:"Linear",img:"hero-cropped.png"},
+  {slug:"mintlify",name:"Mintlify",img:"hero-cropped.png"},
+  {slug:"neon",name:"Neon",img:"hero-cropped.png"},
+  {slug:"notion",name:"Notion",img:"hero-cropped.png"},
+  {slug:"planetfall",name:"Planetfall",img:"hero-cropped.png"},
+  {slug:"planetscale",name:"PlanetScale",img:"hero-cropped.png"},
+  {slug:"posthog",name:"PostHog",img:"hero-cropped.png"},
+  {slug:"prisma",name:"Prisma",img:"hero-cropped.png"},
+  {slug:"railway",name:"Railway",img:"hero-cropped.png"},
+  {slug:"raycast",name:"Raycast",img:"hero-cropped.png"},
+  {slug:"resend",name:"Resend",img:"hero-cropped.png"},
+  {slug:"retool",name:"Retool",img:"hero-cropped.png"},
+  {slug:"shopify",name:"Shopify",img:"hero-cropped.png"},
+  {slug:"slack",name:"Slack",img:"hero-cropped.png"},
+  {slug:"spotify",name:"Spotify",img:"hero-cropped.png"},
+  {slug:"stripe",name:"Stripe",img:"hero-cropped.png"},
+  {slug:"supabase",name:"Supabase",img:"hero-cropped.png"},
+  {slug:"tailwindcss",name:"Tailwind CSS",img:"hero-cropped.png"},
+  {slug:"tinybird",name:"Tinybird",img:"hero-cropped.png"},
+  {slug:"toss",name:"Toss",img:"hero-cropped.png"},
+  {slug:"twitch",name:"Twitch",img:"hero-cropped.png"},
+  {slug:"vercel",name:"Vercel",img:"hero-cropped.png"},
+  {slug:"warp",name:"Warp",img:"hero-cropped.png"}
+];
+
+const BASE = "skills/insane-design/examples";
+const gallery = document.getElementById("gallery");
+const search = document.getElementById("search");
+
+function render(list) {
+  gallery.innerHTML = "";
+  if (!list.length) {
+    const el = document.createElement("div");
+    el.className = "empty";
+    const icon = document.createElement("div");
+    icon.className = "empty__icon";
+    icon.textContent = "∅";
+    const txt = document.createElement("div");
+    txt.className = "empty__text";
+    txt.textContent = "검색 결과가 없습니다";
+    el.appendChild(icon);
+    el.appendChild(txt);
+    gallery.appendChild(el);
+    return;
+  }
+  list.forEach(s => {
+    const a = document.createElement("a");
+    a.className = "card";
+    a.href = BASE + "/" + s.slug + "/report.ko.html";
+    a.dataset.name = s.slug + " " + s.name.toLowerCase();
+
+    a.innerHTML =
+      '<div class="card__img">' +
+        '<img loading="lazy" alt="' + s.name + '" src="' + BASE + '/' + s.slug + '/screenshots/' + s.img + '" />' +
+        '<div class="card__overlay"><span class="card__overlay-btn">리포트 보기</span></div>' +
+      '</div>' +
+      '<div class="card__body">' +
+        '<div class="card__name">' + s.name + '</div>' +
+        '<div class="card__meta">' + s.slug + ' · report.ko.html</div>' +
+      '</div>';
+
+    gallery.appendChild(a);
+  });
+}
+
+search.addEventListener("input", function() {
+  const q = this.value.toLowerCase().trim();
+  if (!q) { render(SERVICES); return; }
+  render(SERVICES.filter(s => s.slug.includes(q) || s.name.toLowerCase().includes(q)));
+});
+
+render(SERVICES);
+</script>
+</body>
+</html>

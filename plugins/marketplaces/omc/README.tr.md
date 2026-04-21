@@ -7,12 +7,13 @@
 [![GitHub stars](https://img.shields.io/github/stars/Yeachan-Heo/oh-my-claudecode?style=flat&color=yellow)](https://github.com/Yeachan-Heo/oh-my-claudecode/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Sponsor](https://img.shields.io/badge/Sponsor-❤️-red?style=flat&logo=github)](https://github.com/sponsors/Yeachan-Heo)
+[![Discord](https://img.shields.io/discord/1452487457085063218?color=5865F2&logo=discord&logoColor=white&label=Discord)](https://discord.gg/PUwSMR9XNk)
 
 **Claude Code için çoklu ajan orkestrasyonu. Sıfır öğrenme eğrisi.**
 
 _Claude Code'u öğrenmeyin. Sadece OMC kullanın._
 
-[Başlangıç](#hızlı-başlangıç) • [Dokümantasyon](https://yeachan-heo.github.io/oh-my-claudecode-website) • [Geçiş Rehberi](docs/MIGRATION.md)
+[Başlangıç](#hızlı-başlangıç) • [Dokümantasyon](https://yeachan-heo.github.io/oh-my-claudecode-website) • [Geçiş Rehberi](docs/MIGRATION.md) • [Discord](https://discord.gg/PUwSMR9XNk)
 
 ---
 
@@ -30,6 +31,10 @@ _Claude Code'u öğrenmeyin. Sadece OMC kullanın._
 ```bash
 /oh-my-claudecode:omc-setup
 ```
+
+OMC'yi `omc --plugin-dir <path>` veya `claude --plugin-dir <path>` aracılığıyla çalıştırıyorsanız, `omc setup`'a `--plugin-dir-mode` ekleyin (veya `OMC_PLUGIN_ROOT`'u önceden dışa aktarın) böylece plugin zaten çalışma zamanında sağlayan beceri/ajanları duplike etmez. Tam karar matrisi ve mevcut tüm bayraklar için [REFERENCE.md'deki Plugin directory flags bölümüne](./docs/REFERENCE.md#plugin-directory-flags) bakın.
+
+<!-- TODO(i18n): verify translation -->
 
 **Adım 3: Bir şey oluşturun**
 
@@ -128,8 +133,42 @@ Farklı kullanım senaryoları için birden fazla strateji — Team destekli ork
 
 - **Sihirli anahtar kelimeler** — Açık kontrol için `ralph`, `ulw`, `eco`, `plan`
 - **HUD statusline** — Durum çubuğunuzda gerçek zamanlı orkestrasyon metrikleri
+  - Claude Code'u doğrudan `claude --plugin-dir <path>` ile başlatıyorsanız (`omc` shim'i atlayarak), shell'de `OMC_PLUGIN_ROOT=<path>` dışa aktarın, böylece HUD paketi plugin yükleyici ile aynı checkout'a çözülür. Ayrıntılar için [REFERENCE.md'deki Plugin directory flags bölümüne](./docs/REFERENCE.md#plugin-directory-flags) bakın.
+
+  <!-- TODO(i18n): verify translation -->
 - **Beceri öğrenimi** — Oturumlarınızdan yeniden kullanılabilir kalıplar çıkarın
 - **Analitik ve maliyet takibi** — Tüm oturumlardaki token kullanımını anlayın
+
+### Katkıda Bulunma
+
+OMC'ye katkıda bulunmak ister misiniz? Fork etme, yerel checkout kurma, etkin eklenti olarak bağlama, testleri çalıştırma ve PR gönderme dahil olmak üzere tam geliştirici kılavuzu için [CONTRIBUTING.md](./CONTRIBUTING.md)'ye bakın.
+
+<!-- TODO(i18n): verify translation -->
+
+### Özel Beceriler
+
+Bir kez öğrenin, sonsuza kadar yeniden kullanın. OMC, hata ayıklama sürecinde kazanılan değerli bilgiyi taşınabilir beceri dosyalarına çıkarır ve ilgili durumlarda otomatik olarak enjekte eder.
+
+| | Proje Kapsamı | Kullanıcı Kapsamı |
+|---|---|---|
+| **Yol** | `.omc/skills/` | `~/.omc/skills/` |
+| **Paylaşım** | Takım (sürüm kontrollü) | Tüm projeleriniz |
+| **Öncelik** | Yüksek (kullanıcı kapsamını geçersiz kılar) | Düşük (yedek) |
+
+```yaml
+# .omc/skills/fix-proxy-crash.md
+---
+name: Fix Proxy Crash
+description: aiohttp proxy crashes on ClientDisconnectedError
+triggers: ["proxy", "aiohttp", "disconnected"]
+source: extracted
+---
+server.py:42'deki handler'ı try/except ClientDisconnectedError ile sarın...
+```
+
+**Beceri yönetimi:** `/skill list | add | remove | edit | search`
+**Otomatik öğrenme:** `/learner` katı kalite standartlarıyla yeniden kullanılabilir kalıplar çıkarır
+**Otomatik enjeksiyon:** Eşleşen beceriler otomatik olarak bağlama yüklenir — manuel çağrı gerekmez
 
 [Tam özellik listesi →](docs/REFERENCE.md)
 
@@ -190,6 +229,66 @@ Etiket davranışı:
 - Telegram: `alice`, `@alice` olarak normalleştirilir
 - Discord: `@here`, `@everyone`, sayısal kullanıcı kimlikleri ve `role:<id>` desteklenir
 - `file` callback'leri etiket seçeneklerini yok sayar
+
+### OpenClaw Entegrasyonu
+
+Claude Code oturum olaylarını bir [OpenClaw](https://openclaw.ai/) ağ geçidine ileterek OpenClaw ajanınız aracılığıyla otomatik yanıtlar ve iş akışları oluşturun.
+
+**Hızlı kurulum (önerilen):**
+
+```bash
+/oh-my-claudecode:configure-notifications
+# → İstendiğinde "openclaw" yazın → "OpenClaw Gateway" seçin
+```
+
+**Manuel kurulum:** `~/.claude/omc_config.openclaw.json` dosyasını oluşturun:
+
+```json
+{
+  "enabled": true,
+  "gateways": {
+    "my-gateway": {
+      "url": "https://your-gateway.example.com/wake",
+      "headers": { "Authorization": "Bearer YOUR_TOKEN" },
+      "method": "POST",
+      "timeout": 10000
+    }
+  },
+  "hooks": {
+    "session-start": { "gateway": "my-gateway", "instruction": "Session started for {{projectName}}", "enabled": true },
+    "stop":          { "gateway": "my-gateway", "instruction": "Session stopping for {{projectName}}", "enabled": true }
+  }
+}
+```
+
+**Ortam değişkenleri:**
+
+| Değişken | Açıklama |
+|----------|----------|
+| `OMC_OPENCLAW=1` | OpenClaw'ı etkinleştir |
+| `OMC_OPENCLAW_DEBUG=1` | Hata ayıklama günlüklemesini etkinleştir |
+| `OMC_OPENCLAW_CONFIG=/path/to/config.json` | Yapılandırma dosyası yolunu değiştir |
+
+**Desteklenen hook olayları (bridge.ts'de 6 aktif):**
+
+| Olay | Tetikleyici | Ana şablon değişkenleri |
+|------|------------|------------------------|
+| `session-start` | Oturum başladığında | `{{sessionId}}`, `{{projectName}}`, `{{projectPath}}` |
+| `stop` | Claude yanıtı tamamlandığında | `{{sessionId}}`, `{{projectName}}` |
+| `keyword-detector` | Her prompt gönderiminde | `{{prompt}}`, `{{sessionId}}` |
+| `ask-user-question` | Claude kullanıcı girişi istediğinde | `{{question}}`, `{{sessionId}}` |
+| `pre-tool-use` | Araç çağrısından önce (yüksek sıklık) | `{{toolName}}`, `{{sessionId}}` |
+| `post-tool-use` | Araç çağrısından sonra (yüksek sıklık) | `{{toolName}}`, `{{sessionId}}` |
+
+**Yanıt kanalı ortam değişkenleri:**
+
+| Değişken | Açıklama |
+|----------|----------|
+| `OPENCLAW_REPLY_CHANNEL` | Yanıt kanalı (ör. `discord`) |
+| `OPENCLAW_REPLY_TARGET` | Kanal ID'si |
+| `OPENCLAW_REPLY_THREAD` | Thread ID'si |
+
+OpenClaw yüklerini ClawdBot aracılığıyla Discord'a ileten bir referans gateway için `scripts/openclaw-gateway-demo.mjs` dosyasına bakın.
 
 ---
 

@@ -7,15 +7,16 @@
  */
 
 import { existsSync, readFileSync, readdirSync, rmSync, mkdirSync, writeFileSync, symlinkSync, lstatSync, readlinkSync, unlinkSync, renameSync } from 'fs';
-import { join, dirname } from 'path';
-import { homedir } from 'os';
+import { join, dirname, basename } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { getClaudeConfigDir } from './lib/config-dir.mjs';
+import { resolveOmcStateRoot } from './lib/state-root.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 /** Claude config directory (respects CLAUDE_CONFIG_DIR env var) */
-const configDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
+const configDir = getClaudeConfigDir();
 
 // Import timeout-protected stdin reader (prevents hangs on Linux/Windows, see issue #240, #524)
 let readStdin;
@@ -45,6 +46,89 @@ function readJsonFile(path) {
   } catch {
     return null;
   }
+}
+
+function getRuntimeBaseDir() {
+  return process.env.CLAUDE_PLUGIN_ROOT || join(__dirname, '..');
+}
+
+async function loadProjectMemoryModules() {
+  try {
+    const runtimeBase = getRuntimeBaseDir();
+    const [
+      projectMemoryStorage,
+      projectMemoryDetector,
+      projectMemoryFormatter,
+      rulesFinder,
+    ] = await Promise.all([
+      import(pathToFileURL(join(runtimeBase, 'dist', 'hooks', 'project-memory', 'storage.js')).href),
+      import(pathToFileURL(join(runtimeBase, 'dist', 'hooks', 'project-memory', 'detector.js')).href),
+      import(pathToFileURL(join(runtimeBase, 'dist', 'hooks', 'project-memory', 'formatter.js')).href),
+      import(pathToFileURL(join(runtimeBase, 'dist', 'hooks', 'rules-injector', 'finder.js')).href),
+    ]);
+
+    return {
+      loadProjectMemory: projectMemoryStorage.loadProjectMemory,
+      saveProjectMemory: projectMemoryStorage.saveProjectMemory,
+      shouldRescan: projectMemoryStorage.shouldRescan,
+      detectProjectEnvironment: projectMemoryDetector.detectProjectEnvironment,
+      formatContextSummary: projectMemoryFormatter.formatContextSummary,
+      findProjectRoot: rulesFinder.findProjectRoot,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function hasProjectMemoryContent(memory) {
+  return Boolean(
+    memory &&
+    (
+      memory.userDirectives?.length ||
+      memory.customNotes?.length ||
+      memory.hotPaths?.length ||
+      memory.techStack?.languages?.length ||
+      memory.techStack?.frameworks?.length ||
+      memory.build?.buildCommand ||
+      memory.build?.testCommand
+    )
+  );
+}
+
+async function resolveProjectMemorySummary(directory, projectMemoryModules) {
+  const {
+    detectProjectEnvironment,
+    findProjectRoot,
+    formatContextSummary,
+    loadProjectMemory,
+    saveProjectMemory,
+    shouldRescan,
+  } = projectMemoryModules;
+
+  const projectRoot = findProjectRoot?.(directory);
+  if (!projectRoot) {
+    return '';
+  }
+
+  let memory = await loadProjectMemory?.(projectRoot);
+
+  if ((!memory || shouldRescan?.(memory)) && detectProjectEnvironment && saveProjectMemory) {
+    const existing = memory;
+    memory = await detectProjectEnvironment(projectRoot);
+
+    if (existing) {
+      memory.customNotes = existing.customNotes;
+      memory.userDirectives = existing.userDirectives;
+    }
+
+    await saveProjectMemory(projectRoot, memory);
+  }
+
+  if (!hasProjectMemoryContent(memory)) {
+    return '';
+  }
+
+  return formatContextSummary(memory)?.trim() || '';
 }
 
 // Semantic version comparison (for cache cleanup sorting)
@@ -173,13 +257,12 @@ async function checkNpmUpdate(currentVersion) {
   } catch {}
 
   // Fetch from npm registry with 2s timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 2000);
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
-    const response = await fetch('https://registry.npmjs.org/oh-my-claudecode/latest', {
+    const response = await fetch('https://registry.npmjs.org/oh-my-claude-sisyphus/latest', {
       signal: controller.signal
     });
-    clearTimeout(timeoutId);
     if (!response.ok) return null;
 
     const data = await response.json();
@@ -194,7 +277,7 @@ async function checkNpmUpdate(currentVersion) {
     } catch {}
 
     return updateAvailable ? { currentVersion, latestVersion } : null;
-  } catch { return null; }
+  } catch { return null; } finally { clearTimeout(timeoutId); }
 }
 
 // Check if HUD is properly installed (with retry for race conditions)
@@ -290,7 +373,9 @@ async function main() {
 
     const directory = data.cwd || data.directory || process.cwd();
     const sessionId = data.session_id || data.sessionId || '';
+    const omcRoot = await resolveOmcStateRoot(directory);
     const messages = [];
+    const projectMemoryModules = await loadProjectMemoryModules();
 
     // Check for version drift between components
     const driftInfo = detectVersionDrift();
@@ -315,6 +400,17 @@ async function main() {
       }
     } catch {}
 
+    // Warn if silentAutoUpdate is enabled but running in plugin mode (#1773)
+    if (process.env.CLAUDE_PLUGIN_ROOT) {
+      try {
+        const omcConfigPath = join(configDir, '.omc-config.json');
+        const omcConfig = readJsonFile(omcConfigPath);
+        if (omcConfig?.silentAutoUpdate) {
+          messages.push(`<session-restore>\n\n[OMC] silentAutoUpdate is enabled in .omc-config.json but has no effect in plugin mode.\nTo update, use: /plugin marketplace update omc && /omc-setup\nOr run manually: omc update\n\n</session-restore>\n\n---\n`);
+        }
+      } catch {}
+    }
+
     // Check HUD installation (one-time setup guidance)
     const hudCheck = await checkHudInstallation();
     if (!hudCheck.installed) {
@@ -328,14 +424,14 @@ async function main() {
     let ultraworkState = null;
     if (sessionId && /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,255}$/.test(sessionId)) {
       // Session-scoped ONLY — no legacy fallback
-      ultraworkState = readJsonFile(join(directory, '.omc', 'state', 'sessions', sessionId, 'ultrawork-state.json'));
+      ultraworkState = readJsonFile(join(omcRoot, 'state', 'sessions', sessionId, 'ultrawork-state.json'));
       // Validate session identity
       if (ultraworkState && ultraworkState.session_id && ultraworkState.session_id !== sessionId) {
         ultraworkState = null;
       }
     } else {
       // No session_id — legacy behavior for backward compat
-      ultraworkState = readJsonFile(join(directory, '.omc', 'state', 'ultrawork-state.json'));
+      ultraworkState = readJsonFile(join(omcRoot, 'state', 'ultrawork-state.json'));
     }
 
     if (ultraworkState?.active) {
@@ -346,7 +442,7 @@ async function main() {
 You have an active ultrawork session from ${ultraworkState.started_at}.
 Original task: ${ultraworkState.original_prompt}
 
-Continue working in ultrawork mode until all tasks are complete.
+Treat this as prior-session context only. Prioritize the user's newest request, and resume ultrawork only if the user explicitly asks to continue it.
 
 </session-restore>
 
@@ -359,16 +455,16 @@ Continue working in ultrawork mode until all tasks are complete.
     let ralphState = null;
     if (sessionId && /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,255}$/.test(sessionId)) {
       // Session-scoped ONLY — no legacy fallback
-      ralphState = readJsonFile(join(directory, '.omc', 'state', 'sessions', sessionId, 'ralph-state.json'));
+      ralphState = readJsonFile(join(omcRoot, 'state', 'sessions', sessionId, 'ralph-state.json'));
       // Validate session identity
       if (ralphState && ralphState.session_id && ralphState.session_id !== sessionId) {
         ralphState = null;
       }
     } else {
       // No session_id — legacy behavior for backward compat
-      ralphState = readJsonFile(join(directory, '.omc', 'state', 'ralph-state.json'));
+      ralphState = readJsonFile(join(omcRoot, 'state', 'ralph-state.json'));
       if (!ralphState) {
-        ralphState = readJsonFile(join(directory, '.omc', 'ralph-state.json'));
+        ralphState = readJsonFile(join(omcRoot, 'ralph-state.json'));
       }
     }
     if (ralphState?.active) {
@@ -380,7 +476,7 @@ You have an active ralph-loop session.
 Original task: ${ralphState.prompt || 'Task in progress'}
 Iteration: ${ralphState.iteration || 1}/${ralphState.max_iterations || 10}
 
-Continue working until the task is verified complete.
+Treat this as prior-session context only. Prioritize the user's newest request, and resume the ralph loop only if the user explicitly asks to continue it.
 
 </session-restore>
 
@@ -388,12 +484,14 @@ Continue working until the task is verified complete.
 `);
     }
 
-    // Check for incomplete todos (project-local only, not global ~/.claude/todos/)
-    // NOTE: We intentionally do NOT scan the global ~/.claude/todos/ directory.
+    // Check for incomplete todos (project-local only, not global
+    // [$CLAUDE_CONFIG_DIR|~/.claude]/todos/)
+    // NOTE: We intentionally do NOT scan the global
+    // [$CLAUDE_CONFIG_DIR|~/.claude]/todos/ directory.
     // That directory accumulates todo files from ALL past sessions across all
     // projects, causing phantom task counts in fresh sessions (see issue #354).
     const localTodoPaths = [
-      join(directory, '.omc', 'todos.json'),
+      join(omcRoot, 'todos.json'),
       join(directory, '.claude', 'todos.json')
     ];
     let incompleteCount = 0;
@@ -413,7 +511,7 @@ Continue working until the task is verified complete.
 [PENDING TASKS DETECTED]
 
 You have ${incompleteCount} incomplete tasks from a previous session.
-Please continue working on these tasks.
+Treat this as prior-session context only. Prioritize the user's newest request, and resume these tasks only if the user explicitly asks to continue them.
 
 </session-restore>
 
@@ -421,8 +519,28 @@ Please continue working on these tasks.
 `);
     }
 
+    if (projectMemoryModules) {
+      try {
+        const summary = await resolveProjectMemorySummary(directory, projectMemoryModules);
+        if (summary) {
+          messages.push(`<project-memory-context>
+
+[PROJECT MEMORY]
+
+${summary}
+
+</project-memory-context>
+
+---
+`);
+        }
+      } catch {
+        // Project memory is additive only; never break session start.
+      }
+    }
+
     // Check for notepad Priority Context
-    const notepadPath = join(directory, '.omc', 'notepad.md');
+    const notepadPath = join(omcRoot, 'notepad.md');
     if (existsSync(notepadPath)) {
       try {
         const notepadContent = readFileSync(notepadPath, 'utf-8');
@@ -449,8 +567,9 @@ ${cleanContent}
     // plugin update whose CLAUDE_PLUGIN_ROOT still points to the old version.
     try {
       const cacheBase = join(configDir, 'plugins', 'cache', 'omc', 'oh-my-claudecode');
+      let versions = [];
       if (existsSync(cacheBase)) {
-        const versions = readdirSync(cacheBase)
+        versions = readdirSync(cacheBase)
           .filter(v => /^\d+\.\d+\.\d+/.test(v))
           .sort(semverCompare)
           .reverse();
@@ -505,6 +624,43 @@ ${cleanContent}
               // lstatSync / rmSync / unlinkSync failure — leave old directory as-is.
             }
           }
+        }
+      }
+
+      // Guard against CLAUDE_PLUGIN_ROOT pointing to a stale/deleted version.
+      // When an old version directory is removed during upgrade but a running
+      // session still has the old CLAUDE_PLUGIN_ROOT in its environment, the
+      // directory won't exist. Create a symlink so subsequent hook invocations
+      // via run.cjs resolve correctly.
+      const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT?.replace(/[\/\\]+$/, ''); // strip trailing separators
+      if (pluginRoot && !existsSync(pluginRoot)) {
+        const pluginRootVersion = basename(pluginRoot);
+        if (/^\d+\.\d+\.\d+/.test(pluginRootVersion) && versions.length > 0) {
+          const latest = versions[0];
+          const stalePath = pluginRoot;
+          const isWin = process.platform === 'win32';
+          // Always use absolute path to avoid symlink target resolution issues
+          // when stalePath is not under cacheBase (e.g., after config-dir move)
+          const symlinkTarget = join(cacheBase, latest);
+          try {
+            // Atomic: create temp symlink then rename over stale path
+            const tmpLink = stalePath + '.tmp.' + process.pid;
+            // Ensure parent dir exists (stalePath may reference a deleted config tree)
+            const parentDir = dirname(stalePath);
+            if (!existsSync(parentDir)) {
+              try { mkdirSync(parentDir, { recursive: true }); } catch {}
+            }
+            symlinkSync(symlinkTarget, tmpLink, isWin ? 'junction' : undefined);
+            try {
+              renameSync(tmpLink, stalePath);
+            } catch {
+              try { unlinkSync(tmpLink); } catch {}
+              // Remove any pre-existing dangling symlink/junction at stalePath
+              // before recreating, otherwise symlinkSync throws EEXIST
+              try { unlinkSync(stalePath); } catch {}
+              symlinkSync(symlinkTarget, stalePath, isWin ? 'junction' : undefined);
+            }
+          } catch {}
         }
       }
     } catch {}

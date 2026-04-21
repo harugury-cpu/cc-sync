@@ -1,7 +1,7 @@
 /**
  * Context Management Module
  * @module lib/task/context
- * @version 1.4.7
+ * @version 2.0.0
  */
 
 // Lazy require

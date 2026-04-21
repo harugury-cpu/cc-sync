@@ -1,7 +1,7 @@
 ---
 template: analysis
-version: 1.2
-description: PDCA Check phase document template with Clean Architecture and Convention compliance checks
+version: 1.3
+description: PDCA Check phase document template with Context Anchor, Clean Architecture and Convention compliance checks
 variables:
   - feature: Feature name
   - date: Creation date (YYYY-MM-DD)
@@ -28,6 +28,51 @@ variables:
 | Phase 2 | [Conventions](../01-plan/conventions.md) | Convention compliance |
 | Phase 4 | [API Spec](../02-design/api/{feature}.md) | API implementation match |
 | Phase 8 | [Review Checklist](./phase-8-review.md) | Architecture/Convention review |
+
+---
+
+## Context Anchor
+
+> Carried from Plan → Design → Analysis. Verify implementation against strategic intent.
+
+| Key | Value |
+|-----|-------|
+| **WHY** | {copied from Design Context Anchor} |
+| **WHO** | {copied from Design Context Anchor} |
+| **RISK** | {copied from Design Context Anchor} |
+| **SUCCESS** | {copied from Design Context Anchor} |
+| **SCOPE** | {copied from Design Context Anchor} |
+
+---
+
+## Strategic Alignment Check
+
+> Verifies implementation against the full upstream chain: PRD → Plan → Design.
+
+### PRD Alignment
+
+| PRD Element | Expected | Implementation Status |
+|-------------|----------|:---------------------:|
+| Core Problem (WHY) | {from PRD} | ✅ Addressed / ❌ Missed |
+| Target User (WHO) | {from PRD} | ✅ Addressed / ❌ Missed |
+| Value Proposition | {from PRD} | ✅ Delivered / ⚠️ Partial |
+
+### Success Criteria Status
+
+| # | Criteria (from Plan) | Status | Evidence |
+|---|---------------------|:------:|----------|
+| SC-1 | {criteria text} | ✅/⚠️/❌ | {file:line or test result} |
+| SC-2 | {criteria text} | ✅/⚠️/❌ | {file:line or test result} |
+
+**Success Rate**: {X}/{Y} criteria met
+
+### Decision Record Verification
+
+| Source | Decision | Followed? | Deviation |
+|--------|----------|:---------:|-----------|
+| [PRD] | {decision} | ✅/❌ | {deviation if any} |
+| [Plan] | {decision} | ✅/❌ | {deviation if any} |
+| [Design] | {decision} | ✅/❌ | {deviation if any} |
 
 ---
 
@@ -72,15 +117,94 @@ variables:
 | {ComponentA} | src/components/{ComponentA}.tsx | ✅ Match |
 | {ComponentB} | - | ❌ Not implemented |
 
-### 2.4 Match Rate Summary
+### 2.4 Functional Depth Analysis (v2.1.0)
+
+> Measures actual implementation completeness, not just file existence.
+
+| File | Depth Score | Placeholder Indicators | Missing Design Elements |
+|------|:----------:|----------------------|------------------------|
+| {file} | {0-100} | {indicators found} | {missing elements from Page UI Checklist} |
+
+```
+Scoring: 0=empty, 20=skeleton, 40=mock data, 60=partial logic, 80=mostly complete, 100=fully implemented
+Threshold: Files scoring <60 are flagged as "SHALLOW"
+```
+
+**Shallow File Count**: {N} / {total} files ({percent}%)
+
+### 2.5 Page UI Checklist Verification (v2.1.0)
+
+> Cross-references Design document §5.4 Page UI Checklist against implementation.
+
+| Page | Design Elements | Implemented | Missing | Rate |
+|------|:--------------:|:-----------:|:-------:|:----:|
+| {page} | {N} | {N} | {N} | {percent}% |
+
+**Functional Match Rate**: {percent}%
+
+### 2.6 API Contract Verification (v2.2.0)
+
+> 3-way cross-reference: Design §4 ↔ Server (route.ts) ↔ Client (fetch calls)
+> Detects runtime failures that structural/functional checks miss.
+
+| # | Endpoint | Design | Server | Client | Contract |
+|---|----------|:------:|:------:|:------:|:--------:|
+| {N} | {endpoint} | ✅/❌ | ✅/❌ | ✅/❌ | PASS/FAIL |
+
+**Contract Failures:**
+
+| Endpoint | Layer | Issue | Fix Required |
+|----------|-------|-------|-------------|
+| {endpoint} | {Server/Client} | {mismatch description} | {fix} |
+
+**Contract Match Rate**: {M}/{N} endpoints = {percent}%
+
+### 2.7 Runtime Verification Results (v2.3.0)
+
+> Actual execution results — not code reading, real HTTP calls and browser tests.
+
+#### L1: API Endpoint Tests (curl)
+
+| # | Test | Status | Expected | Actual | Pass |
+|---|------|:------:|----------|--------|:----:|
+| {N} | {description} | {status code} | {expected} | {actual response} | ✅/❌ |
+
+**L1 Score**: {pass}/{total} = {percent}%
+
+#### L2: UI Action Tests (Playwright)
+
+| # | Page | Action | Expected Result | Pass |
+|---|------|--------|----------------|:----:|
+| {N} | {page} | {action} | {result} | ✅/❌ |
+
+**L2 Score**: {pass}/{total} = {percent}%
+
+#### L3: E2E Scenario Tests (Playwright)
+
+| # | Scenario | Steps | Result | Pass |
+|---|----------|:-----:|--------|:----:|
+| {N} | {scenario name} | {step count} | {pass/fail + details} | ✅/❌ |
+
+**L3 Score**: {pass}/{total} = {percent}%
+
+**Runtime Match Rate**: (L1 × 0.4 + L2 × 0.3 + L3 × 0.3) = {percent}%
+
+### 2.8 Match Rate Summary
 
 ```
 ┌─────────────────────────────────────────────┐
-│  Overall Match Rate: 75%                     │
+│  Structural Match Rate:  {percent}%          │
+│  Functional Match Rate:  {percent}%          │
+│  Contract Match Rate:    {percent}%          │
+│  Runtime Match Rate:     {percent}%   (NEW)  │
+│  ─────────────────────────────────────────── │
+│  Overall Match Rate:     {percent}%          │
+│  = (Structural × 0.15) + (Functional × 0.25)│
+│    + (Contract × 0.25) + (Runtime × 0.35)   │
 ├─────────────────────────────────────────────┤
-│  ✅ Match:          12 items (60%)           │
-│  ⚠️ Missing design:  4 items (20%)           │
-│  ❌ Not implemented:  4 items (20%)           │
+│  ✅ Match:          {N} items ({percent}%)   │
+│  ⚠️ Shallow:        {N} items ({percent}%)   │
+│  ❌ Not implemented: {N} items ({percent}%)   │
 └─────────────────────────────────────────────┘
 ```
 

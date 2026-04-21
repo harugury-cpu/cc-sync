@@ -1,7 +1,8 @@
 {
   "name": "bkit",
-  "version": "1.5.5",
-  "description": "Vibecoding Kit - PDCA methodology + CTO-Led Agent Teams + Claude Code mastery for AI-native development",
+  "version": "2.1.9",
+  "displayName": "bkit — AI Native Development OS",
+  "description": "PDCA-driven development automation with CTO-Led Agent Teams. Living Context System with Self-Healing, 43 PM frameworks (pm-skills MIT), Interactive Checkpoints, Confidence-Based code analysis, workflow engine with state machine, 5-level controllable AI (L0-L4), CLI dashboard, quality gates, audit logging, and MCP servers. 39 Skills, 36 Agents, 21 Hook Events.",
   "author": {
     "name": "POPUP STUDIO PTE. LTD.",
     "email": "contact@popupstudio.ai",
@@ -10,18 +11,10 @@
   "repository": "https://github.com/popup-studio-ai/bkit-claude-code",
   "license": "Apache-2.0",
   "keywords": [
-    "vibecoding",
-    "pdca",
-    "development-pipeline",
-    "ai-native",
-    "agentic",
-    "agent",
-    "automation",
-    "workflow",
-    "fullstack",
-    "multilingual",
-    "baas",
-    "enterprise"
+    "pdca", "development-automation", "agent-teams", "quality-gates",
+    "workflow-engine", "ai-native", "vibecoding", "fullstack",
+    "multilingual", "enterprise", "code-quality", "design-sync",
+    "controllable-ai", "audit-logging", "mcp-server"
   ],
   "outputStyles": "./output-styles/"
 }

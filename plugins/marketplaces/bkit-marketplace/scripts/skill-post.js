@@ -2,25 +2,20 @@
 /**
  * Skill Post-execution Hook (v1.4.4)
  *
- * PostToolUse(Skill) 훅에서 호출됨
- * skill-orchestrator를 사용하여 다음 단계를 제안
+ * Called from PostToolUse(Skill) hook.
+ * Uses skill-orchestrator to suggest next steps.
  *
- * @version 1.4.4
+ * @version 1.6.0
  * @module scripts/skill-post
  */
 
 const path = require('path');
+const { debugLog } = require('../lib/core/debug');
+const { setActiveSkill } = require('../lib/task/context');
+const { getPdcaStatusFull, updatePdcaStatus } = require('../lib/pdca/status');
 
 // Lazy load modules
-let common = null;
 let orchestrator = null;
-
-function getCommon() {
-  if (!common) {
-    common = require('../lib/common.js');
-  }
-  return common;
-}
 
 function getOrchestrator() {
   if (!orchestrator) {
@@ -69,22 +64,44 @@ function formatNextStepMessage(suggestions, skillName) {
   lines.push(`\n--- Skill Post-execution: ${skillName} ---\n`);
 
   if (suggestions.nextSkill) {
-    lines.push(`\n💡 다음 단계 제안:`);
+    lines.push(`\nSuggested next step:`);
     lines.push(`   /${suggestions.nextSkill.name}`);
     lines.push(`   ${suggestions.nextSkill.message}`);
   }
 
   if (suggestions.suggestedAgent) {
-    lines.push(`\n🤖 추천 Agent:`);
+    lines.push(`\nRecommended Agent:`);
     lines.push(`   ${suggestions.suggestedAgent}`);
     lines.push(`   ${suggestions.suggestedMessage}`);
   }
 
   if (!suggestions.nextSkill && !suggestions.suggestedAgent) {
-    lines.push(`\n✅ Skill 실행 완료. 다음 작업을 진행하세요.`);
+    lines.push(`\nSkill execution complete. Proceed to the next task.`);
   }
 
   return lines.join('\n');
+}
+
+/**
+ * v1.5.6: Determine if a skill generates code.
+ * List of skills eligible for /copy command guidance.
+ * @param {string} skillName - Skill name
+ * @returns {boolean}
+ */
+const CODE_GENERATION_SKILLS = [
+  'phase-4-api',
+  'phase-5-design-system',
+  'phase-6-ui-integration',
+  'code-review',
+  'starter',
+  'dynamic',
+  'enterprise',
+  'mobile-app',
+  'desktop-app'
+];
+
+function shouldSuggestCopy(skillName) {
+  return CODE_GENERATION_SKILLS.includes(skillName);
 }
 
 /**
@@ -109,6 +126,11 @@ function generateJsonOutput(suggestions, skillName) {
     output.suggestedAgentMessage = suggestions.suggestedMessage;
   }
 
+  // v1.5.6: /copy command guidance (on code generation skill completion)
+  if (shouldSuggestCopy(skillName)) {
+    output.copyHint = 'Use /copy to select and copy code blocks to clipboard';
+  }
+
   return output;
 }
 
@@ -116,7 +138,6 @@ function generateJsonOutput(suggestions, skillName) {
  * Main execution
  */
 async function main() {
-  const lib = getCommon();
   const orch = getOrchestrator();
 
   try {
@@ -137,7 +158,7 @@ async function main() {
         hookContext = JSON.parse(input);
       }
     } catch (e) {
-      lib.debugLog('SkillPost', 'Failed to parse hook input', { error: e.message });
+      debugLog('SkillPost', 'Failed to parse hook input', { error: e.message });
     }
 
     // Extract skill info from tool_input
@@ -145,16 +166,16 @@ async function main() {
     const { skillName, args } = parseSkillInvocation(toolInput);
 
     if (!skillName) {
-      lib.debugLog('SkillPost', 'No skill name found in context');
+      debugLog('SkillPost', 'No skill name found in context');
       console.log(JSON.stringify({ status: 'skip', reason: 'no skill name' }));
       return;
     }
 
-    lib.debugLog('SkillPost', 'Processing skill post-execution', { skillName, args });
+    debugLog('SkillPost', 'Processing skill post-execution', { skillName, args });
 
     // v1.4.4: Set active skill for unified hooks (GitHub #9354 workaround)
-    lib.setActiveSkill(skillName);
-    lib.debugLog('SkillPost', 'Active skill set for unified hooks', { skillName });
+    setActiveSkill(skillName);
+    debugLog('SkillPost', 'Active skill set for unified hooks', { skillName });
 
     // Get orchestration result
     const result = await orch.orchestrateSkillPost(skillName, {}, { args });
@@ -165,21 +186,53 @@ async function main() {
     output.status = 'success';
     console.log(JSON.stringify(output, null, 2));
 
+    // v2.0.0: Audit logging for skill execution
+    try {
+      const audit = require('../lib/audit/audit-logger');
+      audit.writeAuditLog({
+        actor: 'system', actorId: 'skill-post',
+        action: 'skill_executed',
+        category: 'skill',
+        target: skillName, targetType: 'skill',
+        result: 'success', destructiveOperation: false
+      });
+    } catch (_) {}
+
+    // v2.0.0: Decision tracing when skills make PDCA phase decisions
+    try {
+      const skillCfg = orch.getSkillConfig(skillName);
+      if (skillCfg && skillCfg['pdca-phase']) {
+        const dt = require('../lib/audit/decision-tracer');
+        const feature = args.feature || getPdcaStatusFull()?.currentFeature || '';
+        dt.recordDecision({
+          feature,
+          phase: skillCfg['pdca-phase'],
+          decisionType: 'phase_transition',
+          question: `Skill ${skillName} completed - advance PDCA phase?`,
+          chosenOption: `Advance to ${skillCfg['pdca-phase']}`,
+          rationale: `Skill ${skillName} maps to pdca-phase ${skillCfg['pdca-phase']}`,
+          confidence: 0.9,
+          impact: 'medium',
+          affectedFiles: [],
+          reversible: true
+        });
+      }
+    } catch (_) {}
+
     // Update PDCA status if skill has pdca-phase
     const skillConfig = orch.getSkillConfig(skillName);
     if (skillConfig && skillConfig['pdca-phase']) {
       const phase = skillConfig['pdca-phase'];
-      const feature = args.feature || lib.getPdcaStatusFull()?.currentFeature;
+      const feature = args.feature || getPdcaStatusFull()?.currentFeature;
 
       if (feature) {
-        lib.updatePdcaStatus(phase, feature);
-        lib.debugLog('SkillPost', 'PDCA status updated', { phase, feature });
+        updatePdcaStatus(feature, phase);
+        debugLog('SkillPost', 'PDCA status updated', { feature, phase });
       }
     }
 
   } catch (e) {
-    const lib = getCommon();
-    lib.debugLog('SkillPost', 'Error in post-execution', { error: e.message });
+    debugLog('SkillPost', 'Error in post-execution', { error: e.message });
     console.log(JSON.stringify({
       status: 'error',
       error: e.message

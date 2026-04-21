@@ -1,7 +1,7 @@
 /**
  * Team Strategy Module
  * @module lib/team/strategy
- * @version 1.5.1
+ * @version 2.0.0
  *
  * Level-based Agent Teams strategy definitions with CTO-Led Team support.
  */
@@ -27,24 +27,32 @@ const TEAM_STRATEGIES = {
       },
       {
         name: 'qa',
-        description: 'Testing and gap analysis',
-        agents: ['qa-monitor', 'gap-detector'],
-        phases: ['check'],
+        description: 'Testing, gap analysis, and QA verification',
+        agents: ['qa-monitor', 'gap-detector', 'qa-lead'],
+        phases: ['check', 'qa'],
       },
     ],
     phaseStrategy: {
+      pm: 'single',
       plan: 'single',
       design: 'single',
       do: 'parallel',
       check: 'parallel',
       act: 'parallel',
+      qa: 'parallel',
     },
   },
 
   Enterprise: {
-    teammates: 5,
+    teammates: 6,
     ctoAgent: 'cto-lead',
     roles: [
+      {
+        name: 'pm',
+        description: 'PM analysis and PRD generation',
+        agents: ['pm-lead'],
+        phases: ['pm'],
+      },
       {
         name: 'architect',
         description: 'System architecture and infrastructure design',
@@ -59,9 +67,9 @@ const TEAM_STRATEGIES = {
       },
       {
         name: 'qa',
-        description: 'Quality strategy and verification',
-        agents: ['qa-strategist', 'qa-monitor', 'gap-detector'],
-        phases: ['check'],
+        description: 'Quality strategy, verification, and QA testing',
+        agents: ['qa-strategist', 'qa-monitor', 'gap-detector', 'qa-lead', 'qa-test-planner', 'qa-test-generator', 'qa-debug-analyst'],
+        phases: ['check', 'qa'],
       },
       {
         name: 'reviewer',
@@ -77,11 +85,13 @@ const TEAM_STRATEGIES = {
       },
     ],
     phaseStrategy: {
+      pm: 'single',
       plan: 'single',
       design: 'council',
       do: 'swarm',
       check: 'council',
       act: 'watchdog',
+      qa: 'council',
     },
   },
 };

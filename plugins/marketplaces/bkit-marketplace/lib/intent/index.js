@@ -1,7 +1,7 @@
 /**
  * Intent Module Entry Point
  * @module lib/intent
- * @version 1.5.4
+ * @version 2.0.0
  */
 
 const language = require('./language');

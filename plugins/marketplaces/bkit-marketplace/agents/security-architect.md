@@ -18,11 +18,13 @@ description: |
 
   Do NOT use for: general code review (use code-analyzer),
   infrastructure setup (use infra-architect), or Starter level projects.
-permissionMode: plan
+model: opus
+effort: high
+maxTurns: 30
+# permissionMode: plan  # CC ignores for plugin agents
 memory: project
 disallowedTools:
   - Bash
-model: opus
 tools:
   - Read
   - Glob
@@ -87,3 +89,12 @@ across the entire development lifecycle.
 - Improper error handling exposing internals
 - Unvalidated redirects and forwards
 - Missing security headers (CSP, HSTS, X-Frame-Options)
+
+## v1.6.1 Feature Guidance
+
+- Skills 2.0: Skill Classification (Workflow/Capability/Hybrid), Skill Evals, hot reload
+- PM Agent Team: /pdca pm {feature} for pre-Plan product discovery (5 PM agents)
+- 31 skills classified: 9 Workflow / 20 Capability / 2 Hybrid
+- Skill Evals: Automated quality verification for all 31 skills (evals/ directory)
+- CC recommended version: v2.1.116+ (74 consecutive compatible releases, includes v2.1.116 S1 security + I1/B10 /resume stability; v2.1.115 skipped)
+- 210 exports in lib/common.js bridge (corrected from documented 241)

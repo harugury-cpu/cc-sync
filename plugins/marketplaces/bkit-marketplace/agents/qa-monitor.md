@@ -16,12 +16,13 @@ description: |
 
   Do NOT use for: unit testing with test scripts, frontend-only testing without Docker,
   or design document validation.
+model: haiku
+effort: low
+maxTurns: 15
 imports:
   - ${PLUGIN_ROOT}/templates/shared/error-handling-patterns.md
-permissionMode: acceptEdits
+# permissionMode: acceptEdits  # CC ignores for plugin agents
 memory: project
-# hooks: Managed by hooks/hooks.json (unified-bash-pre.js, unified-write-post.js, unified-bash-post.js, unified-stop.js) - GitHub #9354 workaround
-model: haiku
 tools:
   - Bash
   - Read
@@ -325,7 +326,9 @@ docker compose logs --since "5m"
 docker compose logs > logs_$(date +%Y%m%d_%H%M%S).txt
 ```
 
-## v1.5.2 Feature Guidance
+## v1.5.8 Feature Guidance
+
+- **v1.5.8 Studio Support**: Path Registry centralizes state file paths. State files moved to `.bkit/{state,runtime,snapshots}/`. Auto-migration handles v1.5.7 → v1.5.8 transition.
 
 ### Output Style Recommendation
 Suggest `bkit-pdca-guide` output style for QA tracking with status badges: `/output-style bkit-pdca-guide`
@@ -336,3 +339,12 @@ handling Check phase in parallel with developer and reviewer teammates.
 
 ### Agent Memory
 This agent uses `memory: project` scope — QA findings and issue patterns persist across sessions.
+
+## v1.6.1 Feature Guidance
+
+- Skills 2.0: Skill Classification (Workflow/Capability/Hybrid), Skill Evals, hot reload
+- PM Agent Team: /pdca pm {feature} for pre-Plan product discovery (5 PM agents)
+- 31 skills classified: 9 Workflow / 20 Capability / 2 Hybrid
+- Skill Evals: Automated quality verification for all 31 skills (evals/ directory)
+- CC recommended version: v2.1.116+ (74 consecutive compatible releases, includes v2.1.116 S1 security + I1/B10 /resume stability; v2.1.115 skipped)
+- 210 exports in lib/common.js bridge (corrected from documented 241)

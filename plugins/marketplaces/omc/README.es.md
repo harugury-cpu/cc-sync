@@ -7,6 +7,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/Yeachan-Heo/oh-my-claudecode?style=flat&color=yellow)](https://github.com/Yeachan-Heo/oh-my-claudecode/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Sponsor](https://img.shields.io/badge/Sponsor-❤️-red?style=flat&logo=github)](https://github.com/sponsors/Yeachan-Heo)
+[![Discord](https://img.shields.io/discord/1452487457085063218?color=5865F2&logo=discord&logoColor=white&label=Discord)](https://discord.gg/PUwSMR9XNk)
 
 > **Para usuarios de Codex:** Consulta [oh-my-codex](https://github.com/Yeachan-Heo/oh-my-codex) — la misma experiencia de orquestación para OpenAI Codex CLI.
 
@@ -14,7 +15,7 @@
 
 *No aprendas Claude Code. Solo usa OMC.*
 
-[Comenzar](#inicio-rápido) • [Documentación](https://yeachan-heo.github.io/oh-my-claudecode-website) • [Referencia CLI](https://yeachan-heo.github.io/oh-my-claudecode-website/docs.html#cli-reference) • [Flujos de Trabajo](https://yeachan-heo.github.io/oh-my-claudecode-website/docs.html#workflows) • [Guía de Migración](docs/MIGRATION.md)
+[Comenzar](#inicio-rápido) • [Documentación](https://yeachan-heo.github.io/oh-my-claudecode-website) • [Referencia CLI](https://yeachan-heo.github.io/oh-my-claudecode-website/docs.html#cli-reference) • [Flujos de Trabajo](https://yeachan-heo.github.io/oh-my-claudecode-website/docs.html#workflows) • [Guía de Migración](docs/MIGRATION.md) • [Discord](https://discord.gg/PUwSMR9XNk)
 
 ---
 
@@ -30,6 +31,10 @@
 ```bash
 /omc-setup
 ```
+
+Si ejecuta OMC mediante `omc --plugin-dir <path>` o `claude --plugin-dir <path>`, agregue `--plugin-dir-mode` a `omc setup` (o exporte `OMC_PLUGIN_ROOT` antes) para evitar duplicar habilidades/agentes que el complemento ya proporciona en tiempo de ejecución. Consulte la [sección Plugin directory flags en REFERENCE.md](./docs/REFERENCE.md#plugin-directory-flags) para una matriz de decisión completa y todos los indicadores disponibles.
+
+<!-- TODO(i18n): verify translation -->
 
 **Paso 3: Construye algo**
 ```
@@ -167,6 +172,31 @@ Múltiples estrategias para diferentes casos de uso - desde construcciones compl
 - **Aprendizaje de habilidades** - Extrae patrones reutilizables de tus sesiones
 - **Análisis y seguimiento de costos** - Comprende el uso de tokens en todas las sesiones
 
+### Habilidades Personalizadas
+
+Aprende una vez, reutiliza para siempre. OMC extrae conocimiento valioso de depuración en archivos de habilidades portátiles que se inyectan automáticamente cuando son relevantes.
+
+| | Alcance de Proyecto | Alcance de Usuario |
+|---|---|---|
+| **Ruta** | `.omc/skills/` | `~/.omc/skills/` |
+| **Compartido con** | Equipo (controlado por versiones) | Todos tus proyectos |
+| **Prioridad** | Mayor (anula el alcance de usuario) | Menor (respaldo) |
+
+```yaml
+# .omc/skills/fix-proxy-crash.md
+---
+name: Fix Proxy Crash
+description: aiohttp proxy crashes on ClientDisconnectedError
+triggers: ["proxy", "aiohttp", "disconnected"]
+source: extracted
+---
+Envuelve el handler en server.py:42 con try/except ClientDisconnectedError...
+```
+
+**Gestión de habilidades:** `/skill list | add | remove | edit | search`
+**Auto-aprendizaje:** `/learner` extrae patrones reutilizables con estrictos criterios de calidad
+**Auto-inyección:** Las habilidades coincidentes se cargan en el contexto automáticamente — sin necesidad de invocación manual
+
 [Lista completa de características →](docs/REFERENCE.md)
 
 ---
@@ -230,6 +260,66 @@ Comportamiento de etiquetas:
 - Discord: soporta `@here`, `@everyone`, IDs numéricos de usuario y `role:<id>`
 - Slack: soporta `<@MEMBER_ID>`, `<!channel>`, `<!here>`, `<!everyone>`, `<!subteam^GROUP_ID>`
 - El callback `file` ignora las opciones de etiquetas
+
+### Integración con OpenClaw
+
+Reenvía eventos de sesión de Claude Code a un gateway de [OpenClaw](https://openclaw.ai/) para habilitar respuestas automatizadas y flujos de trabajo a través de tu agente OpenClaw.
+
+**Configuración rápida (recomendado):**
+
+```bash
+/oh-my-claudecode:configure-notifications
+# → Escribe "openclaw" cuando se te solicite → elige "OpenClaw Gateway"
+```
+
+**Configuración manual:** crea `~/.claude/omc_config.openclaw.json`:
+
+```json
+{
+  "enabled": true,
+  "gateways": {
+    "my-gateway": {
+      "url": "https://your-gateway.example.com/wake",
+      "headers": { "Authorization": "Bearer YOUR_TOKEN" },
+      "method": "POST",
+      "timeout": 10000
+    }
+  },
+  "hooks": {
+    "session-start": { "gateway": "my-gateway", "instruction": "Session started for {{projectName}}", "enabled": true },
+    "stop":          { "gateway": "my-gateway", "instruction": "Session stopping for {{projectName}}", "enabled": true }
+  }
+}
+```
+
+**Variables de entorno:**
+
+| Variable | Descripción |
+|----------|-------------|
+| `OMC_OPENCLAW=1` | Habilitar OpenClaw |
+| `OMC_OPENCLAW_DEBUG=1` | Habilitar registro de depuración |
+| `OMC_OPENCLAW_CONFIG=/path/to/config.json` | Ruta alternativa del archivo de configuración |
+
+**Eventos de hook soportados (6 activos en bridge.ts):**
+
+| Evento | Disparador | Variables de plantilla principales |
+|--------|-----------|-----------------------------------|
+| `session-start` | La sesión comienza | `{{sessionId}}`, `{{projectName}}`, `{{projectPath}}` |
+| `stop` | La respuesta de Claude se completa | `{{sessionId}}`, `{{projectName}}` |
+| `keyword-detector` | Cada envío de prompt | `{{prompt}}`, `{{sessionId}}` |
+| `ask-user-question` | Claude solicita entrada del usuario | `{{question}}`, `{{sessionId}}` |
+| `pre-tool-use` | Antes de la invocación de herramienta (alta frecuencia) | `{{toolName}}`, `{{sessionId}}` |
+| `post-tool-use` | Después de la invocación de herramienta (alta frecuencia) | `{{toolName}}`, `{{sessionId}}` |
+
+**Variables de entorno del canal de respuesta:**
+
+| Variable | Descripción |
+|----------|-------------|
+| `OPENCLAW_REPLY_CHANNEL` | Canal de respuesta (ej. `discord`) |
+| `OPENCLAW_REPLY_TARGET` | ID del canal |
+| `OPENCLAW_REPLY_THREAD` | ID del hilo |
+
+Consulta `scripts/openclaw-gateway-demo.mjs` para un gateway de referencia que retransmite payloads de OpenClaw a Discord a través de ClawdBot.
 
 ---
 

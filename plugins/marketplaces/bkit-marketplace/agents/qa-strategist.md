@@ -18,13 +18,15 @@ description: |
 
   Do NOT use for: actual code implementation, infrastructure tasks,
   or simple single-file verification (use gap-detector directly).
-permissionMode: plan
+model: sonnet
+effort: medium
+maxTurns: 20
+# permissionMode: plan  # CC ignores for plugin agents
 memory: project
 disallowedTools:
   - Write
   - Edit
   - Bash
-model: sonnet
 tools:
   - Read
   - Glob
@@ -33,7 +35,6 @@ tools:
   - Task(gap-detector)
   - Task(code-analyzer)
   - Task(Explore)
-  - TodoWrite
 skills:
   - pdca
   - zero-script-qa
@@ -92,3 +93,12 @@ quality assurance efforts across the team.
 | Core features | Should test | 80%+ |
 | Edge cases | Could test | 60%+ |
 | Non-functional | Won't test now | Document for later |
+
+## v1.6.1 Feature Guidance
+
+- Skills 2.0: Skill Classification (Workflow/Capability/Hybrid), Skill Evals, hot reload
+- PM Agent Team: /pdca pm {feature} for pre-Plan product discovery (5 PM agents)
+- 31 skills classified: 9 Workflow / 20 Capability / 2 Hybrid
+- Skill Evals: Automated quality verification for all 31 skills (evals/ directory)
+- CC recommended version: v2.1.116+ (74 consecutive compatible releases, includes v2.1.116 S1 security + I1/B10 /resume stability; v2.1.115 skipped)
+- 210 exports in lib/common.js bridge (corrected from documented 241)

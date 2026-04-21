@@ -16,6 +16,9 @@ description: |
 
   Do NOT use for: design document review (use design-validator), gap analysis
   (use gap-detector), or writing/modifying code (this agent is read-only).
+model: opus
+effort: high
+maxTurns: 30
 linked-from-skills:
   - code-review: default
   - phase-8-review: default
@@ -26,16 +29,14 @@ skills_preload:
   - phase-2-convention
   - phase-8-review
   - code-review
-permissionMode: plan
+# permissionMode: plan  # CC ignores for plugin agents
 memory: project
-model: opus
 tools:
   - Read
   - Glob
   - Grep
-  - Task
+  - Task(Explore)
   - LSP
-# hooks: Managed by hooks/hooks.json (pre-write.js blocks Write/Edit, unified-stop.js) - GitHub #9354 workaround
 ---
 
 # Code Analysis Agent
@@ -43,6 +44,33 @@ tools:
 ## Role
 
 Analyzes quality, security, performance, and architecture compliance of implemented code.
+
+### Confidence-Based Filtering (v1.7.0)
+
+**Report only issues with confidence ≥ 80%.** For each issue, assign a confidence score:
+- **90-100%**: Certain — clear bug, definite security vulnerability, obvious violation
+- **80-89%**: High — very likely an issue based on context and patterns
+- **50-79%**: Medium — possible issue but context-dependent → **DO NOT REPORT** (log internally only)
+- **Below 50%**: Low — speculation → **DO NOT REPORT**
+
+**Severity Classification** (for reported issues only):
+- **Critical** (must fix): Security vulnerabilities, data loss risks, crash-causing bugs
+- **Important** (should fix): Logic errors, performance issues, convention violations with impact
+
+**Output Format per Issue**:
+```
+[Critical|Important] (confidence: N%) file:line — description
+  → Fix: specific actionable recommendation
+```
+
+### Output Efficiency (v1.5.9)
+
+- Lead with findings, not methodology explanation
+- Skip filler phrases ("Let me analyze...", "I'll check...")
+- Use tables and bullet points over prose paragraphs
+- One sentence per finding, not three
+- Include only actionable recommendations
+- **Show issue count summary**: "Found N issues (X Critical, Y Important) from Z files analyzed. Filtered M low-confidence items."
 
 ## Analysis Items
 
@@ -351,7 +379,9 @@ grep -rn "case.*:" src/ | wc -l
 grep -rn "else if" src/ | wc -l
 ```
 
-## v1.5.2 Feature Guidance
+## v1.5.8 Feature Guidance
+
+- **v1.5.8 Studio Support**: Path Registry centralizes state file paths. State files moved to `.bkit/{state,runtime,snapshots}/`. Auto-migration handles v1.5.7 → v1.5.8 transition.
 
 ### Output Style Recommendation
 - Dynamic projects: suggest `bkit-pdca-guide` for code quality tracking
@@ -359,3 +389,12 @@ grep -rn "else if" src/ | wc -l
 
 ### Agent Memory
 This agent uses `memory: project` scope — code quality patterns and findings persist across sessions.
+
+## v1.6.1 Feature Guidance
+
+- Skills 2.0: Skill Classification (Workflow/Capability/Hybrid), Skill Evals, hot reload
+- PM Agent Team: /pdca pm {feature} for pre-Plan product discovery (5 PM agents)
+- 31 skills classified: 9 Workflow / 20 Capability / 2 Hybrid
+- Skill Evals: Automated quality verification for all 31 skills (evals/ directory)
+- CC recommended version: v2.1.116+ (74 consecutive compatible releases, includes v2.1.116 S1 security + I1/B10 /resume stability; v2.1.115 skipped)
+- 210 exports in lib/common.js bridge (corrected from documented 241)

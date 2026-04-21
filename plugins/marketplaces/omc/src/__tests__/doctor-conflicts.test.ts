@@ -6,17 +6,30 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, rmSync, mkdtempSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
+import { tmpdir } from 'os';
 
-const TEST_CLAUDE_DIR = join(homedir(), '.claude-test-doctor-conflicts');
-const TEST_PROJECT_DIR = join(homedir(), '.claude-test-doctor-project');
-const TEST_PROJECT_CLAUDE_DIR = join(TEST_PROJECT_DIR, '.claude');
+// vi.hoisted runs before vi.mock hoisting — safe to reference in mock factories
+const { TEST_DIRS } = vi.hoisted(() => {
+  const TEST_DIRS = { claudeDir: '', projectDir: '', projectClaudeDir: '' };
+  return { TEST_DIRS };
+});
+
+let TEST_CLAUDE_DIR = '';
+let TEST_PROJECT_DIR = '';
+let TEST_PROJECT_CLAUDE_DIR = '';
+
+function resetTestDirs(): void {
+  TEST_CLAUDE_DIR = mkdtempSync(join(tmpdir(), 'omc-doctor-conflicts-claude-'));
+  TEST_PROJECT_DIR = mkdtempSync(join(tmpdir(), 'omc-doctor-conflicts-project-'));
+  TEST_PROJECT_CLAUDE_DIR = join(TEST_PROJECT_DIR, '.claude');
+  TEST_DIRS.claudeDir = TEST_CLAUDE_DIR;
+}
 
 // Mock getClaudeConfigDir before importing the module under test
-vi.mock('../utils/paths.js', () => ({
-  getClaudeConfigDir: () => TEST_CLAUDE_DIR,
+vi.mock('../utils/config-dir.js', () => ({
+  getClaudeConfigDir: () => TEST_DIRS.claudeDir,
 }));
 
 // Mock builtin skills to return a known list for testing
@@ -31,26 +44,38 @@ vi.mock('../features/builtin-skills/skills.js', () => ({
 }));
 
 // Import after mock setup
-import { checkHookConflicts, checkClaudeMdStatus, checkLegacySkills, runConflictCheck } from '../cli/commands/doctor-conflicts.js';
+import {
+  checkHookConflicts,
+  checkClaudeMdStatus,
+  checkConfigIssues,
+  checkLegacySkills,
+  runConflictCheck,
+} from '../cli/commands/doctor-conflicts.js';
 
 describe('doctor-conflicts: hook ownership classification', () => {
   let cwdSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     for (const dir of [TEST_CLAUDE_DIR, TEST_PROJECT_DIR]) {
-      if (existsSync(dir)) {
+      if (dir && existsSync(dir)) {
         rmSync(dir, { recursive: true, force: true });
       }
     }
-    mkdirSync(TEST_CLAUDE_DIR, { recursive: true });
+    resetTestDirs();
     mkdirSync(TEST_PROJECT_CLAUDE_DIR, { recursive: true });
+    process.env.CLAUDE_CONFIG_DIR = TEST_CLAUDE_DIR;
+    process.env.CLAUDE_MCP_CONFIG_PATH = join(TEST_CLAUDE_DIR, '..', '.claude.json');
     cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(TEST_PROJECT_DIR);
   });
 
   afterEach(() => {
-    cwdSpy.mockRestore();
+    cwdSpy?.mockRestore();
+    delete process.env.CLAUDE_CONFIG_DIR;
+    delete process.env.CLAUDE_MCP_CONFIG_PATH;
+    delete process.env.OMC_HOME;
+    delete process.env.CODEX_HOME;
     for (const dir of [TEST_CLAUDE_DIR, TEST_PROJECT_DIR]) {
-      if (existsSync(dir)) {
+      if (dir && existsSync(dir)) {
         rmSync(dir, { recursive: true, force: true });
       }
     }
@@ -171,6 +196,74 @@ describe('doctor-conflicts: hook ownership classification', () => {
     expect(postTool?.isOmc).toBe(false);
   });
 
+  it('reports Codex config.toml drift against the unified MCP registry', () => {
+    const registryDir = join(TEST_CLAUDE_DIR, '..', '.omc');
+    const codexDir = join(TEST_CLAUDE_DIR, '..', '.codex');
+    mkdirSync(registryDir, { recursive: true });
+    mkdirSync(codexDir, { recursive: true });
+
+    writeFileSync(join(registryDir, 'mcp-registry.json'), JSON.stringify({
+      gitnexus: { command: 'gitnexus', args: ['mcp'] },
+    }));
+    writeFileSync(process.env.CLAUDE_MCP_CONFIG_PATH!, JSON.stringify({
+      mcpServers: {
+        gitnexus: { command: 'gitnexus', args: ['mcp'] },
+      },
+    }));
+    writeFileSync(join(codexDir, 'config.toml'), 'model = "gpt-5"\n');
+
+    process.env.OMC_HOME = registryDir;
+    process.env.CODEX_HOME = codexDir;
+
+    const report = runConflictCheck();
+
+    expect(report.mcpRegistrySync.registryExists).toBe(true);
+    expect(report.mcpRegistrySync.claudeMissing).toEqual([]);
+    expect(report.mcpRegistrySync.codexMissing).toEqual(['gitnexus']);
+    expect(report.hasConflicts).toBe(true);
+
+    delete process.env.OMC_HOME;
+    delete process.env.CODEX_HOME;
+  });
+
+  it('reports mismatched Codex config.toml entries against the unified MCP registry', () => {
+    const registryDir = join(TEST_CLAUDE_DIR, '..', '.omc');
+    const codexDir = join(TEST_CLAUDE_DIR, '..', '.codex');
+    mkdirSync(registryDir, { recursive: true });
+    mkdirSync(codexDir, { recursive: true });
+
+    writeFileSync(join(registryDir, 'mcp-registry.json'), JSON.stringify({
+      gitnexus: { command: 'gitnexus', args: ['mcp'] },
+    }));
+    writeFileSync(process.env.CLAUDE_MCP_CONFIG_PATH!, JSON.stringify({
+      mcpServers: {
+        gitnexus: { command: 'gitnexus', args: ['mcp'] },
+      },
+    }));
+    writeFileSync(join(codexDir, 'config.toml'), [
+      '# BEGIN OMC MANAGED MCP REGISTRY',
+      '',
+      '[mcp_servers.gitnexus]',
+      'command = "gitnexus"',
+      'args = ["wrong"]',
+      '',
+      '# END OMC MANAGED MCP REGISTRY',
+      '',
+    ].join('\n'));
+
+    process.env.OMC_HOME = registryDir;
+    process.env.CODEX_HOME = codexDir;
+
+    const report = runConflictCheck();
+
+    expect(report.mcpRegistrySync.codexMissing).toEqual([]);
+    expect(report.mcpRegistrySync.codexMismatched).toEqual(['gitnexus']);
+    expect(report.hasConflicts).toBe(true);
+
+    delete process.env.OMC_HOME;
+    delete process.env.CODEX_HOME;
+  });
+
   it('reports hasConflicts only when non-OMC hooks exist', () => {
     // All-OMC config: no conflicts
     const omcOnlySettings = {
@@ -276,19 +369,25 @@ describe('doctor-conflicts: CLAUDE.md companion file detection (issue #1101)', (
 
   beforeEach(() => {
     for (const dir of [TEST_CLAUDE_DIR, TEST_PROJECT_DIR]) {
-      if (existsSync(dir)) {
+      if (dir && existsSync(dir)) {
         rmSync(dir, { recursive: true, force: true });
       }
     }
-    mkdirSync(TEST_CLAUDE_DIR, { recursive: true });
+    resetTestDirs();
     mkdirSync(TEST_PROJECT_CLAUDE_DIR, { recursive: true });
+    process.env.CLAUDE_CONFIG_DIR = TEST_CLAUDE_DIR;
+    process.env.CLAUDE_MCP_CONFIG_PATH = join(TEST_CLAUDE_DIR, '..', '.claude.json');
     cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(TEST_PROJECT_DIR);
   });
 
   afterEach(() => {
-    cwdSpy.mockRestore();
+    cwdSpy?.mockRestore();
+    delete process.env.CLAUDE_CONFIG_DIR;
+    delete process.env.CLAUDE_MCP_CONFIG_PATH;
+    delete process.env.OMC_HOME;
+    delete process.env.CODEX_HOME;
     for (const dir of [TEST_CLAUDE_DIR, TEST_PROJECT_DIR]) {
-      if (existsSync(dir)) {
+      if (dir && existsSync(dir)) {
         rmSync(dir, { recursive: true, force: true });
       }
     }
@@ -348,19 +447,19 @@ describe('doctor-conflicts: legacy skills collision check (issue #1101)', () => 
 
   beforeEach(() => {
     for (const dir of [TEST_CLAUDE_DIR, TEST_PROJECT_DIR]) {
-      if (existsSync(dir)) {
+      if (dir && existsSync(dir)) {
         rmSync(dir, { recursive: true, force: true });
       }
     }
-    mkdirSync(TEST_CLAUDE_DIR, { recursive: true });
+    resetTestDirs();
     mkdirSync(TEST_PROJECT_CLAUDE_DIR, { recursive: true });
     cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(TEST_PROJECT_DIR);
   });
 
   afterEach(() => {
-    cwdSpy.mockRestore();
+    cwdSpy?.mockRestore();
     for (const dir of [TEST_CLAUDE_DIR, TEST_PROJECT_DIR]) {
-      if (existsSync(dir)) {
+      if (dir && existsSync(dir)) {
         rmSync(dir, { recursive: true, force: true });
       }
     }
@@ -424,5 +523,85 @@ describe('doctor-conflicts: legacy skills collision check (issue #1101)', () => 
     const report = runConflictCheck();
     expect(report.legacySkills).toHaveLength(1);
     expect(report.hasConflicts).toBe(true);
+  });
+});
+
+describe('doctor-conflicts: config known fields (issue #1499)', () => {
+  let cwdSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    for (const dir of [TEST_CLAUDE_DIR, TEST_PROJECT_DIR]) {
+      if (dir && existsSync(dir)) {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+    resetTestDirs();
+    mkdirSync(TEST_PROJECT_CLAUDE_DIR, { recursive: true });
+    mkdirSync(join(TEST_PROJECT_DIR, '.omc'), { recursive: true });
+    mkdirSync(join(TEST_PROJECT_DIR, '.codex'), { recursive: true });
+    process.env.CLAUDE_CONFIG_DIR = TEST_CLAUDE_DIR;
+    process.env.CLAUDE_MCP_CONFIG_PATH = join(TEST_CLAUDE_DIR, '..', '.claude.json');
+    process.env.OMC_HOME = join(TEST_PROJECT_DIR, '.omc');
+    process.env.CODEX_HOME = join(TEST_PROJECT_DIR, '.codex');
+    cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(TEST_PROJECT_DIR);
+  });
+
+  afterEach(() => {
+    cwdSpy?.mockRestore();
+    delete process.env.CLAUDE_CONFIG_DIR;
+    delete process.env.CLAUDE_MCP_CONFIG_PATH;
+    delete process.env.OMC_HOME;
+    delete process.env.CODEX_HOME;
+    for (const dir of [TEST_CLAUDE_DIR, TEST_PROJECT_DIR]) {
+      if (dir && existsSync(dir)) {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it('does not flag legitimate config keys from current writers and readers', () => {
+    writeFileSync(join(TEST_CLAUDE_DIR, '.omc-config.json'), JSON.stringify({
+      silentAutoUpdate: false,
+      notificationProfiles: {
+        work: {
+          enabled: true,
+          discord: {
+            enabled: true,
+            webhookUrl: 'https://discord.example.test/webhook',
+          },
+        },
+      },
+      hudEnabled: true,
+      nodeBinary: '/opt/homebrew/bin/node',
+      delegationEnforcementLevel: 'strict',
+      autoInvoke: {
+        enabled: true,
+        confidenceThreshold: 85,
+      },
+      customIntegrations: {
+        enabled: true,
+        integrations: [],
+      },
+      team: {
+        ops: {
+          maxAgents: 20,
+          defaultAgentType: 'claude',
+        },
+      },
+    }, null, 2));
+
+    expect(checkConfigIssues().unknownFields).toEqual([]);
+    expect(runConflictCheck().hasConflicts).toBe(false);
+  });
+
+  it('still reports genuinely unknown config keys', () => {
+    writeFileSync(join(TEST_CLAUDE_DIR, '.omc-config.json'), JSON.stringify({
+      silentAutoUpdate: false,
+      totallyMadeUpKey: true,
+      anotherUnknown: { nested: true },
+    }, null, 2));
+
+    expect(checkConfigIssues().unknownFields).toEqual(['totallyMadeUpKey', 'anotherUnknown']);
+    expect(runConflictCheck().hasConflicts).toBe(true);
   });
 });

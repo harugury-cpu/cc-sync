@@ -360,3 +360,59 @@ echo '{"tool_input":{"file_path":"src/features/auth/login.ts","content":"test"}}
 | AM-T03 | Check pipeline-guide agent | Has `memory: user` in frontmatter |
 | AM-T04 | Check remaining 9 agents | All have `memory: project` in frontmatter |
 | AM-T05 | `/claude-code-learning learn 6` | Covers memory scopes and behavior |
+
+---
+
+## v1.6.0 Feature Tests
+
+### Skill Classification Tests (SC-T)
+
+| ID | Test | Expected Result |
+|----|------|-----------------|
+| SC-T01 | Verify 9 Workflow skills identified | pdca, pm-discovery, development-pipeline, bkit-rules, bkit-templates, phase-2-convention, phase-8-review, code-review, zero-script-qa |
+| SC-T02 | Verify 18 Capability skills identified | starter, dynamic, enterprise, phase-1/3/4/5/6/7/9, claude-code-learning, mobile-app, desktop-app, bkend-quickstart, bkend-data, bkend-auth, bkend-cookbook, bkend-storage |
+| SC-T03 | Verify 1 Hybrid skill identified | plan-plus |
+| SC-T04 | Total skill count = 28 | 9W + 18C + 1H |
+
+### Skill Evals Tests (SE-T)
+
+| ID | Test | Expected Result |
+|----|------|-----------------|
+| SE-T01 | Verify 28 eval definitions exist | One per skill |
+| SE-T02 | Eval definition structure valid | Contains input/output/criteria fields |
+| SE-T03 | A/B testing workflow functional | Can compare two skill variants |
+| SE-T04 | Parity test scoring works | Returns numeric score 0-100 |
+
+### PM Agent Team Tests (PM-T)
+
+| ID | Test | Expected Result |
+|----|------|-----------------|
+| PM-T01 | "product discovery" triggers pm-lead | pm-lead agent activated |
+| PM-T02 | "PRD" keyword triggers pm-lead | pm-lead agent activated |
+| PM-T03 | pm-lead delegates to pm-discovery | pm-discovery agent invoked |
+| PM-T04 | pm-lead delegates to pm-strategy | pm-strategy agent invoked |
+| PM-T05 | pm-lead delegates to pm-research | pm-research agent invoked |
+| PM-T06 | pm-prd generates PRD document | PRD markdown generated in docs/ |
+| PM-T07 | PM Team does not activate during active PDCA | No PM agents triggered when Plan exists |
+| PM-T08 | PM discovery completion transitions to Plan | PDCA Plan phase suggested after PM completion |
+| PM-T09 | All 5 PM agents have memory: project | Frontmatter verified |
+| PM-T10 | All 5 PM agents use sonnet model | Model field verified |
+
+### Template Validator Tests (TV-T)
+
+| ID | Test | Expected Result |
+|----|------|-----------------|
+| TV-T01 | Plan template validates correctly | Template structure matches schema |
+| TV-T02 | Design template validates correctly | Template structure matches schema |
+| TV-T03 | Analysis template validates correctly | Template structure matches schema |
+| TV-T04 | Report template validates correctly | Template structure matches schema |
+
+### v1.6.0 Integration Tests
+
+| ID | Test | Expected Result |
+|----|------|-----------------|
+| V16-T01 | Total exports count = 210 | `Object.keys(require('./lib/common')).length === 210` |
+| V16-T02 | Total agents = 29 | 16 core + 5 PM Team + 8 new agents in agents/ directory |
+| V16-T03 | Total skills = 31 | 22 core + 5 bkend + 1 pm-discovery + 3 new in skills/ directory |
+| V16-T04 | CC v2.1.78 compatibility | All 12 hook events fire correctly |
+| V16-T05 | SessionStart announces PM Team | PM Team availability in session message |
