@@ -63,8 +63,18 @@ DASHBOARD_DIR="$TARGET_DIR/claude-dashboard"
 if [ ! -d "$DASHBOARD_DIR" ]; then
     echo "✓ claude-dashboard 설치 중..."
     git clone https://github.com/uppinote20/claude-dashboard.git "$DASHBOARD_DIR" 2>/dev/null
-    cd "$DASHBOARD_DIR" && npm install --silent && npm run build --silent && cd "$SCRIPT_DIR"
-    echo "  ✓ claude-dashboard 빌드 완료"
+    cd "$DASHBOARD_DIR" && npm install --silent && cd "$SCRIPT_DIR"
+fi
+
+# claude-dashboard 패치 적용 후 빌드
+PATCHES_DIR="$SCRIPT_DIR/claude-dashboard-patches"
+if [ -d "$PATCHES_DIR" ]; then
+    echo "✓ claude-dashboard 패치 적용 중..."
+    [ -f "$PATCHES_DIR/last-skill.ts" ] && cp "$PATCHES_DIR/last-skill.ts" "$DASHBOARD_DIR/scripts/widgets/last-skill.ts"
+    [ -f "$PATCHES_DIR/types.ts" ] && cp "$PATCHES_DIR/types.ts" "$DASHBOARD_DIR/scripts/types.ts"
+    [ -f "$PATCHES_DIR/index.ts" ] && cp "$PATCHES_DIR/index.ts" "$DASHBOARD_DIR/scripts/widgets/index.ts"
+    cd "$DASHBOARD_DIR" && npm run build --silent && cd "$SCRIPT_DIR"
+    echo "  ✓ 패치 빌드 완료"
 fi
 
 # hooks, scripts 실행 권한 부여
