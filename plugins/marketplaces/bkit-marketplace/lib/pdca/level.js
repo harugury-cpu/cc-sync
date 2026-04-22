@@ -1,7 +1,7 @@
 /**
  * Level Detection Module
  * @module lib/pdca/level
- * @version 2.0.0
+ * @version 1.4.7
  */
 
 const fs = require('fs');

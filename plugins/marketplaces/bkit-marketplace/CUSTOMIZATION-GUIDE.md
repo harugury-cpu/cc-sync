@@ -34,55 +34,6 @@ A comprehensive guide to customizing Claude Code plugins for your organization, 
 
 ---
 
-## ⚠️ Important Notices
-
-### Custom Skills Data Loss Warning (CC v2.1.116+ Users)
-
-**Symptom**: On CC CLI v2.1.113+ (especially v2.1.116), the `~/.claude/skills/` directory may be **silently deleted** on first-run ([#51234](https://github.com/anthropics/claude-code/issues/51234)).
-
-**Impact on bkit**:
-- ✅ **bkit plugin itself is unaffected** — bkit's 39 skills live under `${CLAUDE_PLUGIN_ROOT}/skills/` (plugin bundle path).
-- ⚠️ **User custom skills affected** — if you keep personal skills under `~/.claude/skills/`, **data loss is possible**.
-
-#### Recommended Backup (run immediately)
-
-```bash
-# Full backup with date tag
-cp -R ~/.claude/skills ~/.claude/skills.backup.$(date +%Y%m%d)
-
-# Backup to an external safe location
-mkdir -p ~/Documents/claude-skills-backup
-cp -R ~/.claude/skills/* ~/Documents/claude-skills-backup/
-```
-
-#### Restore (if deletion occurs)
-
-```bash
-# Restore from backup
-cp -R ~/.claude/skills.backup.YYYYMMDD ~/.claude/skills
-```
-
-#### Recommended Paths for bkit Custom Skill Authors
-
-bkit stores skills under the **plugin bundle path** (`${CLAUDE_PLUGIN_ROOT}/skills/`), so it is unaffected. To author your own skill:
-
-1. **Recommended**: Fork the bkit plugin and create `skills/{skill-name}/SKILL.md` (see §9 of this guide).
-2. **Alternative**: Create a separate plugin (follow bkit's `.claude-plugin/plugin.json` + `skills/` structure).
-3. **Avoid**: Using `~/.claude/skills/` — risk of loss on CC upgrades.
-
-#### Monitoring Status
-
-This issue is tracked under **MON-CC-06** (16 regressions from CC v2.1.113 native-binary transition, consolidated). Related issues:
-- [#50274](https://github.com/anthropics/claude-code/issues/50274) session termination
-- [#50383](https://github.com/anthropics/claude-code/issues/50383) macOS 11 dyld
-- [#50974](https://github.com/anthropics/claude-code/issues/50974) postinstall failure
-- [#51165](https://github.com/anthropics/claude-code/issues/51165) `context: fork` failure
-- [#51234](https://github.com/anthropics/claude-code/issues/51234) custom skills deletion
-
-This warning will be relaxed once an official fix lands in v2.1.117+.
-
----
-
 ## 1. bkit Design Philosophy
 
 Before customizing bkit, understanding its design intent helps you make better decisions about what to adapt and what to keep.
@@ -112,7 +63,7 @@ Layer 1: hooks.json          → SessionStart, PreToolUse, PostToolUse hooks
 Layer 2: Skill Frontmatter   → hooks: PreToolUse, PostToolUse, Stop
 Layer 3: Agent Frontmatter   → hooks: PreToolUse, PostToolUse
 Layer 4: Description Triggers → "Triggers:" keyword matching
-Layer 5: Scripts             → Actual Node.js logic execution (43 scripts)
+Layer 5: Scripts             → Actual Node.js logic execution (45 modules)
 ```
 
 This separation allows fine-grained control over when and how automation triggers.
@@ -177,27 +128,26 @@ For deeper understanding, explore the `bkit-system/` folder:
 
 bkit is not just a collection of prompts—it's a **production-grade plugin architecture** with carefully designed components that work together as a cohesive system.
 
-### Component Inventory (v2.1.9)
+### Component Inventory (v1.5.5)
 
 | Component | Count | Purpose |
 |-----------|-------|---------|
-| **Agents** | 36 | Specialized AI subagents with memory persistence |
-| **Skills** | 39 | Domain knowledge and slash commands (Commands deprecated) |
+| **Agents** | 16 | Specialized AI subagents with memory persistence |
+| **Skills** | 27 | Domain knowledge and slash commands (Commands deprecated) |
 | **Commands** | DEPRECATED | Migrated to Skills in v1.4.4+ |
-| **Scripts** | 43 | Hook execution scripts with unified handlers |
-| **Templates** | 18 | Document templates (PDCA + 9 phases + shared) |
-| **Hooks** | 21 events | Event-driven automation (centralized in hooks.json) |
-| **lib/** | 101 modules (11 subdirs) | Modular utility library. Subdirs: audit, context, control, core, intent, pdca, qa, quality, task, team, ui. |
-| **Output Styles** | 4 | Level-based response formatting |
-| **MCP Servers** | 2 | `bkit-pdca-server`, `bkit-analysis-server` (16 tools) |
+| **Scripts** | 45 | Hook execution scripts with unified handlers |
+| **Templates** | 28 | Document templates (PDCA + 9 phases + shared) |
+| **Hooks** | 10 events | Event-driven automation (centralized in hooks.json) |
+| **lib/** | 5 modules (241 functions) | Modular utility library (v1.5.3) |
+| **Output Styles** | 4 | Level-based response formatting (v1.5.3) |
 
-**Total: 600+ components** working in harmony.
+**Total: 100+ components** working in harmony.
 
 ### Library Module Structure (v1.5.3)
 
 ```
 lib/
-├── common.js              # Migration Bridge (210 exports, re-exports all modules)
+├── common.js              # Migration Bridge (re-exports all modules)
 ├── core/                  # Core utilities (7 files, 41 exports)
 │   ├── index.js           # Entry point
 │   ├── platform.js        # Platform detection (Claude Code)
@@ -245,18 +195,10 @@ const { matchImplicitAgentTrigger } = require('./lib/intent');
 const { classifyTask } = require('./lib/task');
 
 // Legacy: Still supported via Migration Bridge
-const { debugLog, getConfig } = require('./lib/common');  // 210 exports
+const { debugLog, getConfig } = require('./lib/common');
 ```
 
-> **v1.6.2**: CC v2.1.78 Integration (14 ENH), PostCompact/StopFailure hooks, ${CLAUDE_PLUGIN_DATA} backup, agent effort/maxTurns, 1M context default, 12 hook events, 49 scripts, 210 exports, 1186 TC (99.7%), CC v2.1.78 recommended
->
-> **v1.6.1**: CTO Orchestration Redesign (Main Session as CTO), 3-Tier Agent Security Model, Config-Code Sync, P0 Bug Fixes (4), Skill Evals 28/28, CE-5 Master (88/100), 1073 TC (99.6%), 28 skills, 21 agents, 208 exports, CC v2.1.69+ required
->
-> **v1.6.0**: Skills 2.0 Complete Integration (19 ENH items), PM Agent Team (5 agents), Skill Evals Framework, Skill Classification (9 Workflow / 18 Capability / 1 Hybrid), A/B Testing, Skill Creator, template-validator, 28 skills, 21 agents, 208 exports, CC v2.1.71 recommended
-
-> **v1.5.9**: Executive Summary module (3 exports), AskUserQuestion Preview UX, ENH-74~81 (agent_id/agent_type, continue:false), 199 exports
-
-> **v1.5.8**: Claude Code Exclusive with CTO-Led Agent Teams (16 agents), Plan Plus skill, bkend MCP Accuracy Fix (28+ tools), Output Styles, Agent Memory, Team Visibility, /simplify + /batch PDCA integration, auto-memory support, HTTP hooks awareness, Studio Support (Path Registry, state directory migration)
+> **v1.5.5**: Claude Code Exclusive with CTO-Led Agent Teams (16 agents), Plan Plus skill (brainstorming-enhanced planning), bkend MCP Accuracy Fix (28+ tools), Output Styles, Agent Memory, and Team Visibility
 
 ### Context Engineering Architecture (v1.5.3)
 
@@ -269,7 +211,7 @@ bkit is a **practical implementation of Context Engineering**—the art of curat
 │                                                                 │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────┐  │
 │  │ Domain Knowledge │  │ Behavioral Rules │  │ State Mgmt   │  │
-│  │    (39 Skills)   │  │   (36 Agents)    │  │(lib/common)  │  │
+│  │    (27 Skills)   │  │   (16 Agents)    │  │(lib/common)  │  │
 │  │                  │  │                  │  │              │  │
 │  │ • 9-Phase Guide  │  │ • Role Def.      │  │ • PDCA v2.0  │  │
 │  │ • 3 Levels       │  │ • Constraints    │  │ • Multi-Feat │  │
@@ -279,13 +221,12 @@ bkit is a **practical implementation of Context Engineering**—the art of curat
 │           └─────────────────────┼────────────────────┘          │
 │                                 ▼                               │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │                6-Layer Hook System                        │  │
-│  │  L1: hooks.json (21 events)                              │  │
+│  │                5-Layer Hook System                        │  │
+│  │  L1: hooks.json (SessionStart)                           │  │
 │  │  L2: Skill Frontmatter (PreToolUse/PostToolUse/Stop)     │  │
 │  │  L3: Agent Frontmatter (PreToolUse/PostToolUse)          │  │
 │  │  L4: Description Triggers (keyword matching)             │  │
-│  │  L5: Scripts (43 Node.js modules)                        │  │
-│  │  L6: Plugin Data Backup (${CLAUDE_PLUGIN_DATA})          │  │
+│  │  L5: Scripts (45 Node.js modules)                        │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                                 │                               │
 │                                 ▼                               │
@@ -321,20 +262,20 @@ For detailed Context Engineering documentation, see [bkit-system/philosophy/cont
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│               bkit Component Architecture (v2.1.9)               │
+│               bkit Component Architecture (v1.5.3)               │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  Knowledge Layer    │ Skills (39)      │ Domain expertise       │
+│  Knowledge Layer    │ Skills (27)      │ Domain expertise       │
 │  ─────────────────────────────────────────────────────────────  │
-│  Execution Layer    │ Agents (36)      │ Autonomous task work   │
+│  Execution Layer    │ Agents (16)      │ Autonomous task work   │
 │  ─────────────────────────────────────────────────────────────  │
-│  Interface Layer    │ Commands (DEPRECATED) │ User interaction  │
+│  Interface Layer    │ Commands (20×2)  │ User interaction       │
 │  ─────────────────────────────────────────────────────────────  │
-│  Automation Layer   │ Hooks + Scripts (43) │ Event-driven triggers│
+│  Automation Layer   │ Hooks + Scripts (45) │ Event-driven triggers│
 │  ─────────────────────────────────────────────────────────────  │
-│  Template Layer     │ Templates (18)   │ Document standards     │
+│  Template Layer     │ Templates (27)   │ Document standards     │
 │  ─────────────────────────────────────────────────────────────  │
-│  Shared Library     │ lib/ (101 modules)  │ Modular utilities     │
+│  Shared Library     │ lib/ (241 funcs)    │ Modular utilities     │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -382,7 +323,7 @@ Layer 3: Agent Frontmatter
 Layer 4: Description Triggers
    └─ "Triggers:" keywords for auto-activation
 
-Layer 5: Scripts (43 Node.js scripts)
+Layer 5: Scripts (45 Node.js scripts)
    └─ Actual logic execution
 ```
 
@@ -412,19 +353,19 @@ When you customize bkit, you inherit:
 
 | Benefit | How bkit Provides It |
 |---------|---------------------|
-| **Proven Architecture** | 600+ components tested together |
+| **Proven Architecture** | 86+ components tested together |
 | **Complete Workflows** | PDCA + 9-phase pipeline ready |
 | **Multilingual Support** | 8 languages in trigger keywords |
 | **Level Adaptation** | Auto-adjusts to Starter/Dynamic/Enterprise |
-| **Documentation Standards** | 29 templates for consistency |
-| **Automation Foundation** | 6-layer hook system |
+| **Documentation Standards** | 21 templates for consistency |
+| **Automation Foundation** | 5-layer hook system |
 
 ### Quality Indicators
 
 | Metric | bkit Value | Industry Typical |
 |--------|------------|------------------|
-| Component Count | 600+ | 10-20 |
-| Hook Layers | 6 | 1-2 |
+| Component Count | 100+ | 10-20 |
+| Hook Layers | 5 | 1-2 |
 | Template Coverage | 100% PDCA | Partial |
 | Language Support | 8 | 1-2 |
 | Project Levels | 3 | 1 |
@@ -442,9 +383,9 @@ bkit implements a **4-tier language classification system** optimized for AI-Nat
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  TIER 1: AI-Native Essential (Full PDCA Support)                        │
 ├─────────────────────────────────────────────────────────────────────────┤
-│  Languages:   Python, TypeScript, JavaScript ,java                           │
+│  Languages:   Python, TypeScript, JavaScript                            │
 │  Extensions:  .py, .pyx, .pyi, .ts, .tsx, .js, .jsx, .mjs, .cjs        │
-│  Frameworks:  React, Next.js, Svelte, SvelteKit, FastAPI , JAVA                │
+│  Frameworks:  React, Next.js, Svelte, SvelteKit, FastAPI                │
 │  AI Support:  Copilot ✓, Claude ✓, Cursor ✓, Vibe Coding optimized     │
 ├─────────────────────────────────────────────────────────────────────────┤
 │  TIER 2: Mainstream Recommended                                          │
@@ -789,14 +730,14 @@ A Claude Code plugin like bkit consists of these components:
 | **Templates** | Document templates for standardization | `templates/` |
 | **Scripts** | Helper scripts for automation | `scripts/` |
 
-### bkit Plugin Structure Example (v2.1.1 - Claude Code Exclusive)
+### bkit Plugin Structure Example (v1.5.5 - Claude Code Exclusive)
 
 ```
 bkit-claude-code/
 ├── .claude-plugin/
 │   ├── plugin.json                 # Claude Code plugin metadata
 │   └── marketplace.json            # Marketplace registration
-├── agents/                         # AI subagents (36 total, with memory)
+├── agents/                         # AI subagents (16 total, with memory)
 │   ├── starter-guide.md            # Beginner-friendly agent
 │   ├── enterprise-expert.md        # Enterprise architecture agent
 │   ├── code-analyzer.md            # Code review agent
@@ -805,8 +746,8 @@ bkit-claude-code/
 │   ├── product-manager.md          # Requirements & feature prioritization
 │   ├── qa-strategist.md            # QA strategy coordinator
 │   ├── security-architect.md       # Security & vulnerability expert
-│   └── ... (36 total, including 8 CTO/PM Team + 8 PDCA Eval agents)
-├── skills/                         # Domain knowledge (39 skills)
+│   └── ... (16 total)
+├── skills/                         # Domain knowledge (27 skills)
 │   ├── bkit-rules/SKILL.md         # Core PDCA rules
 │   ├── plan-plus/SKILL.md          # Brainstorming-enhanced planning (v1.5.5)
 │   ├── development-pipeline/SKILL.md
@@ -814,9 +755,9 @@ bkit-claude-code/
 ├── commands/
 │   └── *.md                        # Claude Code commands
 ├── hooks/
-│   ├── hooks.json                  # Claude Code hook configuration (21 events)
+│   ├── hooks.json                  # Claude Code hook configuration (10 events)
 │   └── session-start.js            # Session initialization (Node.js)
-├── scripts/                        # Hook execution scripts (43 scripts)
+├── scripts/                        # Hook execution scripts (45 scripts)
 │   └── *.js
 ├── output-styles/                  # Level-based response formatting (v1.5.3)
 │   ├── bkit-learning.md            # Starter level style
@@ -997,7 +938,7 @@ hooks:                         # Skill-specific hooks
     - matcher: "Write"
       hooks:
         - type: command
-          command: "node \"${CLAUDE_PLUGIN_ROOT}/scripts/validate.js\""
+          command: "node ${CLAUDE_PLUGIN_ROOT}/scripts/validate.js"
 ---
 
 # Skill Content
@@ -1264,7 +1205,7 @@ Create `hooks/hooks.json`:
       "hooks": [
         {
           "type": "command",
-          "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.js\"",
+          "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/session-start.js",
           "timeout": 5000
         }
       ]
@@ -1275,7 +1216,7 @@ Create `hooks/hooks.json`:
       "hooks": [
         {
           "type": "command",
-          "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/validate-bash.js\""
+          "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/validate-bash.js"
         }
       ]
     },
@@ -1600,7 +1541,7 @@ Provide senior-level guidance on architecture and best practices.
       "hooks": [
         {
           "type": "command",
-          "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/init.js\""
+          "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/init.js"
         }
       ]
     }

@@ -408,11 +408,11 @@ var require_codegen = __commonJS({
         const rhs = this.rhs === void 0 ? "" : ` = ${this.rhs}`;
         return `${varKind} ${this.name}${rhs};` + _n;
       }
-      optimizeNames(names, constants2) {
+      optimizeNames(names, constants) {
         if (!names[this.name.str])
           return;
         if (this.rhs)
-          this.rhs = optimizeExpr(this.rhs, names, constants2);
+          this.rhs = optimizeExpr(this.rhs, names, constants);
         return this;
       }
       get names() {
@@ -429,10 +429,10 @@ var require_codegen = __commonJS({
       render({ _n }) {
         return `${this.lhs} = ${this.rhs};` + _n;
       }
-      optimizeNames(names, constants2) {
+      optimizeNames(names, constants) {
         if (this.lhs instanceof code_1.Name && !names[this.lhs.str] && !this.sideEffects)
           return;
-        this.rhs = optimizeExpr(this.rhs, names, constants2);
+        this.rhs = optimizeExpr(this.rhs, names, constants);
         return this;
       }
       get names() {
@@ -493,8 +493,8 @@ var require_codegen = __commonJS({
       optimizeNodes() {
         return `${this.code}` ? this : void 0;
       }
-      optimizeNames(names, constants2) {
-        this.code = optimizeExpr(this.code, names, constants2);
+      optimizeNames(names, constants) {
+        this.code = optimizeExpr(this.code, names, constants);
         return this;
       }
       get names() {
@@ -523,12 +523,12 @@ var require_codegen = __commonJS({
         }
         return nodes.length > 0 ? this : void 0;
       }
-      optimizeNames(names, constants2) {
+      optimizeNames(names, constants) {
         const { nodes } = this;
         let i = nodes.length;
         while (i--) {
           const n = nodes[i];
-          if (n.optimizeNames(names, constants2))
+          if (n.optimizeNames(names, constants))
             continue;
           subtractNames(names, n.names);
           nodes.splice(i, 1);
@@ -581,12 +581,12 @@ var require_codegen = __commonJS({
           return void 0;
         return this;
       }
-      optimizeNames(names, constants2) {
+      optimizeNames(names, constants) {
         var _a;
-        this.else = (_a = this.else) === null || _a === void 0 ? void 0 : _a.optimizeNames(names, constants2);
-        if (!(super.optimizeNames(names, constants2) || this.else))
+        this.else = (_a = this.else) === null || _a === void 0 ? void 0 : _a.optimizeNames(names, constants);
+        if (!(super.optimizeNames(names, constants) || this.else))
           return;
-        this.condition = optimizeExpr(this.condition, names, constants2);
+        this.condition = optimizeExpr(this.condition, names, constants);
         return this;
       }
       get names() {
@@ -609,10 +609,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.iteration})` + super.render(opts);
       }
-      optimizeNames(names, constants2) {
-        if (!super.optimizeNames(names, constants2))
+      optimizeNames(names, constants) {
+        if (!super.optimizeNames(names, constants))
           return;
-        this.iteration = optimizeExpr(this.iteration, names, constants2);
+        this.iteration = optimizeExpr(this.iteration, names, constants);
         return this;
       }
       get names() {
@@ -648,10 +648,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.varKind} ${this.name} ${this.loop} ${this.iterable})` + super.render(opts);
       }
-      optimizeNames(names, constants2) {
-        if (!super.optimizeNames(names, constants2))
+      optimizeNames(names, constants) {
+        if (!super.optimizeNames(names, constants))
           return;
-        this.iterable = optimizeExpr(this.iterable, names, constants2);
+        this.iterable = optimizeExpr(this.iterable, names, constants);
         return this;
       }
       get names() {
@@ -693,11 +693,11 @@ var require_codegen = __commonJS({
         (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNodes();
         return this;
       }
-      optimizeNames(names, constants2) {
+      optimizeNames(names, constants) {
         var _a, _b;
-        super.optimizeNames(names, constants2);
-        (_a = this.catch) === null || _a === void 0 ? void 0 : _a.optimizeNames(names, constants2);
-        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants2);
+        super.optimizeNames(names, constants);
+        (_a = this.catch) === null || _a === void 0 ? void 0 : _a.optimizeNames(names, constants);
+        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants);
         return this;
       }
       get names() {
@@ -998,7 +998,7 @@ var require_codegen = __commonJS({
     function addExprNames(names, from) {
       return from instanceof code_1._CodeOrName ? addNames(names, from.names) : names;
     }
-    function optimizeExpr(expr, names, constants2) {
+    function optimizeExpr(expr, names, constants) {
       if (expr instanceof code_1.Name)
         return replaceName(expr);
       if (!canOptimize(expr))
@@ -1013,14 +1013,14 @@ var require_codegen = __commonJS({
         return items;
       }, []));
       function replaceName(n) {
-        const c = constants2[n.str];
+        const c = constants[n.str];
         if (c === void 0 || names[n.str] !== 1)
           return n;
         delete names[n.str];
         return c;
       }
       function canOptimize(e) {
-        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants2[c.str] !== void 0);
+        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants[c.str] !== void 0);
       }
     }
     function subtractNames(names, from) {
@@ -2233,8 +2233,8 @@ var require_resolve = __commonJS({
       }
       return count;
     }
-    function getFullPath(resolver, id = "", normalize2) {
-      if (normalize2 !== false)
+    function getFullPath(resolver, id = "", normalize) {
+      if (normalize !== false)
         id = normalizeId(id);
       const p = resolver.parse(id);
       return _getFullPath(resolver, p);
@@ -2982,7 +2982,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve2.call(this, root, ref);
+      let _sch = resolve.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a = root.localRefs) === null || _a === void 0 ? void 0 : _a[ref];
         const { schemaId } = this.opts;
@@ -3009,7 +3009,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve2(root, ref) {
+    function resolve(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3224,8 +3224,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path4) {
-      let input = path4;
+    function removeDotSegments(path) {
+      let input = path;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3424,8 +3424,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path4, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path4 && path4 !== "/" ? path4 : void 0;
+        const [path, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path && path !== "/" ? path : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -3574,65 +3574,65 @@ var require_fast_uri = __commonJS({
     "use strict";
     var { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizeComponentEncoding, isIPv4, nonSimpleDomain } = require_utils();
     var { SCHEMES, getSchemeHandler } = require_schemes();
-    function normalize2(uri, options) {
+    function normalize(uri, options) {
       if (typeof uri === "string") {
         uri = /** @type {T} */
-        serialize(parse5(uri, options), options);
+        serialize(parse3(uri, options), options);
       } else if (typeof uri === "object") {
         uri = /** @type {T} */
-        parse5(serialize(uri, options), options);
+        parse3(serialize(uri, options), options);
       }
       return uri;
     }
-    function resolve2(baseURI, relativeURI, options) {
+    function resolve(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
-      const resolved = resolveComponent(parse5(baseURI, schemelessOptions), parse5(relativeURI, schemelessOptions), schemelessOptions, true);
+      const resolved = resolveComponent(parse3(baseURI, schemelessOptions), parse3(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
-    function resolveComponent(base, relative2, options, skipNormalization) {
+    function resolveComponent(base, relative, options, skipNormalization) {
       const target = {};
       if (!skipNormalization) {
-        base = parse5(serialize(base, options), options);
-        relative2 = parse5(serialize(relative2, options), options);
+        base = parse3(serialize(base, options), options);
+        relative = parse3(serialize(relative, options), options);
       }
       options = options || {};
-      if (!options.tolerant && relative2.scheme) {
-        target.scheme = relative2.scheme;
-        target.userinfo = relative2.userinfo;
-        target.host = relative2.host;
-        target.port = relative2.port;
-        target.path = removeDotSegments(relative2.path || "");
-        target.query = relative2.query;
+      if (!options.tolerant && relative.scheme) {
+        target.scheme = relative.scheme;
+        target.userinfo = relative.userinfo;
+        target.host = relative.host;
+        target.port = relative.port;
+        target.path = removeDotSegments(relative.path || "");
+        target.query = relative.query;
       } else {
-        if (relative2.userinfo !== void 0 || relative2.host !== void 0 || relative2.port !== void 0) {
-          target.userinfo = relative2.userinfo;
-          target.host = relative2.host;
-          target.port = relative2.port;
-          target.path = removeDotSegments(relative2.path || "");
-          target.query = relative2.query;
+        if (relative.userinfo !== void 0 || relative.host !== void 0 || relative.port !== void 0) {
+          target.userinfo = relative.userinfo;
+          target.host = relative.host;
+          target.port = relative.port;
+          target.path = removeDotSegments(relative.path || "");
+          target.query = relative.query;
         } else {
-          if (!relative2.path) {
+          if (!relative.path) {
             target.path = base.path;
-            if (relative2.query !== void 0) {
-              target.query = relative2.query;
+            if (relative.query !== void 0) {
+              target.query = relative.query;
             } else {
               target.query = base.query;
             }
           } else {
-            if (relative2.path[0] === "/") {
-              target.path = removeDotSegments(relative2.path);
+            if (relative.path[0] === "/") {
+              target.path = removeDotSegments(relative.path);
             } else {
               if ((base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0) && !base.path) {
-                target.path = "/" + relative2.path;
+                target.path = "/" + relative.path;
               } else if (!base.path) {
-                target.path = relative2.path;
+                target.path = relative.path;
               } else {
-                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative2.path;
+                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative.path;
               }
               target.path = removeDotSegments(target.path);
             }
-            target.query = relative2.query;
+            target.query = relative.query;
           }
           target.userinfo = base.userinfo;
           target.host = base.host;
@@ -3640,19 +3640,19 @@ var require_fast_uri = __commonJS({
         }
         target.scheme = base.scheme;
       }
-      target.fragment = relative2.fragment;
+      target.fragment = relative.fragment;
       return target;
     }
     function equal(uriA, uriB, options) {
       if (typeof uriA === "string") {
         uriA = unescape(uriA);
-        uriA = serialize(normalizeComponentEncoding(parse5(uriA, options), true), { ...options, skipEscape: true });
+        uriA = serialize(normalizeComponentEncoding(parse3(uriA, options), true), { ...options, skipEscape: true });
       } else if (typeof uriA === "object") {
         uriA = serialize(normalizeComponentEncoding(uriA, true), { ...options, skipEscape: true });
       }
       if (typeof uriB === "string") {
         uriB = unescape(uriB);
-        uriB = serialize(normalizeComponentEncoding(parse5(uriB, options), true), { ...options, skipEscape: true });
+        uriB = serialize(normalizeComponentEncoding(parse3(uriB, options), true), { ...options, skipEscape: true });
       } else if (typeof uriB === "object") {
         uriB = serialize(normalizeComponentEncoding(uriB, true), { ...options, skipEscape: true });
       }
@@ -3721,7 +3721,7 @@ var require_fast_uri = __commonJS({
       return uriTokens.join("");
     }
     var URI_PARSE = /^(?:([^#/:?]+):)?(?:\/\/((?:([^#/?@]*)@)?(\[[^#/?\]]+\]|[^#/:?]*)(?::(\d*))?))?([^#?]*)(?:\?([^#]*))?(?:#((?:.|[\n\r])*))?/u;
-    function parse5(uri, opts) {
+    function parse3(uri, opts) {
       const options = Object.assign({}, opts);
       const parsed = {
         scheme: void 0,
@@ -3810,12 +3810,12 @@ var require_fast_uri = __commonJS({
     }
     var fastUri = {
       SCHEMES,
-      normalize: normalize2,
-      resolve: resolve2,
+      normalize,
+      resolve,
       resolveComponent,
       equal,
       serialize,
-      parse: parse5
+      parse: parse3
     };
     module2.exports = fastUri;
     module2.exports.default = fastUri;
@@ -4727,7 +4727,6 @@ var require_pattern = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var code_1 = require_code2();
-    var util_1 = require_util();
     var codegen_1 = require_codegen();
     var error2 = {
       message: ({ schemaCode }) => (0, codegen_1.str)`must match pattern "${schemaCode}"`,
@@ -4740,18 +4739,10 @@ var require_pattern = __commonJS({
       $data: true,
       error: error2,
       code(cxt) {
-        const { gen, data, $data, schema, schemaCode, it } = cxt;
+        const { data, $data, schema, schemaCode, it } = cxt;
         const u = it.opts.unicodeRegExp ? "u" : "";
-        if ($data) {
-          const { regExp } = it.opts.code;
-          const regExpCode = regExp.code === "new RegExp" ? (0, codegen_1._)`new RegExp` : (0, util_1.useFunc)(gen, regExp);
-          const valid = gen.let("valid");
-          gen.try(() => gen.assign(valid, (0, codegen_1._)`${regExpCode}(${schemaCode}, ${u}).test(${data})`), () => gen.assign(valid, false));
-          cxt.fail$data((0, codegen_1._)`!${valid}`);
-        } else {
-          const regExp = (0, code_1.usePattern)(cxt, schema);
-          cxt.fail$data((0, codegen_1._)`!${regExp}.test(${data})`);
-        }
+        const regExp = $data ? (0, codegen_1._)`(new RegExp(${schemaCode}, ${u}))` : (0, code_1.usePattern)(cxt, schema);
+        cxt.fail$data((0, codegen_1._)`!${regExp}.test(${data})`);
       }
     };
     exports2.default = def;
@@ -6787,12 +6778,12 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs3, exportName) {
+    function addFormats(ajv, list, fs2, exportName) {
       var _a;
       var _b;
       (_a = (_b = ajv.opts.code).formats) !== null && _a !== void 0 ? _a : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs3[f]);
+        ajv.addFormat(f, fs2[f]);
     }
     module2.exports = exports2 = formatsPlugin;
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -7289,8 +7280,8 @@ function getErrorMap() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path4, errorMaps, issueData } = params;
-  const fullPath = [...path4, ...issueData.path || []];
+  const { data, path, errorMaps, issueData } = params;
+  const fullPath = [...path, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -7406,11 +7397,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path4, key) {
+  constructor(parent, value, path, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path4;
+    this._path = path;
     this._key = key;
   }
   get path() {
@@ -11047,10 +11038,10 @@ function assignProp(target, prop, value) {
     configurable: true
   });
 }
-function getElementAtPath(obj, path4) {
-  if (!path4)
+function getElementAtPath(obj, path) {
+  if (!path)
     return obj;
-  return path4.reduce((acc, key) => acc?.[key], obj);
+  return path.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -11370,11 +11361,11 @@ function aborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path4, issues) {
+function prefixIssues(path, issues) {
   return issues.map((iss) => {
     var _a;
     (_a = iss).path ?? (_a.path = []);
-    iss.path.unshift(path4);
+    iss.path.unshift(path);
     return iss;
   });
 }
@@ -16673,7 +16664,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve2) => setTimeout(resolve2, pollInterval));
+        await new Promise((resolve) => setTimeout(resolve, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -16690,7 +16681,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve2, reject) => {
+    return new Promise((resolve, reject) => {
       const earlyReject = (error2) => {
         reject(error2);
       };
@@ -16768,7 +16759,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject(parseResult.error);
           } else {
-            resolve2(parseResult.data);
+            resolve(parseResult.data);
           }
         } catch (error2) {
           reject(error2);
@@ -17029,12 +17020,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve2, reject) => {
+    return new Promise((resolve, reject) => {
       if (signal.aborted) {
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve2, interval);
+      const timeoutId = setTimeout(resolve, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -17763,28 +17754,28 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve2) => {
+    return new Promise((resolve) => {
       const json = serializeMessage(message);
       if (this._stdout.write(json)) {
-        resolve2();
+        resolve();
       } else {
-        this._stdout.once("drain", resolve2);
+        this._stdout.once("drain", resolve);
       }
     });
   }
 };
 
 // src/mcp/team-server.ts
-var import_node_crypto = require("node:crypto");
 var import_child_process3 = require("child_process");
-var import_path7 = require("path");
-var import_url = require("url");
-var import_fs7 = require("fs");
+var import_path3 = require("path");
+var import_fs2 = require("fs");
 var import_promises2 = require("fs/promises");
+var import_os = require("os");
 
 // src/team/tmux-session.ts
-var import_fs = require("fs");
-var import_path2 = require("path");
+var import_child_process = require("child_process");
+var import_path = require("path");
+var import_util5 = require("util");
 var import_promises = __toESM(require("fs/promises"), 1);
 
 // src/team/team-name.ts
@@ -17798,101 +17789,23 @@ function validateTeamName(teamName) {
   return teamName;
 }
 
-// src/cli/tmux-utils.ts
-var import_child_process = require("child_process");
-var import_path = require("path");
-var import_util5 = require("util");
-function tmuxEnv() {
-  const { TMUX: _, ...env } = process.env;
-  return env;
-}
-function resolveEnv(opts) {
-  return opts?.stripTmux ? tmuxEnv() : process.env;
-}
-function quoteForCmd(arg) {
-  if (arg.length === 0) return '""';
-  if (!/[\s"%^&|<>()]/.test(arg)) return arg;
-  return `"${arg.replace(/(["%])/g, "$1$1")}"`;
-}
-function resolveTmuxInvocation(args) {
-  const resolvedBinary = resolveTmuxBinaryPath();
-  if (process.platform === "win32" && /\.(cmd|bat)$/i.test(resolvedBinary)) {
-    const comspec = process.env.COMSPEC || "cmd.exe";
-    const commandLine = [quoteForCmd(resolvedBinary), ...args.map(quoteForCmd)].join(" ");
-    return {
-      command: comspec,
-      args: ["/d", "/s", "/c", commandLine]
-    };
-  }
-  return {
-    command: resolvedBinary,
-    args
-  };
-}
-async function tmuxExecAsync(args, opts) {
-  const { stripTmux: _, timeout, ...rest } = opts ?? {};
-  const invocation = resolveTmuxInvocation(args);
-  return (0, import_util5.promisify)(import_child_process.execFile)(invocation.command, invocation.args, {
-    encoding: "utf-8",
-    env: resolveEnv(opts),
-    ...timeout !== void 0 ? { timeout } : {},
-    ...rest
-  });
-}
-async function tmuxShellAsync(command, opts) {
-  const { stripTmux: _, timeout, ...rest } = opts ?? {};
-  return (0, import_util5.promisify)(import_child_process.exec)(`tmux ${command}`, {
-    encoding: "utf-8",
-    env: resolveEnv(opts),
-    ...timeout !== void 0 ? { timeout } : {},
-    ...rest
-  });
-}
-async function tmuxCmdAsync(args, opts) {
-  if (args.some((a) => a.includes("#{"))) {
-    const escaped = args.map((a) => "'" + a.replace(/'/g, "'\\''") + "'").join(" ");
-    return tmuxShellAsync(escaped, opts);
-  }
-  return tmuxExecAsync(args, opts);
-}
-function resolveTmuxBinaryPath() {
-  if (process.platform !== "win32") {
-    return "tmux";
-  }
-  try {
-    const result = (0, import_child_process.spawnSync)("where", ["tmux"], {
-      timeout: 5e3,
-      encoding: "utf8"
-    });
-    if (result.status !== 0) return "tmux";
-    const candidates = result.stdout?.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) ?? [];
-    const first = candidates[0];
-    if (first && ((0, import_path.isAbsolute)(first) || import_path.win32.isAbsolute(first))) {
-      return first;
-    }
-  } catch {
-  }
-  return "tmux";
-}
-
 // src/team/tmux-session.ts
 var sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-function sanitizeName(name) {
-  const sanitized = name.replace(/[^a-zA-Z0-9-]/g, "");
-  if (sanitized.length === 0) {
-    throw new Error(`Invalid name: "${name}" contains no valid characters (alphanumeric or hyphen)`);
+var promisifiedExec = (0, import_util5.promisify)(import_child_process.exec);
+var promisifiedExecFile = (0, import_util5.promisify)(import_child_process.execFile);
+async function tmuxAsync(args) {
+  if (args.some((a) => a.includes("#{"))) {
+    const escaped = args.map((a) => `"${a.replace(/"/g, '\\"')}"`).join(" ");
+    return promisifiedExec(`tmux ${escaped}`);
   }
-  if (sanitized.length < 2) {
-    throw new Error(`Invalid name: "${name}" too short after sanitization (minimum 2 characters)`);
-  }
-  return sanitized.slice(0, 50);
+  return promisifiedExecFile("tmux", args);
 }
 function normalizeTmuxCapture(value) {
   return value.replace(/\r/g, "").replace(/\s+/g, " ").trim();
 }
-async function capturePaneAsync(paneId) {
+async function capturePaneAsync(paneId, execFileAsync) {
   try {
-    const result = await tmuxExecAsync(["capture-pane", "-t", paneId, "-p", "-S", "-80"]);
+    const result = await execFileAsync("tmux", ["capture-pane", "-t", paneId, "-p", "-S", "-80"]);
     return result.stdout;
   } catch {
     return "";
@@ -17905,39 +17818,30 @@ function paneHasTrustPrompt(captured) {
   const hasChoices = tail.some((l) => /Yes,\s*continue|No,\s*quit|Press enter to continue/i.test(l));
   return hasQuestion && hasChoices;
 }
-function paneIsBootstrapping(captured) {
-  const lines = captured.split("\n").map((line) => line.replace(/\r/g, "").trim()).filter((line) => line.length > 0);
-  return lines.some(
-    (line) => /\b(loading|initializing|starting up)\b/i.test(line) || /\bmodel:\s*loading\b/i.test(line) || /\bconnecting\s+to\b/i.test(line)
-  );
-}
 function paneHasActiveTask(captured) {
   const lines = captured.split("\n").map((l) => l.replace(/\r/g, "").trim()).filter((l) => l.length > 0);
   const tail = lines.slice(-40);
-  if (tail.some((l) => /\b\d+\s+background terminal running\b/i.test(l))) return true;
   if (tail.some((l) => /esc to interrupt/i.test(l))) return true;
   if (tail.some((l) => /\bbackground terminal running\b/i.test(l))) return true;
-  if (tail.some((l) => /^[·✻]\s+[A-Za-z][A-Za-z0-9''-]*(?:\s+[A-Za-z][A-Za-z0-9''-]*){0,3}(?:…|\.{3})$/u.test(l))) return true;
   return false;
 }
 function paneLooksReady(captured) {
-  const content = captured.trimEnd();
-  if (content === "") return false;
-  const lines = content.split("\n").map((line) => line.replace(/\r/g, "").trimEnd()).filter((line) => line.trim() !== "");
+  const lines = captured.split("\n").map((line) => line.replace(/\r/g, "").trim()).filter((line) => line.length > 0);
   if (lines.length === 0) return false;
-  if (paneIsBootstrapping(content)) return false;
-  const lastLine = lines[lines.length - 1];
-  if (/^\s*[›>❯]\s*/u.test(lastLine)) return true;
-  const hasCodexPromptLine = lines.some((line) => /^\s*›\s*/u.test(line));
-  const hasClaudePromptLine = lines.some((line) => /^\s*❯\s*/u.test(line));
-  return hasCodexPromptLine || hasClaudePromptLine;
+  const tail = lines.slice(-20);
+  const hasPrompt = tail.some((line) => /^\s*[›>❯]\s*/u.test(line));
+  if (hasPrompt) return true;
+  const hasCodexHint = tail.some(
+    (line) => /\bgpt-[\w.-]+\b/i.test(line) || /\b\d+% left\b/i.test(line)
+  );
+  return hasCodexHint;
 }
 function paneTailContainsLiteralLine(captured, text) {
   return normalizeTmuxCapture(captured).includes(normalizeTmuxCapture(text));
 }
-async function paneInCopyMode(paneId) {
+async function paneInCopyMode(paneId, execFileAsync) {
   try {
-    const result = await tmuxCmdAsync(["display-message", "-t", paneId, "-p", "#{pane_in_mode}"]);
+    const result = await tmuxAsync(["display-message", "-t", paneId, "-p", "#{pane_in_mode}"]);
     return result.stdout.trim() === "1";
   } catch {
     return false;
@@ -17956,48 +17860,52 @@ function shouldAttemptAdaptiveRetry(args) {
 }
 async function sendToWorker(_sessionName, paneId, message) {
   if (message.length > 200) {
-    console.warn(`[tmux-session] sendToWorker: message rejected (${message.length} chars exceeds 200 char limit)`);
-    return false;
+    console.warn(`[tmux-session] sendToWorker: message truncated to 200 chars`);
+    message = message.slice(0, 200);
   }
   try {
+    const { execFile: execFile3 } = await import("child_process");
+    const { promisify: promisify2 } = await import("util");
+    const execFileAsync = promisify2(execFile3);
+    const sleep2 = (ms) => new Promise((r) => setTimeout(r, ms));
     const sendKey = async (key) => {
-      await tmuxExecAsync(["send-keys", "-t", paneId, key]);
+      await execFileAsync("tmux", ["send-keys", "-t", paneId, key]);
     };
-    if (await paneInCopyMode(paneId)) {
+    if (await paneInCopyMode(paneId, execFileAsync)) {
       return false;
     }
-    const initialCapture = await capturePaneAsync(paneId);
+    const initialCapture = await capturePaneAsync(paneId, execFileAsync);
     const paneBusy = paneHasActiveTask(initialCapture);
     if (paneHasTrustPrompt(initialCapture)) {
       await sendKey("C-m");
-      await sleep(120);
+      await sleep2(120);
       await sendKey("C-m");
-      await sleep(200);
+      await sleep2(200);
     }
-    await tmuxExecAsync(["send-keys", "-t", paneId, "-l", "--", message]);
-    await sleep(150);
+    await execFileAsync("tmux", ["send-keys", "-t", paneId, "-l", "--", message]);
+    await sleep2(150);
     const submitRounds = 6;
     for (let round = 0; round < submitRounds; round++) {
-      await sleep(100);
+      await sleep2(100);
       if (round === 0 && paneBusy) {
         await sendKey("Tab");
-        await sleep(80);
+        await sleep2(80);
         await sendKey("C-m");
       } else {
         await sendKey("C-m");
-        await sleep(200);
+        await sleep2(200);
         await sendKey("C-m");
       }
-      await sleep(140);
-      const checkCapture = await capturePaneAsync(paneId);
+      await sleep2(140);
+      const checkCapture = await capturePaneAsync(paneId, execFileAsync);
       if (!paneTailContainsLiteralLine(checkCapture, message)) return true;
-      await sleep(140);
+      await sleep2(140);
     }
-    if (await paneInCopyMode(paneId)) {
+    if (await paneInCopyMode(paneId, execFileAsync)) {
       return false;
     }
-    const finalCapture = await capturePaneAsync(paneId);
-    const paneModeBeforeAdaptiveRetry = await paneInCopyMode(paneId);
+    const finalCapture = await capturePaneAsync(paneId, execFileAsync);
+    const paneModeBeforeAdaptiveRetry = await paneInCopyMode(paneId, execFileAsync);
     if (shouldAttemptAdaptiveRetry({
       paneBusy,
       latestCapture: finalCapture,
@@ -18005,51 +17913,32 @@ async function sendToWorker(_sessionName, paneId, message) {
       paneInCopyMode: paneModeBeforeAdaptiveRetry,
       retriesAttempted: 0
     })) {
-      if (await paneInCopyMode(paneId)) {
+      if (await paneInCopyMode(paneId, execFileAsync)) {
         return false;
       }
       await sendKey("C-u");
-      await sleep(80);
-      if (await paneInCopyMode(paneId)) {
+      await sleep2(80);
+      if (await paneInCopyMode(paneId, execFileAsync)) {
         return false;
       }
-      await tmuxExecAsync(["send-keys", "-t", paneId, "-l", "--", message]);
-      await sleep(120);
+      await execFileAsync("tmux", ["send-keys", "-t", paneId, "-l", "--", message]);
+      await sleep2(120);
       for (let round = 0; round < 4; round++) {
         await sendKey("C-m");
-        await sleep(180);
+        await sleep2(180);
         await sendKey("C-m");
-        await sleep(140);
-        const retryCapture = await capturePaneAsync(paneId);
+        await sleep2(140);
+        const retryCapture = await capturePaneAsync(paneId, execFileAsync);
         if (!paneTailContainsLiteralLine(retryCapture, message)) return true;
       }
     }
-    if (await paneInCopyMode(paneId)) {
+    if (await paneInCopyMode(paneId, execFileAsync)) {
       return false;
     }
     await sendKey("C-m");
-    await sleep(120);
+    await sleep2(120);
     await sendKey("C-m");
-    await sleep(140);
-    const finalCheckCapture = await capturePaneAsync(paneId);
-    if (!finalCheckCapture || finalCheckCapture.trim() === "") {
-      return false;
-    }
-    return !paneTailContainsLiteralLine(finalCheckCapture, message);
-  } catch {
-    return false;
-  }
-}
-async function isWorkerAlive(paneId) {
-  try {
-    const result = await tmuxCmdAsync([
-      "display-message",
-      "-t",
-      paneId,
-      "-p",
-      "#{pane_dead}"
-    ]);
-    return result.stdout.trim() === "0";
+    return true;
   } catch {
     return false;
   }
@@ -18057,73 +17946,38 @@ async function isWorkerAlive(paneId) {
 async function killWorkerPanes(opts) {
   const { paneIds, leaderPaneId, teamName, cwd, graceMs = 1e4 } = opts;
   if (!paneIds.length) return;
-  const shutdownPath = (0, import_path2.join)(cwd, ".omc", "state", "team", teamName, "shutdown.json");
+  const shutdownPath = (0, import_path.join)(cwd, ".omc", "state", "team", teamName, "shutdown.json");
   try {
     await import_promises.default.writeFile(shutdownPath, JSON.stringify({ requestedAt: Date.now() }));
-    const aliveChecks = await Promise.all(paneIds.map((id) => isWorkerAlive(id)));
-    if (aliveChecks.some((alive) => alive)) {
-      await sleep(graceMs);
-    }
+    await sleep(graceMs);
   } catch {
   }
+  const { execFile: execFile3 } = await import("child_process");
+  const { promisify: promisify2 } = await import("util");
+  const execFileAsync = promisify2(execFile3);
   for (const paneId of paneIds) {
     if (paneId === leaderPaneId) continue;
     try {
-      await tmuxExecAsync(["kill-pane", "-t", paneId]);
+      await execFileAsync("tmux", ["kill-pane", "-t", paneId]);
     } catch {
     }
-  }
-}
-async function killTeamSession(sessionName, workerPaneIds, leaderPaneId, options = {}) {
-  const sessionMode = options.sessionMode ?? (sessionName.includes(":") ? "split-pane" : "detached-session");
-  if (sessionMode === "split-pane") {
-    if (!workerPaneIds?.length) return;
-    for (const id of workerPaneIds) {
-      if (id === leaderPaneId) continue;
-      try {
-        await tmuxExecAsync(["kill-pane", "-t", id]);
-      } catch {
-      }
-    }
-    return;
-  }
-  if (sessionMode === "dedicated-window") {
-    try {
-      await tmuxExecAsync(["kill-window", "-t", sessionName]);
-    } catch {
-    }
-    return;
-  }
-  const sessionTarget = sessionName.split(":")[0] ?? sessionName;
-  if (process.env.OMC_TEAM_ALLOW_KILL_CURRENT_SESSION !== "1" && process.env.TMUX) {
-    try {
-      const current = await tmuxCmdAsync(["display-message", "-p", "#S"]);
-      const currentSessionName = current.stdout.trim();
-      if (currentSessionName && currentSessionName === sessionTarget) {
-        return;
-      }
-    } catch {
-    }
-  }
-  try {
-    await tmuxExecAsync(["kill-session", "-t", sessionTarget]);
-  } catch {
   }
 }
 
 // src/team/idle-nudge.ts
+var import_child_process2 = require("child_process");
 var DEFAULT_NUDGE_CONFIG = {
   delayMs: 3e4,
   maxCount: 3,
-  message: "Continue working on your assigned task and report concrete progress (not ACK-only)."
+  message: "Continue working on your assigned task."
 };
-async function capturePane(paneId) {
-  try {
-    const result = await tmuxExecAsync(["capture-pane", "-t", paneId, "-p", "-S", "-80"]);
-    return result.stdout ?? "";
-  } catch {
-    return "";
-  }
+function capturePane(paneId) {
+  return new Promise((resolve) => {
+    (0, import_child_process2.execFile)("tmux", ["capture-pane", "-t", paneId, "-p", "-S", "-80"], (err, stdout) => {
+      if (err) resolve("");
+      else resolve(stdout ?? "");
+    });
+  });
 }
 async function isPaneIdle(paneId) {
   const captured = await capturePane(paneId);
@@ -18200,295 +18054,14 @@ var NudgeTracker = class {
 };
 
 // src/mcp/team-job-convergence.ts
-var import_fs5 = require("fs");
-var import_path4 = require("path");
-
-// src/team/git-worktree.ts
-var import_node_fs = require("node:fs");
-var import_node_path = require("node:path");
-var import_node_child_process = require("node:child_process");
-
-// src/team/fs-utils.ts
-var import_fs2 = require("fs");
-var import_path3 = require("path");
-function atomicWriteJson(filePath, data, mode = 384) {
-  const dir = (0, import_path3.dirname)(filePath);
-  if (!(0, import_fs2.existsSync)(dir)) (0, import_fs2.mkdirSync)(dir, { recursive: true, mode: 448 });
-  const tmpPath = `${filePath}.tmp.${process.pid}.${Date.now()}`;
-  (0, import_fs2.writeFileSync)(tmpPath, JSON.stringify(data, null, 2) + "\n", { encoding: "utf-8", mode });
-  (0, import_fs2.renameSync)(tmpPath, filePath);
-}
-function ensureDirWithMode(dirPath, mode = 448) {
-  if (!(0, import_fs2.existsSync)(dirPath)) (0, import_fs2.mkdirSync)(dirPath, { recursive: true, mode });
-}
-function safeRealpath(p) {
-  try {
-    return (0, import_fs2.realpathSync)(p);
-  } catch {
-    const segments = [];
-    let current = (0, import_path3.resolve)(p);
-    while (!(0, import_fs2.existsSync)(current)) {
-      segments.unshift((0, import_path3.basename)(current));
-      const parent = (0, import_path3.dirname)(current);
-      if (parent === current) break;
-      current = parent;
-    }
-    try {
-      return (0, import_path3.join)((0, import_fs2.realpathSync)(current), ...segments);
-    } catch {
-      return (0, import_path3.resolve)(p);
-    }
-  }
-}
-function validateResolvedPath(resolvedPath, expectedBase) {
-  const absResolved = safeRealpath(resolvedPath);
-  const absBase = safeRealpath(expectedBase);
-  const rel = (0, import_path3.relative)(absBase, absResolved);
-  if (rel.startsWith("..") || (0, import_path3.resolve)(absBase, rel) !== absResolved) {
-    throw new Error(`Path traversal detected: "${resolvedPath}" escapes base "${expectedBase}"`);
-  }
-}
-
-// src/lib/file-lock.ts
-var import_fs4 = require("fs");
-var path3 = __toESM(require("path"), 1);
-
-// src/lib/atomic-write.ts
-var fs2 = __toESM(require("fs/promises"), 1);
-var fsSync = __toESM(require("fs"), 1);
-var path = __toESM(require("path"), 1);
-var crypto = __toESM(require("crypto"), 1);
-function ensureDirSync(dir) {
-  if (fsSync.existsSync(dir)) {
-    return;
-  }
-  try {
-    fsSync.mkdirSync(dir, { recursive: true });
-  } catch (err) {
-    if (err.code === "EEXIST") {
-      return;
-    }
-    throw err;
-  }
-}
-
-// src/platform/index.ts
-var path2 = __toESM(require("path"), 1);
-var import_fs3 = require("fs");
-
-// src/platform/process-utils.ts
-var import_child_process2 = require("child_process");
-var import_util6 = require("util");
-var fsPromises = __toESM(require("fs/promises"), 1);
-var execFileAsync = (0, import_util6.promisify)(import_child_process2.execFile);
-function isProcessAlive(pid) {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    if (e && typeof e === "object" && "code" in e && e.code === "EPERM") {
-      return true;
-    }
-    return false;
-  }
-}
-
-// src/platform/index.ts
-var PLATFORM = process.platform;
-
-// src/lib/file-lock.ts
-var DEFAULT_STALE_LOCK_MS = 3e4;
-var DEFAULT_RETRY_DELAY_MS = 50;
-function isLockStale(lockPath, staleLockMs) {
-  try {
-    const stat = (0, import_fs4.statSync)(lockPath);
-    const ageMs = Date.now() - stat.mtimeMs;
-    if (ageMs < staleLockMs) return false;
-    try {
-      const raw = (0, import_fs4.readFileSync)(lockPath, "utf-8");
-      const payload = JSON.parse(raw);
-      if (payload.pid && isProcessAlive(payload.pid)) return false;
-    } catch {
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
-function tryAcquireSync(lockPath, staleLockMs) {
-  ensureDirSync(path3.dirname(lockPath));
-  try {
-    const fd = (0, import_fs4.openSync)(
-      lockPath,
-      import_fs4.constants.O_CREAT | import_fs4.constants.O_EXCL | import_fs4.constants.O_WRONLY,
-      384
-    );
-    try {
-      const payload = JSON.stringify({ pid: process.pid, timestamp: Date.now() });
-      (0, import_fs4.writeSync)(fd, payload, null, "utf-8");
-    } catch (writeErr) {
-      try {
-        (0, import_fs4.closeSync)(fd);
-      } catch {
-      }
-      try {
-        (0, import_fs4.unlinkSync)(lockPath);
-      } catch {
-      }
-      throw writeErr;
-    }
-    return { fd, path: lockPath };
-  } catch (err) {
-    if (err && typeof err === "object" && "code" in err && err.code === "EEXIST") {
-      if (isLockStale(lockPath, staleLockMs)) {
-        try {
-          (0, import_fs4.unlinkSync)(lockPath);
-        } catch {
-        }
-        try {
-          const fd = (0, import_fs4.openSync)(
-            lockPath,
-            import_fs4.constants.O_CREAT | import_fs4.constants.O_EXCL | import_fs4.constants.O_WRONLY,
-            384
-          );
-          try {
-            const payload = JSON.stringify({ pid: process.pid, timestamp: Date.now() });
-            (0, import_fs4.writeSync)(fd, payload, null, "utf-8");
-          } catch (writeErr) {
-            try {
-              (0, import_fs4.closeSync)(fd);
-            } catch {
-            }
-            try {
-              (0, import_fs4.unlinkSync)(lockPath);
-            } catch {
-            }
-            throw writeErr;
-          }
-          return { fd, path: lockPath };
-        } catch {
-          return null;
-        }
-      }
-      return null;
-    }
-    throw err;
-  }
-}
-function acquireFileLockSync(lockPath, opts) {
-  const staleLockMs = opts?.staleLockMs ?? DEFAULT_STALE_LOCK_MS;
-  const timeoutMs = opts?.timeoutMs ?? 0;
-  const retryDelayMs = opts?.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
-  const handle = tryAcquireSync(lockPath, staleLockMs);
-  if (handle || timeoutMs <= 0) return handle;
-  const deadline = Date.now() + timeoutMs;
-  const sharedBuf = new SharedArrayBuffer(4);
-  const sharedArr = new Int32Array(sharedBuf);
-  while (Date.now() < deadline) {
-    const waitMs = Math.min(retryDelayMs, deadline - Date.now());
-    try {
-      Atomics.wait(sharedArr, 0, 0, waitMs);
-    } catch {
-      const waitUntil = Date.now() + waitMs;
-      while (Date.now() < waitUntil) {
-      }
-    }
-    const retryHandle = tryAcquireSync(lockPath, staleLockMs);
-    if (retryHandle) return retryHandle;
-  }
-  return null;
-}
-function releaseFileLockSync(handle) {
-  try {
-    (0, import_fs4.closeSync)(handle.fd);
-  } catch {
-  }
-  try {
-    (0, import_fs4.unlinkSync)(handle.path);
-  } catch {
-  }
-}
-function withFileLockSync(lockPath, fn, opts) {
-  const handle = acquireFileLockSync(lockPath, opts);
-  if (!handle) {
-    throw new Error(`Failed to acquire file lock: ${lockPath}`);
-  }
-  try {
-    return fn();
-  } finally {
-    releaseFileLockSync(handle);
-  }
-}
-
-// src/team/git-worktree.ts
-function getWorktreePath(repoRoot, teamName, workerName) {
-  return (0, import_node_path.join)(repoRoot, ".omc", "worktrees", sanitizeName(teamName), sanitizeName(workerName));
-}
-function getBranchName(teamName, workerName) {
-  return `omc-team/${sanitizeName(teamName)}/${sanitizeName(workerName)}`;
-}
-function getMetadataPath(repoRoot, teamName) {
-  return (0, import_node_path.join)(repoRoot, ".omc", "state", "team-bridge", sanitizeName(teamName), "worktrees.json");
-}
-function readMetadata(repoRoot, teamName) {
-  const metaPath = getMetadataPath(repoRoot, teamName);
-  if (!(0, import_node_fs.existsSync)(metaPath)) return [];
-  try {
-    return JSON.parse((0, import_node_fs.readFileSync)(metaPath, "utf-8"));
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`[omc] warning: worktrees.json parse error: ${msg}
-`);
-    return [];
-  }
-}
-function writeMetadata(repoRoot, teamName, entries) {
-  const metaPath = getMetadataPath(repoRoot, teamName);
-  validateResolvedPath(metaPath, repoRoot);
-  const dir = (0, import_node_path.join)(repoRoot, ".omc", "state", "team-bridge", sanitizeName(teamName));
-  ensureDirWithMode(dir);
-  atomicWriteJson(metaPath, entries);
-}
-function removeWorkerWorktree(teamName, workerName, repoRoot) {
-  const wtPath = getWorktreePath(repoRoot, teamName, workerName);
-  const branch = getBranchName(teamName, workerName);
-  try {
-    (0, import_node_child_process.execFileSync)("git", ["worktree", "remove", "--force", wtPath], { cwd: repoRoot, stdio: "pipe" });
-  } catch {
-  }
-  try {
-    (0, import_node_child_process.execFileSync)("git", ["worktree", "prune"], { cwd: repoRoot, stdio: "pipe" });
-  } catch {
-  }
-  try {
-    (0, import_node_child_process.execFileSync)("git", ["branch", "-D", branch], { cwd: repoRoot, stdio: "pipe" });
-  } catch {
-  }
-  const metaLockPath = getMetadataPath(repoRoot, teamName) + ".lock";
-  withFileLockSync(metaLockPath, () => {
-    const existing = readMetadata(repoRoot, teamName);
-    const updated = existing.filter((e) => e.workerName !== workerName);
-    writeMetadata(repoRoot, teamName, updated);
-  });
-}
-function cleanupTeamWorktrees(teamName, repoRoot) {
-  const entries = readMetadata(repoRoot, teamName);
-  for (const entry of entries) {
-    try {
-      removeWorkerWorktree(teamName, entry.workerName, repoRoot);
-    } catch {
-    }
-  }
-}
-
-// src/mcp/team-job-convergence.ts
+var import_fs = require("fs");
+var import_path2 = require("path");
 function readResultArtifact(omcJobsDir, jobId) {
-  const artifactPath = (0, import_path4.join)(omcJobsDir, `${jobId}-result.json`);
-  if (!(0, import_fs5.existsSync)(artifactPath)) return { kind: "none" };
+  const artifactPath = (0, import_path2.join)(omcJobsDir, `${jobId}-result.json`);
+  if (!(0, import_fs.existsSync)(artifactPath)) return { kind: "none" };
   let raw;
   try {
-    raw = (0, import_fs5.readFileSync)(artifactPath, "utf-8");
+    raw = (0, import_fs.readFileSync)(artifactPath, "utf-8");
   } catch {
     return { kind: "none" };
   }
@@ -18541,6 +18114,14 @@ function convergeJobWithResultArtifact(job, jobId, omcJobsDir) {
 function isJobTerminal(job) {
   return job.status === "completed" || job.status === "failed" || job.status === "timeout";
 }
+function isPidAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
 function clearScopedTeamState(job) {
   if (!job.cwd || !job.teamName) {
     return "team state cleanup skipped (missing job cwd/teamName).";
@@ -18550,80 +18131,21 @@ function clearScopedTeamState(job) {
   } catch (error2) {
     return `team state cleanup skipped (invalid teamName): ${error2 instanceof Error ? error2.message : String(error2)}`;
   }
-  const stateDir = (0, import_path4.join)(job.cwd, ".omc", "state", "team", job.teamName);
-  let worktreeMessage = "worktree cleanup skipped.";
+  const stateDir = (0, import_path2.join)(job.cwd, ".omc", "state", "team", job.teamName);
   try {
-    cleanupTeamWorktrees(job.teamName, job.cwd);
-    worktreeMessage = `worktree cleanup attempted for ${job.teamName}.`;
-  } catch (error2) {
-    worktreeMessage = `worktree cleanup skipped: ${error2 instanceof Error ? error2.message : String(error2)}`;
-  }
-  try {
-    if (!(0, import_fs5.existsSync)(stateDir)) {
-      return `${worktreeMessage} team state dir not found at ${stateDir}.`;
+    if (!(0, import_fs.existsSync)(stateDir)) {
+      return `team state dir not found at ${stateDir}.`;
     }
-    (0, import_fs5.rmSync)(stateDir, { recursive: true, force: true });
-    return `${worktreeMessage} team state dir removed at ${stateDir}.`;
+    (0, import_fs.rmSync)(stateDir, { recursive: true, force: true });
+    return `team state dir removed at ${stateDir}.`;
   } catch (error2) {
-    return `${worktreeMessage} team state cleanup failed at ${stateDir}: ${error2 instanceof Error ? error2.message : String(error2)}`;
+    return `team state cleanup failed at ${stateDir}: ${error2 instanceof Error ? error2.message : String(error2)}`;
   }
 }
-
-// src/utils/paths.ts
-var import_path6 = require("path");
-var import_fs6 = require("fs");
-var import_os2 = require("os");
-
-// src/utils/config-dir.ts
-var import_path5 = require("path");
-var import_os = require("os");
-
-// src/utils/paths.ts
-function getStateDir() {
-  if (process.platform === "win32") {
-    return process.env.LOCALAPPDATA || (0, import_path6.join)((0, import_os2.homedir)(), "AppData", "Local");
-  }
-  return process.env.XDG_STATE_HOME || (0, import_path6.join)((0, import_os2.homedir)(), ".local", "state");
-}
-function prefersXdgOmcDirs() {
-  return process.platform !== "win32" && process.platform !== "darwin";
-}
-function getUserHomeDir() {
-  if (process.platform === "win32") {
-    return process.env.USERPROFILE || process.env.HOME || (0, import_os2.homedir)();
-  }
-  return process.env.HOME || (0, import_os2.homedir)();
-}
-function getLegacyOmcDir() {
-  return (0, import_path6.join)(getUserHomeDir(), ".omc");
-}
-function getGlobalOmcStateRoot() {
-  const explicitRoot = process.env.OMC_HOME?.trim();
-  if (explicitRoot) {
-    return (0, import_path6.join)(explicitRoot, "state");
-  }
-  if (prefersXdgOmcDirs()) {
-    return (0, import_path6.join)(getStateDir(), "omc");
-  }
-  return (0, import_path6.join)(getLegacyOmcDir(), "state");
-}
-function getGlobalOmcStatePath(...segments) {
-  return (0, import_path6.join)(getGlobalOmcStateRoot(), ...segments);
-}
-var STALE_THRESHOLD_MS = 24 * 60 * 60 * 1e3;
 
 // src/mcp/team-server.ts
-var import_meta = {};
-var __ownDir = (() => {
-  if (typeof __dirname !== "undefined" && __dirname) return __dirname;
-  try {
-    return (0, import_url.fileURLToPath)(new URL(".", import_meta.url));
-  } catch {
-    return process.cwd();
-  }
-})();
 var omcTeamJobs = /* @__PURE__ */ new Map();
-var OMC_JOBS_DIR = process.env.OMC_JOBS_DIR || getGlobalOmcStatePath("team-jobs");
+var OMC_JOBS_DIR = process.env.OMC_JOBS_DIR || (0, import_path3.join)((0, import_os.homedir)(), ".omc", "team-jobs");
 var DEPRECATION_CODE = "deprecated_cli_only";
 var TEAM_CLI_REPLACEMENT_HINTS = {
   omc_run_team_start: "omc team start",
@@ -18649,7 +18171,6 @@ function buildCliReplacement(toolName, args) {
   if (toolName === "omc_run_team_start") {
     const teamName = typeof parsed.teamName === "string" ? parsed.teamName.trim() : "";
     const cwd = typeof parsed.cwd === "string" ? parsed.cwd.trim() : "";
-    const newWindow = parsed.newWindow === true;
     const agentTypes = Array.isArray(parsed.agentTypes) ? parsed.agentTypes.filter((item) => typeof item === "string" && item.trim().length > 0) : [];
     const tasks = Array.isArray(parsed.tasks) ? parsed.tasks.map(
       (task) => typeof task === "object" && task !== null && typeof task.description === "string" ? task.description.trim() : ""
@@ -18657,7 +18178,6 @@ function buildCliReplacement(toolName, args) {
     const flags = ["omc", "team", "start"];
     if (teamName) flags.push("--name", quoteCliValue(teamName));
     if (cwd) flags.push("--cwd", quoteCliValue(cwd));
-    if (newWindow) flags.push("--new-window");
     if (agentTypes.length > 0) {
       const uniqueAgentTypes = new Set(agentTypes);
       if (uniqueAgentTypes.size === 1) {
@@ -18708,20 +18228,20 @@ function createDeprecatedCliOnlyEnvelopeWithArgs(toolName, args) {
 }
 function persistJob(jobId, job) {
   try {
-    if (!(0, import_fs7.existsSync)(OMC_JOBS_DIR)) (0, import_fs7.mkdirSync)(OMC_JOBS_DIR, { recursive: true });
-    (0, import_fs7.writeFileSync)((0, import_path7.join)(OMC_JOBS_DIR, `${jobId}.json`), JSON.stringify(job), "utf-8");
+    if (!(0, import_fs2.existsSync)(OMC_JOBS_DIR)) (0, import_fs2.mkdirSync)(OMC_JOBS_DIR, { recursive: true });
+    (0, import_fs2.writeFileSync)((0, import_path3.join)(OMC_JOBS_DIR, `${jobId}.json`), JSON.stringify(job), "utf-8");
   } catch {
   }
 }
 function loadJobFromDisk(jobId) {
   try {
-    return JSON.parse((0, import_fs7.readFileSync)((0, import_path7.join)(OMC_JOBS_DIR, `${jobId}.json`), "utf-8"));
+    return JSON.parse((0, import_fs2.readFileSync)((0, import_path3.join)(OMC_JOBS_DIR, `${jobId}.json`), "utf-8"));
   } catch {
     return void 0;
   }
 }
 async function loadPaneIds(jobId) {
-  const p = (0, import_path7.join)(OMC_JOBS_DIR, `${jobId}-panes.json`);
+  const p = (0, import_path3.join)(OMC_JOBS_DIR, `${jobId}-panes.json`);
   try {
     return JSON.parse(await (0, import_promises2.readFile)(p, "utf-8"));
   } catch {
@@ -18729,8 +18249,8 @@ async function loadPaneIds(jobId) {
   }
 }
 function validateJobId(job_id) {
-  if (!/^omc-[a-z0-9]{1,16}$/.test(job_id)) {
-    throw new Error(`Invalid job_id: "${job_id}". Must match /^omc-[a-z0-9]{1,16}$/`);
+  if (!/^omc-[a-z0-9]{1,12}$/.test(job_id)) {
+    throw new Error(`Invalid job_id: "${job_id}". Must match /^omc-[a-z0-9]{1,12}$/`);
   }
 }
 function saveJobState(jobId, job) {
@@ -18758,8 +18278,7 @@ var startSchema = external_exports.object({
     subject: external_exports.string().describe("Brief task title"),
     description: external_exports.string().describe("Full task description")
   })).describe("Tasks to distribute to workers"),
-  cwd: external_exports.string().describe("Working directory (absolute path)"),
-  newWindow: external_exports.boolean().optional().describe("Spawn workers in a dedicated tmux window instead of splitting the current window")
+  cwd: external_exports.string().describe("Working directory (absolute path)")
 });
 var statusSchema = external_exports.object({
   job_id: external_exports.string().describe("Job ID returned by omc_run_team_start")
@@ -18769,7 +18288,7 @@ var waitSchema = external_exports.object({
   timeout_ms: external_exports.number().optional().describe("Maximum wait time in ms (default: 300000, max: 3600000)"),
   nudge_delay_ms: external_exports.number().optional().describe("Milliseconds a pane must be idle before nudging (default: 30000)"),
   nudge_max_count: external_exports.number().optional().describe("Maximum nudges per pane (default: 3)"),
-  nudge_message: external_exports.string().optional().describe('Message sent as nudge (default: "Continue working on your assigned task and report concrete progress (not ACK-only).")')
+  nudge_message: external_exports.string().optional().describe('Message sent as nudge (default: "Continue working on your assigned task.")')
 });
 var cleanupSchema = external_exports.object({
   job_id: external_exports.string().describe("Job ID returned by omc_run_team_start"),
@@ -18783,8 +18302,8 @@ async function handleStart(args) {
   }
   const input = startSchema.parse(args);
   validateTeamName(input.teamName);
-  const jobId = `omc-${Date.now().toString(36)}${(0, import_node_crypto.randomUUID)().slice(0, 8)}`;
-  const runtimeCliPath = (0, import_path7.join)(__ownDir, "runtime-cli.cjs");
+  const jobId = `omc-${Date.now().toString(36)}`;
+  const runtimeCliPath = (0, import_path3.join)(__dirname, "runtime-cli.cjs");
   const job = { status: "running", startedAt: Date.now(), teamName: input.teamName, cwd: input.cwd };
   omcTeamJobs.set(jobId, job);
   const child = (0, import_child_process3.spawn)("node", [runtimeCliPath], {
@@ -18845,7 +18364,7 @@ async function handleStatus(args) {
   if (isJobTerminal(job)) {
     return makeJobResponse(job_id, job);
   }
-  if (job.pid != null && !isProcessAlive(job.pid)) {
+  if (job.pid != null && !isPidAlive(job.pid)) {
     job = saveJobState(job_id, {
       ...job,
       status: "failed",
@@ -18889,7 +18408,7 @@ async function handleWait(args) {
       }
       return out;
     }
-    if (job.pid != null && !isProcessAlive(job.pid)) {
+    if (job.pid != null && !isPidAlive(job.pid)) {
       job = saveJobState(job_id, {
         ...job,
         status: "failed",
@@ -18935,16 +18454,7 @@ async function handleCleanup(args) {
   if (!job) return { content: [{ type: "text", text: `Job ${job_id} not found` }] };
   const panes = await loadPaneIds(job_id);
   let paneCleanupMessage = "No pane IDs recorded for this job \u2014 pane cleanup skipped.";
-  if (panes?.sessionName && (panes.ownsWindow === true || !panes.sessionName.includes(":"))) {
-    const sessionMode = panes.ownsWindow === true ? panes.sessionName.includes(":") ? "dedicated-window" : "detached-session" : "detached-session";
-    await killTeamSession(
-      panes.sessionName,
-      panes.paneIds,
-      panes.leaderPaneId,
-      { sessionMode }
-    );
-    paneCleanupMessage = panes.ownsWindow ? "Cleaned up team tmux window." : `Cleaned up ${panes.paneIds.length} worker pane(s).`;
-  } else if (panes?.paneIds?.length) {
+  if (panes?.paneIds?.length) {
     await killWorkerPanes({
       paneIds: panes.paneIds,
       leaderPaneId: panes.leaderPaneId,
@@ -18980,8 +18490,7 @@ var TOOLS = [
           },
           description: "Tasks to distribute to workers"
         },
-        cwd: { type: "string", description: "Working directory (absolute path)" },
-        newWindow: { type: "boolean", description: "Spawn workers in a dedicated tmux window instead of splitting the current window" }
+        cwd: { type: "string", description: "Working directory (absolute path)" }
       },
       required: ["teamName", "agentTypes", "tasks", "cwd"]
     }
@@ -19007,7 +18516,7 @@ var TOOLS = [
         timeout_ms: { type: "number", description: "Maximum wait time in ms (default: 300000, max: 3600000)" },
         nudge_delay_ms: { type: "number", description: "Milliseconds a pane must be idle before nudging (default: 30000)" },
         nudge_max_count: { type: "number", description: "Maximum nudges per pane (default: 3)" },
-        nudge_message: { type: "string", description: 'Message sent as nudge (default: "Continue working on your assigned task and report concrete progress (not ACK-only).")' }
+        nudge_message: { type: "string", description: 'Message sent as nudge (default: "Continue working on your assigned task.")' }
       },
       required: ["job_id"]
     }
@@ -19032,18 +18541,18 @@ var server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+  if (isDeprecatedTeamToolName(name)) {
+    return createDeprecatedCliOnlyEnvelopeWithArgs(name, args);
+  }
   try {
     if (name === "omc_run_team_start") return await handleStart(args ?? {});
     if (name === "omc_run_team_status") return await handleStatus(args ?? {});
     if (name === "omc_run_team_wait") return await handleWait(args ?? {});
     if (name === "omc_run_team_cleanup") return await handleCleanup(args ?? {});
+    return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
   } catch (error2) {
     return { content: [{ type: "text", text: `Error: ${error2 instanceof Error ? error2.message : String(error2)}` }], isError: true };
   }
-  if (isDeprecatedTeamToolName(name)) {
-    return createDeprecatedCliOnlyEnvelopeWithArgs(name, args);
-  }
-  return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
 });
 async function main() {
   const transport = new StdioServerTransport();

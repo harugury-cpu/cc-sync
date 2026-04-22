@@ -1,12 +1,18 @@
 ---
 name: desktop-app
-classification: capability
-classification-reason: Specialized domain knowledge with limited model overlap
-deprecation-risk: low
-effort: low
 description: |
-  Desktop app development guide — Electron and Tauri for cross-platform apps.
-  Triggers: desktop app, Electron, Tauri, mac app, windows app, 데스크톱 앱.
+  Desktop app development guide for cross-platform desktop applications.
+  Covers Electron and Tauri frameworks.
+
+  Use proactively when user wants to build desktop applications with web technologies.
+
+  Triggers: desktop app, Electron, Tauri, mac app, windows app, 데스크톱 앱, デスクトップアプリ, 桌面应用,
+  aplicación de escritorio, app de escritorio,
+  application de bureau, application desktop,
+  Desktop-Anwendung, Desktop-App,
+  applicazione desktop, app desktop
+
+  Do NOT use for: web-only projects, mobile apps, or server-side development.
 agent: bkit:pipeline-guide
 allowed-tools:
   - Read
@@ -16,7 +22,7 @@ allowed-tools:
   - Grep
   - Bash
   - WebSearch
-user-invocable: true
+user-invocable: false
 ---
 
 # Desktop App Development Expertise

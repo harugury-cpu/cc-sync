@@ -15,7 +15,6 @@ import { readFileSync, writeFileSync, existsSync, readdirSync } from 'fs';
 import { join, resolve } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname } from 'path';
-import { syncFeaturedContributorsReadme } from './generate-featured-contributors.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -72,7 +71,7 @@ function loadMetadata(): Metadata {
     keywords: packageJson.keywords || [],
     repository: packageJson.repository?.url?.replace(/^git\+/, '').replace(/\.git$/, '') || '',
     homepage: packageJson.homepage || '',
-    npmPackage: packageJson.name || 'oh-my-claude-sisyphus',
+    npmPackage: packageJson.name || 'oh-my-claudecode',
   };
 }
 
@@ -167,16 +166,6 @@ function getFileSyncConfigs(): FileSync[] {
       ],
     },
     {
-      path: 'docs/CLAUDE.md',
-      replacements: [
-        {
-          pattern: /<!-- OMC:VERSION:[^\s]*? -->/g,
-          replacement: (m) => `<!-- OMC:VERSION:${m.version} -->`,
-          description: 'CLAUDE.md version marker',
-        },
-      ],
-    },
-    {
       path: 'docs/ARCHITECTURE.md',
       replacements: [
         {
@@ -243,7 +232,7 @@ function syncFile(
 }
 
 // Verify all files are in sync
-async function verifySync(metadata: Metadata, projectRoot: string): Promise<boolean> {
+function verifySync(metadata: Metadata, projectRoot: string): boolean {
   console.log(color('\n🔍 Verifying metadata sync...', colors.cyan));
 
   const configs = getFileSyncConfigs();
@@ -263,27 +252,11 @@ async function verifySync(metadata: Metadata, projectRoot: string): Promise<bool
     }
   }
 
-  const featuredContributorsResult = await syncFeaturedContributorsReadme({
-    dryRun: true,
-    projectRoot,
-  });
-
-  if (featuredContributorsResult.changed) {
-    allInSync = false;
-    console.log(color(`✗ README.md`, colors.red));
-    featuredContributorsResult.changes.forEach(change => {
-      console.log(color(`  - ${change} needs update`, colors.yellow));
-    });
-  } else {
-    console.log(color('✓ README.md (featured contributors)', colors.green));
-  }
-
   return allInSync;
 }
 
-
 // Main sync operation
-async function syncAll(dryRun: boolean): Promise<void> {
+function syncAll(dryRun: boolean): void {
   const projectRoot = resolve(__dirname, '..');
   const metadata = loadMetadata();
 
@@ -314,20 +287,6 @@ async function syncAll(dryRun: boolean): Promise<void> {
     }
   }
 
-  const featuredContributorsResult = await syncFeaturedContributorsReadme({
-    dryRun,
-    projectRoot,
-  });
-
-  if (featuredContributorsResult.changed) {
-    totalChanges++;
-    const status = dryRun ? '📝' : '✓';
-    console.log(color(`\n${status} README.md`, colors.cyan));
-    featuredContributorsResult.changes.forEach(change => {
-      console.log(color(`  - ${change}`, colors.blue));
-    });
-  }
-
   if (totalChanges === 0) {
     console.log(color('\n✅ All files are already in sync!', colors.green));
   } else if (dryRun) {
@@ -339,7 +298,7 @@ async function syncAll(dryRun: boolean): Promise<void> {
 }
 
 // CLI
-async function main(): Promise<void> {
+function main(): void {
   const args = process.argv.slice(2);
   const dryRun = args.includes('--dry-run');
   const verify = args.includes('--verify');
@@ -359,7 +318,7 @@ ${color('Description:', colors.cyan)}
   Prevents version drift and ensures consistency across the project.
 
 ${color('Files Synced:', colors.cyan)}
-  - README.md (npm badges + featured contributors)
+  - README.md (npm badges)
   - docs/REFERENCE.md (version badges and headers)
   - .github/CLAUDE.md (agent/skill counts)
   - docs/ARCHITECTURE.md (version references)
@@ -377,7 +336,7 @@ ${color('Examples:', colors.cyan)}
     if (verify) {
       const projectRoot = resolve(__dirname, '..');
       const metadata = loadMetadata();
-      const inSync = await verifySync(metadata, projectRoot);
+      const inSync = verifySync(metadata, projectRoot);
 
       if (!inSync) {
         console.log(color('\n❌ Files are out of sync!', colors.red));
@@ -387,7 +346,7 @@ ${color('Examples:', colors.cyan)}
         console.log(color('\n✅ All files are in sync!', colors.green));
       }
     } else {
-      await syncAll(dryRun);
+      syncAll(dryRun);
     }
   } catch (error) {
     console.error(color('\n❌ Error:', colors.red), error instanceof Error ? error.message : error);
@@ -397,10 +356,7 @@ ${color('Examples:', colors.cyan)}
 
 // Run if called directly
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((error) => {
-    console.error(color('\n❌ Error:', colors.red), error instanceof Error ? error.message : error);
-    process.exit(1);
-  });
+  main();
 }
 
 // Export for testing

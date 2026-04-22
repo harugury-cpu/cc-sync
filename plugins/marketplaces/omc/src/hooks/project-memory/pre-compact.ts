@@ -42,8 +42,7 @@ export async function processPreCompact(input: PreCompactInput): Promise<PreComp
     const hasCriticalInfo =
       memory.userDirectives.length > 0 ||
       memory.hotPaths.length > 0 ||
-      memory.techStack.languages.length > 0 ||
-      memory.customNotes.length > 0;
+      memory.techStack.languages.length > 0;
 
     if (!hasCriticalInfo) {
       return { continue: true };

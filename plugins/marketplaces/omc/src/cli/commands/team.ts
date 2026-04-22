@@ -14,34 +14,24 @@ import {
   executeTeamApiOperation,
   type TeamApiOperation,
 } from '../../team/api-interop.js';
-import type { CliAgentType } from '../../team/model-contract.js';
-import { loadConfig } from '../../config/loader.js';
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);
 const MIN_WORKER_COUNT = 1;
 const MAX_WORKER_COUNT = 20;
-const VALID_TEAM_CLI_AGENT_TYPES = new Set(['claude', 'codex', 'gemini']);
-const DEFAULT_TEAM_CLI_AGENT_TYPE: CliAgentType = 'claude';
 
 const TEAM_HELP = `
-Usage: omc team [N:agent-type[:role]] [--new-window] "<task description>"
+Usage: omc team [N:agent-type] "<task description>"
        omc team status <team-name>
        omc team shutdown <team-name> [--force]
        omc team api <operation> [--input <json>] [--json]
        omc team api --help
 
 Examples:
-  omc team 3:claude "fix failing tests"
-  omc team 2:codex:architect "design auth system"
-  omc team 1:gemini:executor "implement feature"
-  omc team 1:codex,1:gemini "compare approaches"
-  omc team 2:codex "review auth flow" --new-window
+  omc team 3:executor "fix failing tests"
+  omc team 2:claude "build the auth module"
   omc team status fix-failing-tests
   omc team shutdown fix-failing-tests
   omc team api send-message --input '{"team_name":"my-team","from_worker":"worker-1","to_worker":"leader-fixed","body":"ACK"}' --json
-
-Roles (optional): architect, executor, planner, analyst, critic, debugger, verifier,
-  code-reviewer, security-reviewer, test-engineer, debugger, designer, writer, scientist
 `;
 
 const TEAM_API_HELP = `
@@ -79,7 +69,6 @@ const TEAM_API_OPERATION_REQUIRED_FIELDS: Record<TeamApiOperation, string[]> = {
   'append-event': ['team_name', 'type', 'worker'],
   'get-summary': ['team_name'],
   'cleanup': ['team_name'],
-  'orphan-cleanup': ['team_name'],
   'write-shutdown-request': ['team_name', 'worker', 'requested_by'],
   'read-shutdown-ack': ['team_name', 'worker'],
   'read-monitor-snapshot': ['team_name'],
@@ -108,112 +97,6 @@ const TEAM_API_OPERATION_NOTES: Partial<Record<TeamApiOperation, string>> = {
 };
 
 // ---------------------------------------------------------------------------
-// Task decomposition helpers
-// ---------------------------------------------------------------------------
-
-export type DecompositionStrategy = 'numbered' | 'bulleted' | 'conjunction' | 'atomic';
-
-export interface DecompositionPlan {
-  strategy: DecompositionStrategy;
-  subtasks: Array<{ subject: string; description: string }>;
-}
-
-const NUMBERED_LINE_RE = /^\s*\d+[.)]\s+(.+)$/;
-const BULLETED_LINE_RE = /^\s*[-*•]\s+(.+)$/;
-// Conjunction split: "fix auth AND fix login AND fix logout" or "fix auth, fix login, and fix logout"
-const CONJUNCTION_SPLIT_RE = /\s+(?:and|,\s*and|,)\s+/i;
-
-/** Signals that a task is atomic (contains file refs, code symbols, or parallel keywords) */
-const PARALLELIZATION_KEYWORDS_RE =
-  /\b(?:parallel|concurrently|simultaneously|at the same time|independently)\b/i;
-const FILE_REF_RE = /\b\S+\.\w{1,6}\b/g;
-const CODE_SYMBOL_RE = /`[^`]+`/g;
-
-/**
- * Count atomic parallelization signals in a task string.
- * Returns true when the task should NOT be decomposed (it's already atomic or tightly coupled).
- */
-export function hasAtomicParallelizationSignals(task: string, _size: string): boolean {
-  const fileRefs = (task.match(FILE_REF_RE) || []).length;
-  const codeSymbols = (task.match(CODE_SYMBOL_RE) || []).length;
-  const parallelKw = PARALLELIZATION_KEYWORDS_RE.test(task);
-  // Treat as atomic when many specific file/symbol refs present (tightly coupled)
-  return fileRefs >= 3 || codeSymbols >= 3 || parallelKw;
-}
-
-/**
- * Resolve the effective worker count fanout limit for decomposed tasks.
- * Caps worker count to the number of discovered subtasks when decomposition produces fewer items.
- */
-export function resolveTeamFanoutLimit(
-  requestedWorkerCount: number,
-  _explicitAgentType: string | undefined,
-  _explicitWorkerCount: number | undefined,
-  plan: DecompositionPlan
-): number {
-  if (plan.strategy === 'atomic') return requestedWorkerCount;
-  const subtaskCount = plan.subtasks.length;
-  if (subtaskCount > 0 && subtaskCount < requestedWorkerCount) {
-    return subtaskCount;
-  }
-  return requestedWorkerCount;
-}
-
-/**
- * Decompose a task string into a structured plan.
- *
- * Detects:
- * - Numbered list: "1. fix auth\n2. fix login"
- * - Bulleted list: "- fix auth\n- fix login"
- * - Conjunction: "fix auth and fix login and fix logout"
- * - Atomic: single task, no decomposition
- */
-export function splitTaskString(task: string): DecompositionPlan {
-  const lines = task.split('\n').map(l => l.trim()).filter(Boolean);
-
-  // Check numbered list
-  if (lines.length >= 2 && lines.every(l => NUMBERED_LINE_RE.test(l))) {
-    return {
-      strategy: 'numbered',
-      subtasks: lines.map(l => {
-        const m = l.match(NUMBERED_LINE_RE)!;
-        const subject = m[1].trim();
-        return { subject: subject.slice(0, 80), description: subject };
-      }),
-    };
-  }
-
-  // Check bulleted list
-  if (lines.length >= 2 && lines.every(l => BULLETED_LINE_RE.test(l))) {
-    return {
-      strategy: 'bulleted',
-      subtasks: lines.map(l => {
-        const m = l.match(BULLETED_LINE_RE)!;
-        const subject = m[1].trim();
-        return { subject: subject.slice(0, 80), description: subject };
-      }),
-    };
-  }
-
-  // Check conjunction split (single line with "and" or commas)
-  if (lines.length === 1) {
-    const parts = lines[0].split(CONJUNCTION_SPLIT_RE).map(s => s.trim()).filter(Boolean);
-    if (parts.length >= 2) {
-      return {
-        strategy: 'conjunction',
-        subtasks: parts.map(p => ({ subject: p.slice(0, 80), description: p })),
-      };
-    }
-  }
-
-  // Atomic: no decomposition
-  return {
-    strategy: 'atomic',
-    subtasks: [{ subject: task.slice(0, 80), description: task }],
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -226,26 +109,12 @@ function slugifyTask(task: string): string {
     .slice(0, 30) || 'team-task';
 }
 
-export interface ParsedWorkerSpec {
-  agentType: string;
-  role?: string;
-}
-
-export interface ParsedTeamArgs {
+interface ParsedTeamArgs {
   workerCount: number;
-  agentTypes: string[];
-  workerSpecs: ParsedWorkerSpec[];
-  role?: string;
+  agentType: string;
   task: string;
   teamName: string;
   json: boolean;
-  newWindow: boolean;
-}
-
-interface NormalizedWorkerSpecSegment {
-  count: number;
-  agentType: string;
-  role?: string;
 }
 
 function getTeamWorkerIdentityFromEnv(env: NodeJS.ProcessEnv = process.env): string | null {
@@ -255,149 +124,41 @@ function getTeamWorkerIdentityFromEnv(env: NodeJS.ProcessEnv = process.env): str
   return omx || null;
 }
 
-export async function assertTeamSpawnAllowed(cwd: string, env: NodeJS.ProcessEnv = process.env): Promise<void> {
+function assertTeamSpawnAllowed(env: NodeJS.ProcessEnv = process.env): void {
   const workerIdentity = getTeamWorkerIdentityFromEnv(env);
-  const { teamReadManifest } = await import('../../team/team-ops.js');
-  const { findActiveTeamsV2 } = await import('../../team/runtime-v2.js');
-  const { DEFAULT_TEAM_GOVERNANCE, normalizeTeamGovernance } = await import('../../team/governance.js');
-
-  if (workerIdentity) {
-    const [parentTeamName] = workerIdentity.split('/');
-    const parentManifest = parentTeamName ? await teamReadManifest(parentTeamName, cwd) : null;
-    const governance = normalizeTeamGovernance(parentManifest?.governance, parentManifest?.policy);
-    if (!governance.nested_teams_allowed) {
-      throw new Error(
-        `Worker context (${workerIdentity}) cannot start nested teams because nested_teams_allowed is false.`,
-      );
-    }
-    if (!governance.delegation_only) {
-      throw new Error(
-        `Worker context (${workerIdentity}) cannot start nested teams because delegation_only is false.`,
-      );
-    }
-    return;
-  }
-
-  const activeTeams = await findActiveTeamsV2(cwd);
-  for (const activeTeam of activeTeams) {
-    const manifest = await teamReadManifest(activeTeam, cwd);
-    const governance = normalizeTeamGovernance(manifest?.governance, manifest?.policy);
-    if (governance.one_team_per_leader_session ?? DEFAULT_TEAM_GOVERNANCE.one_team_per_leader_session) {
-      throw new Error(
-        `Leader session already owns active team "${activeTeam}" and one_team_per_leader_session is enabled.`,
-      );
-    }
-  }
+  if (!workerIdentity) return;
+  throw new Error(
+    `Worker context (${workerIdentity}) cannot start/spawn new teams. ` +
+    `Use only "omc team api ..." operations from worker sessions.`,
+  );
 }
 
-/** Regex for a single worker spec segment: N[:type[:role]] */
-const SINGLE_SPEC_RE = /^(\d+)(?::([a-z][a-z0-9-]*)(?::([a-z][a-z0-9-]*))?)?$/i;
-
-function normalizeWorkerSpecSegment(match: RegExpMatchArray): NormalizedWorkerSpecSegment {
-  const count = Number.parseInt(match[1], 10);
-  if (!Number.isFinite(count) || count < MIN_WORKER_COUNT || count > MAX_WORKER_COUNT) {
-    throw new Error(`Invalid worker count "${match[1]}". Expected ${MIN_WORKER_COUNT}-${MAX_WORKER_COUNT}.`);
-  }
-
-  const token = match[2]?.toLowerCase();
-  const explicitRole = match[3]?.toLowerCase();
-  if (!token) {
-    return { count, agentType: 'claude' };
-  }
-
-  if (explicitRole) {
-    return { count, agentType: token, role: explicitRole };
-  }
-
-  if (VALID_TEAM_CLI_AGENT_TYPES.has(token)) {
-    return { count, agentType: token };
-  }
-
-  return { count, agentType: 'claude', role: token };
-}
-
-/** @internal Exported for testing */
-export function parseTeamArgs(tokens: string[], defaultAgentType: string = 'claude'): ParsedTeamArgs {
+function parseTeamArgs(tokens: string[]): ParsedTeamArgs {
   const args = [...tokens];
   let workerCount = 3;
-  let agentTypes: string[] = [];
-  let workerSpecs: ParsedWorkerSpec[] = [];
+  let agentType = 'claude';
   let json = false;
-  let newWindow = false;
-  const normalizedDefaultAgentType = VALID_TEAM_CLI_AGENT_TYPES.has(defaultAgentType as CliAgentType)
-    ? defaultAgentType
-    : DEFAULT_TEAM_CLI_AGENT_TYPE;
 
-  // Extract supported flags before parsing positional args
+  // Extract --json flag before parsing positional args
   const filteredArgs: string[] = [];
   for (const arg of args) {
     if (arg === '--json') {
       json = true;
-    } else if (arg === '--new-window') {
-      newWindow = true;
     } else {
       filteredArgs.push(arg);
     }
   }
 
   const first = filteredArgs[0] || '';
-
-  // Try comma-separated multi-type spec first (e.g. "1:codex,1:gemini" or "2:claude,1:codex:architect")
-  let role: string | undefined;
-  let specMatched = false;
-
-  if (first.includes(',')) {
-    const segments = first.split(',');
-    const parsedSegments: NormalizedWorkerSpecSegment[] = [];
-    let allValid = true;
-
-    for (const seg of segments) {
-      const m = seg.match(SINGLE_SPEC_RE);
-      if (!m) { allValid = false; break; }
-      parsedSegments.push(normalizeWorkerSpecSegment(m));
+  const match = first.match(/^(\d+)(?::([a-z][a-z0-9-]*))?$/i);
+  if (match) {
+    const count = Number.parseInt(match[1], 10);
+    if (!Number.isFinite(count) || count < MIN_WORKER_COUNT || count > MAX_WORKER_COUNT) {
+      throw new Error(`Invalid worker count "${match[1]}". Expected ${MIN_WORKER_COUNT}-${MAX_WORKER_COUNT}.`);
     }
-
-    if (allValid && parsedSegments.length > 0) {
-      workerCount = 0;
-      for (const seg of parsedSegments) {
-        workerCount += seg.count;
-        for (let i = 0; i < seg.count; i++) {
-          agentTypes.push(seg.agentType);
-          workerSpecs.push({ agentType: seg.agentType, ...(seg.role ? { role: seg.role } : {}) });
-        }
-      }
-      if (workerCount > MAX_WORKER_COUNT) {
-        throw new Error(`Total worker count ${workerCount} exceeds maximum ${MAX_WORKER_COUNT}.`);
-      }
-      // If every segment specifies the same role, use it; otherwise leave undefined
-      const roles = parsedSegments.map(s => s.role);
-      const uniqueRoles = [...new Set(roles)];
-      if (uniqueRoles.length === 1 && uniqueRoles[0]) role = uniqueRoles[0];
-      specMatched = true;
-      filteredArgs.shift();
-    }
-  }
-
-  // Fall back to single spec (e.g. "3:codex" or "2:codex:architect")
-  if (!specMatched) {
-    const match = first.match(SINGLE_SPEC_RE);
-    if (match) {
-      const normalized = normalizeWorkerSpecSegment(match);
-      workerCount = normalized.count;
-      role = normalized.role;
-      agentTypes = Array.from({ length: workerCount }, () => normalized.agentType);
-      workerSpecs = Array.from({ length: workerCount }, () => ({
-        agentType: normalized.agentType,
-        ...(role ? { role } : {}),
-      }));
-      filteredArgs.shift();
-    }
-  }
-
-  // Default: 3 workers with configured default agent type (falls back to claude)
-  if (agentTypes.length === 0) {
-    agentTypes = Array.from({ length: workerCount }, () => normalizedDefaultAgentType);
-    workerSpecs = Array.from({ length: workerCount }, () => ({ agentType: normalizedDefaultAgentType }));
+    workerCount = count;
+    if (match[2]) agentType = match[2];
+    filteredArgs.shift();
   }
 
   const task = filteredArgs.join(' ').trim();
@@ -406,23 +167,8 @@ export function parseTeamArgs(tokens: string[], defaultAgentType: string = 'clau
   }
 
   const teamName = slugifyTask(task);
-  return { workerCount, agentTypes, workerSpecs, role, task, teamName, json, newWindow };
+  return { workerCount, agentType, task, teamName, json };
 }
-
-export function buildStartupTasks(parsed: ParsedTeamArgs): Array<{ subject: string; description: string; owner?: string }> {
-  return Array.from({ length: parsed.workerCount }, (_, index) => {
-    const workerSpec = parsed.workerSpecs[index];
-    const roleLabel = workerSpec?.role ? ` (${workerSpec.role})` : '';
-    return {
-      subject: parsed.workerCount === 1
-        ? parsed.task.slice(0, 80)
-        : `Worker ${index + 1}${roleLabel}: ${parsed.task}`.slice(0, 80),
-      description: parsed.task,
-      ...(workerSpec?.role ? { owner: `worker-${index + 1}` } : {}),
-    };
-  });
-}
-
 
 function sampleValueForField(field: string): unknown {
   switch (field) {
@@ -550,65 +296,32 @@ function parseTeamApiArgs(args: string[]): {
 // ---------------------------------------------------------------------------
 
 async function handleTeamStart(parsed: ParsedTeamArgs, cwd: string): Promise<void> {
-  await assertTeamSpawnAllowed(cwd);
+  assertTeamSpawnAllowed();
 
-  // Decompose the task string into subtasks when possible
-  const decomposition = splitTaskString(parsed.task);
-  const effectiveWorkerCount = resolveTeamFanoutLimit(
-    parsed.workerCount,
-    parsed.agentTypes[0],
-    parsed.workerCount,
-    decomposition
-  );
-
-  // Build the task list from decomposition subtasks or fall back to atomic replication
+  // Create tasks from the task description (one per worker, like OMX)
   const tasks: Array<{ subject: string; description: string; owner?: string }> = [];
-  if (decomposition.strategy !== 'atomic' && decomposition.subtasks.length > 1) {
-    // Use decomposed subtasks — one per subtask (up to effectiveWorkerCount)
-    const subtasks = decomposition.subtasks.slice(0, effectiveWorkerCount);
-    for (let i = 0; i < subtasks.length; i++) {
-      tasks.push({
-        subject: subtasks[i].subject,
-        description: subtasks[i].description,
-        owner: `worker-${i + 1}`,
-      });
-    }
-  } else {
-    // Atomic task: replicate across all workers (backward compatible)
-    for (let i = 0; i < effectiveWorkerCount; i++) {
-      tasks.push({
-        subject: effectiveWorkerCount === 1
-          ? parsed.task.slice(0, 80)
-          : `Worker ${i + 1}: ${parsed.task}`.slice(0, 80),
-        description: parsed.task,
-        owner: `worker-${i + 1}`,
-      });
-    }
-  }
-
-  // Load role prompt if a role was specified (e.g., 3:codex:architect)
-  let rolePrompt: string | undefined;
-  if (parsed.role) {
-    const { loadAgentPrompt } = await import('../../agents/utils.js');
-    rolePrompt = loadAgentPrompt(parsed.role);
+  for (let i = 0; i < parsed.workerCount; i++) {
+    tasks.push({
+      subject: parsed.workerCount === 1
+        ? parsed.task.slice(0, 80)
+        : `Worker ${i + 1}: ${parsed.task}`.slice(0, 80),
+      description: parsed.task,
+      owner: `worker-${i + 1}`,
+    });
   }
 
   // Use v2 runtime by default (OMC_RUNTIME_V2 opt-out), otherwise fall back to v1
   const { isRuntimeV2Enabled } = await import('../../team/runtime-v2.js');
   if (isRuntimeV2Enabled()) {
     const { startTeamV2, monitorTeamV2 } = await import('../../team/runtime-v2.js');
+    const agentTypes = Array.from({ length: parsed.workerCount }, () => parsed.agentType);
     const runtime = await startTeamV2({
       teamName: parsed.teamName,
-      workerCount: effectiveWorkerCount,
-      agentTypes: parsed.agentTypes.slice(0, effectiveWorkerCount),
+      workerCount: parsed.workerCount,
+      agentTypes,
       tasks,
       cwd,
-      newWindow: parsed.newWindow,
-      workerRoles: parsed.workerSpecs.map((spec) => spec.role ?? spec.agentType),
-      ...(rolePrompt ? { roleName: parsed.role, rolePrompt } : {}),
     });
-
-    const uniqueTypes = [...new Set(parsed.agentTypes)].join(',');
 
     if (parsed.json) {
       const snapshot = await monitorTeamV2(runtime.teamName, cwd);
@@ -616,7 +329,7 @@ async function handleTeamStart(parsed: ParsedTeamArgs, cwd: string): Promise<voi
         teamName: runtime.teamName,
         sessionName: runtime.sessionName,
         workerCount: runtime.config.worker_count,
-        agentType: uniqueTypes,
+        agentType: parsed.agentType,
         tasks: snapshot ? snapshot.tasks : null,
       }));
       return;
@@ -625,7 +338,7 @@ async function handleTeamStart(parsed: ParsedTeamArgs, cwd: string): Promise<voi
     console.log(`Team started: ${runtime.teamName}`);
     console.log(`tmux session: ${runtime.sessionName}`);
     console.log(`workers: ${runtime.config.worker_count}`);
-    console.log(`agent_type: ${uniqueTypes}`);
+    console.log(`agent_type: ${parsed.agentType}`);
 
     const snapshot = await monitorTeamV2(runtime.teamName, cwd);
     if (snapshot) {
@@ -636,16 +349,14 @@ async function handleTeamStart(parsed: ParsedTeamArgs, cwd: string): Promise<voi
 
   // v1 fallback
   const { startTeam, monitorTeam } = await import('../../team/runtime.js');
+  const agentTypes = Array.from({ length: parsed.workerCount }, () => parsed.agentType) as any;
   const runtime = await startTeam({
     teamName: parsed.teamName,
-    workerCount: effectiveWorkerCount,
-    agentTypes: parsed.agentTypes.slice(0, effectiveWorkerCount) as CliAgentType[],
+    workerCount: parsed.workerCount,
+    agentTypes,
     tasks,
     cwd,
-    newWindow: parsed.newWindow,
   });
-
-  const uniqueTypesV1 = [...new Set(parsed.agentTypes)].join(',');
 
   if (parsed.json) {
     const snapshot = await monitorTeam(runtime.teamName, cwd, runtime.workerPaneIds);
@@ -653,7 +364,7 @@ async function handleTeamStart(parsed: ParsedTeamArgs, cwd: string): Promise<voi
       teamName: runtime.teamName,
       sessionName: runtime.sessionName,
       workerCount: runtime.workerNames.length,
-      agentType: uniqueTypesV1,
+      agentType: parsed.agentType,
       tasks: snapshot ? {
         total: snapshot.taskCounts.pending + snapshot.taskCounts.inProgress + snapshot.taskCounts.completed + snapshot.taskCounts.failed,
         pending: snapshot.taskCounts.pending,
@@ -668,7 +379,7 @@ async function handleTeamStart(parsed: ParsedTeamArgs, cwd: string): Promise<voi
   console.log(`Team started: ${runtime.teamName}`);
   console.log(`tmux session: ${runtime.sessionName}`);
   console.log(`workers: ${runtime.workerNames.length}`);
-  console.log(`agent_type: ${uniqueTypesV1}`);
+  console.log(`agent_type: ${parsed.agentType}`);
 
   const snapshot = await monitorTeam(runtime.teamName, cwd, runtime.workerPaneIds);
   if (snapshot) {
@@ -684,39 +395,14 @@ async function handleTeamStatus(teamName: string, cwd: string): Promise<void> {
   const { isRuntimeV2Enabled } = await import('../../team/runtime-v2.js');
   if (isRuntimeV2Enabled()) {
     const { monitorTeamV2 } = await import('../../team/runtime-v2.js');
-    const { deriveTeamLeaderGuidance } = await import('../../team/leader-nudge-guidance.js');
-    const { readTeamEventsByType } = await import('../../team/events.js');
     const snapshot = await monitorTeamV2(teamName, cwd);
     if (!snapshot) {
       console.log(`No team state found for ${teamName}`);
       return;
     }
-    const leaderGuidance = deriveTeamLeaderGuidance({
-      tasks: {
-        pending: snapshot.tasks.pending,
-        blocked: snapshot.tasks.blocked,
-        inProgress: snapshot.tasks.in_progress,
-        completed: snapshot.tasks.completed,
-        failed: snapshot.tasks.failed,
-      },
-      workers: {
-        total: snapshot.workers.length,
-        alive: snapshot.workers.filter((worker) => worker.alive).length,
-        idle: snapshot.workers.filter((worker) => worker.alive && (worker.status.state === 'idle' || worker.status.state === 'done')).length,
-        nonReporting: snapshot.nonReportingWorkers.length,
-      },
-    });
-    const latestLeaderNudge = (await readTeamEventsByType(teamName, 'team_leader_nudge', cwd)).at(-1);
     console.log(`team=${snapshot.teamName} phase=${snapshot.phase}`);
     console.log(`workers: total=${snapshot.workers.length}`);
     console.log(`tasks: total=${snapshot.tasks.total} pending=${snapshot.tasks.pending} blocked=${snapshot.tasks.blocked} in_progress=${snapshot.tasks.in_progress} completed=${snapshot.tasks.completed} failed=${snapshot.tasks.failed}`);
-    console.log(`leader_next_action=${leaderGuidance.nextAction}`);
-    console.log(`leader_guidance=${leaderGuidance.message}`);
-    if (latestLeaderNudge) {
-      console.log(
-        `latest_leader_nudge action=${latestLeaderNudge.next_action ?? 'unknown'} at=${latestLeaderNudge.created_at} reason=${latestLeaderNudge.reason ?? 'n/a'}`,
-      );
-    }
     return;
   }
 
@@ -872,10 +558,7 @@ export async function teamCommand(args: string[]): Promise<void> {
 
   // Default: omc team [N:agent-type] "task" -> Start team
   try {
-    // Honor team.ops.defaultAgentType when user hasn't supplied N:agent-type.
-    const cfg = loadConfig();
-    const defaultAgentType = cfg.team?.ops?.defaultAgentType ?? DEFAULT_TEAM_CLI_AGENT_TYPE;
-    const parsed = parseTeamArgs(args, defaultAgentType);
+    const parsed = parseTeamArgs(args);
     await handleTeamStart(parsed, cwd);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));

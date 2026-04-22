@@ -15,10 +15,9 @@
  *
  * Ported from oh-my-opencode's thinking-block-validator hook.
  */
-import { CONTENT_PART_TYPES, THINKING_PART_TYPES, SYNTHETIC_THINKING_ID_PREFIX, HOOK_NAME, } from "./constants.js";
+import { CONTENT_PART_TYPES, THINKING_PART_TYPES, DEFAULT_THINKING_CONTENT, SYNTHETIC_THINKING_ID_PREFIX, HOOK_NAME, } from "./constants.js";
 export * from "./types.js";
 export * from "./constants.js";
-const SYNTHETIC_THINKING_CONTENT = "[Synthetic thinking block inserted to preserve message structure]";
 function isContentPartType(type) {
     return CONTENT_PART_TYPES.includes(type);
 }
@@ -90,10 +89,8 @@ export function validateMessage(message, messages, index, modelID) {
     }
     if (hasContentParts(message.parts) &&
         !startsWithThinkingBlock(message.parts)) {
-        // Never carry forward prior-turn assistant thinking into a later message.
-        // Reusing stale reasoning can make the model appear to answer an older task
-        // instead of the user's newest request (issue #1386).
-        const thinkingContent = SYNTHETIC_THINKING_CONTENT;
+        const previousThinking = findPreviousThinkingContent(messages, index);
+        const thinkingContent = previousThinking || DEFAULT_THINKING_CONTENT;
         prependThinkingBlock(message, thinkingContent);
         return {
             valid: false,
@@ -128,7 +125,9 @@ export function createThinkingBlockValidatorHook() {
                 if (msg.info.role !== "assistant")
                     continue;
                 if (hasContentParts(msg.parts) && !startsWithThinkingBlock(msg.parts)) {
-                    prependThinkingBlock(msg, SYNTHETIC_THINKING_CONTENT);
+                    const previousThinking = findPreviousThinkingContent(messages, i);
+                    const thinkingContent = previousThinking || DEFAULT_THINKING_CONTENT;
+                    prependThinkingBlock(msg, thinkingContent);
                     fixedCount++;
                 }
             }

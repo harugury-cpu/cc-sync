@@ -3,7 +3,6 @@
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "BASH_MAX_OUTPUT_LENGTH": "20000"
   },
-  "includeGitInstructions": false,
   "permissions": {
     "allow": [
       "Read",
@@ -20,7 +19,7 @@
     ],
     "defaultMode": "bypassPermissions",
     "additionalDirectories": [
-      "/Users/mac/Documents/Obsidian Vault"
+      "/Users/harugury/Documents/Obsidian Vault"
     ]
   },
   "hooks": {
@@ -98,7 +97,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "node /Users/mac/.claude/claude-dashboard/dist/index.js"
+    "command": "node /Users/harugury/.claude/claude-dashboard/dist/index.js"
   },
   "enabledPlugins": {
     "oh-my-claudecode@omc": true,
@@ -171,5 +170,7 @@
         "apps"
       ]
     }
-  }
+  },
+  "model": "sonnet",
+  "includeGitInstructions": false
 }

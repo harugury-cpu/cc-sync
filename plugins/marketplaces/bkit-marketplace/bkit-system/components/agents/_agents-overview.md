@@ -1,23 +1,10 @@
 # Agents Overview
 
-> List of 36 Agents defined in bkit and their roles (v2.1.9)
->
-> **v2.1.9**: CC v2.1.116 response — ENH-253/254/259/263 (zero-script-qa fork verification, defense-in-depth security docs, custom skill warning, Docs=Code 15-file correction). CC recommended: v2.1.116+ (74 consecutive compatible, v2.1.115 skipped).
-> **v2.1.8**: Issue #81 hotfix - agents unchanged. Hook/lib layer focus (`lib/core/context-budget.js`, `session-ctx-fp.js`). CC recommended: v2.1.111+ (72 consecutive compatible).
-> **v2.1.7**: Issue #79 hotfix, PDCA workflow stabilization.
+> List of 16 Agents defined in bkit and their roles (v1.5.4)
 >
 > **v1.4.1**: Added Context Engineering perspective - Role-based Behavioral Rules Layer
 > **v1.5.0**: Claude Code Exclusive
 > **v1.5.4**: Model distribution verified: 7 opus / 7 sonnet / 2 haiku, 9 acceptEdits / 7 plan
-> **v1.5.6**: Auto-memory integration, multi-agent memory optimization (CC v2.1.59)
-> **v1.5.7**: /simplify + /batch PDCA flow integration, English conversion for stop script outputs
-> **v1.5.8**: Studio Support awareness - Path Registry, state directory migration, 186 exports
-> **v1.5.9**: Executive Summary module, AskUserQuestion Preview UX, ENH-74~81, 199 exports
-> **v1.6.0**: PM Agent Team (5 agents), 21 total agents
-> **v1.6.1**: 3-Tier Agent Security Model (9 acceptEdits agents with tiered disallowedTools), CTO Orchestration Redesign, 208 exports, CC v2.1.71
-> **v1.6.2**: Agent frontmatter effort/maxTurns native support (29 agents), CC v2.1.78
-> **v1.6.2+**: cc-version-researcher + bkit-impact-analyst agents (31 agents), CC version analysis workflow
-> **v2.0.6**: self-healing agent (opus) added (32 agents, 11 opus / 19 sonnet / 2 haiku)
 
 ## What are Agents?
 
@@ -61,11 +48,11 @@ Agents form bkit's **Behavioral Rules Layer**, designed according to [[../../phi
 
 | Model | Agents | Characteristics |
 |-------|--------|-----------------|
-| **opus** (10) | cto-lead, code-analyzer, design-validator, gap-detector, enterprise-expert, infra-architect, security-architect, cc-version-researcher, bkit-impact-analyst, + 1 more | Complex analysis, strategic decisions |
-| **sonnet** (19) | bkend-expert, pdca-iterator, pipeline-guide, starter-guide, product-manager, frontend-architect, qa-strategist, pm-lead, pm-discovery, pm-strategy, pm-research, pm-prd, + 7 more | Execution, guidance, iteration |
+| **opus** (7) | cto-lead, code-analyzer, design-validator, gap-detector, enterprise-expert, infra-architect, security-architect | Complex analysis, strategic decisions |
+| **sonnet** (7) | bkend-expert, pdca-iterator, pipeline-guide, starter-guide, product-manager, frontend-architect, qa-strategist | Execution, guidance, iteration |
 | **haiku** (2) | qa-monitor, report-generator | Fast monitoring, document generation |
 
-**Distribution**: 36 total agents
+**Distribution**: 7 opus / 7 sonnet / 2 haiku, 9 acceptEdits / 7 plan
 
 ## Full List
 
@@ -105,18 +92,6 @@ Agents auto-invoked based on specific tasks:
 | [[../../../agents/qa-monitor|qa-monitor]] | "QA", "test", "log analysis" | Zero Script QA execution | PreToolUse, PostToolUse, Stop |
 | [[../../../agents/pdca-iterator|pdca-iterator]] | "fix it", "improve it", "iterate" | Auto iterative improvement | Stop |
 | [[../../../agents/report-generator|report-generator]] | "report", "summary", "complete" | PDCA report generation | - |
-
-### PM Team Agents (5) (v1.6.0)
-
-Agents for pre-Plan product discovery:
-
-| Agent | Model | Permission Mode | Role | Hooks |
-|-------|-------|-----------------|------|-------|
-| [[../../../agents/pm-lead|pm-lead]] | sonnet | plan | PM Team orchestrator, discovery workflow coordination | - |
-| [[../../../agents/pm-discovery|pm-discovery]] | sonnet | plan | Market research, user interviews, pain point analysis | - |
-| [[../../../agents/pm-strategy|pm-strategy]] | sonnet | plan | Product positioning, go-to-market strategy | - |
-| [[../../../agents/pm-research|pm-research]] | sonnet | plan | Competitive analysis, trend research, data gathering | - |
-| [[../../../agents/pm-prd|pm-prd]] | sonnet | plan | PRD document generation with user stories | - |
 
 ---
 
@@ -250,12 +225,7 @@ bkit-claude-code/
     ├── frontend-architect.md
     ├── product-manager.md
     ├── qa-strategist.md
-    ├── security-architect.md
-    ├── pm-lead.md
-    ├── pm-discovery.md
-    ├── pm-strategy.md
-    ├── pm-research.md
-    └── pm-prd.md
+    └── security-architect.md
 ```
 
 ---
@@ -274,7 +244,7 @@ bkit-claude-code/
 
 ### Agent Memory
 
-All 36 agents have `memory:` frontmatter for cross-session context persistence:
+All 16 agents have `memory:` frontmatter for cross-session context persistence:
 
 | Scope | Agents |
 |-------|--------|

@@ -49,11 +49,8 @@ You are reviewing PR #{{PR_NUMBER}}: **{{PR_TITLE}}**
 # View diff
 git diff {{BASE_BRANCH}}...HEAD
 
-# Run the narrowest relevant tests first
-# If this clean review worktree has a symlinked node_modules from the source repo,
-# focused vitest commands should work without a fresh install.
-npm run test:run -- <changed-test-paths>  # preferred focused verification
-npm test  # or appropriate full test command if focused coverage is insufficient
+# Run tests
+npm test  # or appropriate test command
 
 # Check build
 npm run build  # or appropriate build command

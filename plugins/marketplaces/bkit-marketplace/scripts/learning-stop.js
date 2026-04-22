@@ -4,11 +4,17 @@
  *
  * 학습 완료 후 다음 단계 제안
  *
- * @version 1.6.0
+ * @version 1.4.4
  * @module scripts/learning-stop
  */
 
-// No common.js dependency needed
+let common = null;
+function getCommon() {
+  if (!common) {
+    common = require('../lib/common.js');
+  }
+  return common;
+}
 
 function generateLearningCompletion(level) {
   const nextLevel = level < 5 ? level + 1 : null;
@@ -38,6 +44,8 @@ function formatOutput(result) {
 }
 
 async function main() {
+  const lib = getCommon();
+
   try {
     let input = '';
     if (process.stdin.isTTY === false) {

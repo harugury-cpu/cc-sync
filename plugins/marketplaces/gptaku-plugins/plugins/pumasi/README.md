@@ -1,195 +1,150 @@
-English | [한국어](README.ko.md)
+# 품앗이 (Pumasi)
 
-# pumasi
-
-> **Parallel coding orchestration — Claude as PM, Codex CLI as your dev team.**
-
-Delegate the building to Codex. Keep the thinking for Claude.
-
-[Quick Start](#quick-start) • [Why pumasi?](#why-pumasi) • [How it works](#how-it-works) • [Features](#features) • [Requirements](#requirements)
+> Claude가 PM/감독 역할을 맡고, Codex CLI 인스턴스를 병렬 외주 개발자로 활용하여 대규모 코딩 작업을 수행합니다.
 
 ---
 
-## Quick Start
+## 이런 분을 위한 도구입니다
 
-### 1. Add the marketplace (once)
+- 3개 이상의 독립 모듈/파일을 동시에 만들어야 하는 분
+- Claude 토큰을 절약하면서 대규모 코딩을 하고 싶은 분
+- Codex CLI를 병렬 워커로 활용하고 싶은 분
+- PM처럼 기획하고 검증하는 워크플로우를 원하는 분
+
+---
+
+## 어떻게 작동하나요?
+
+7단계 워크플로우로 병렬 코딩을 수행합니다:
+
+1. **기획** -- Claude가 PM으로서 "당연히 있어야 할 기능"까지 자체 설계
+2. **분석** -- 독립 실행 가능한 서브태스크로 분해 (의존성 있으면 라운드 분리)
+3. **설정** -- 각 서브태스크별 시그니처 + 요구사항 instruction + 동적 검증 게이트 작성
+4. **실행** -- Codex CLI 인스턴스를 N개 병렬 스폰하여 동시 구현
+5. **모니터링** -- 완료 대기 및 상태 확인
+6. **검증** -- 동적 게이트(bash, 토큰 0)로 자동 검증 + 선택적 코드 리뷰
+7. **통합** -- 서브태스크 간 인터페이스 확인, 필요 시 Codex에 수정 재위임
+
+```
+사용자 요청 → Claude PM 기획 → 태스크 분해 → Codex x N 병렬 실행
+                                                    │
+                              Claude 검토 ← 결과물 ←─┘
+                                    │
+                              통합 → 완성
+```
+
+---
+
+## 빠른 시작
+
+### 1. 설치
+
+#### 마켓플레이스 등록 (처음 한 번만)
 
 ```
 /plugin marketplace add https://github.com/fivetaku/gptaku_plugins.git
 ```
 
-### 2. Install
+#### 플러그인 설치
 
 ```
 /plugin install pumasi
 ```
 
-Restart Claude Code after installation.
+#### 업데이트
 
-### 3. Install prerequisites
+플러그인이 업데이트되면 아래 명령어로 최신 버전을 받을 수 있습니다:
+
+```
+/plugin update
+```
+
+> 설치/업데이트 후에는 Claude Code를 **재시작**하세요.
+
+### 2. 사전 요구사항
 
 ```bash
-# Codex CLI
+# Codex CLI 설치 확인
+command -v codex
+# 없으면:
 npm install -g @openai/codex
 
-# yaml dependency (one-time)
+# yaml 의존성 (최초 1회)
 cd <plugin-dir>/skills/pumasi && npm install yaml
 ```
 
-### 4. Run
+### 3. 첫 실행
 
 ```
-/pumasi Build me a Todo app with auth, storage, and API
+/pumasi Todo 앱 만들어줘
 ```
-
-Or trigger naturally — pumasi auto-activates when 3+ independent modules are detected.
 
 ---
 
-## Why pumasi?
+## 핵심 기능
 
-- **Claude does not write code** — It designs interfaces, writes signatures, and sets requirements. Codex does the actual implementation. Claude tokens stay cheap.
-- **N modules in parallel** — Three independent modules take the same wall time as one. Five modules, same story.
-- **Zero-token validation** — Each task gets a bash-based gate (type-check, build, test). Gates run without consuming Claude tokens.
-- **Dependency-aware rounds** — Tasks with dependencies get split into rounds. Round 1 completes before Round 2 starts. No integration surprises.
-- **Codex-aware instructions** — Codex does not infer context. Pumasi writes absolute paths, function signatures, required imports, and hard constraints into every instruction — but never the function body.
+### 1. Claude = PM, Codex = 구현자
 
----
+Claude가 직접 코딩하지 않습니다. **시그니처 + 요구사항만** 작성하고, 실제 코드 구현은 Codex에게 위임합니다. Claude 토큰을 절약하면서 대규모 작업이 가능합니다.
 
-## How it works
+> **핵심 원칙**: Claude는 함수 body를 작성하지 않는다. 시그니처와 자연어 요구사항만 전달하고, Codex가 구현한다.
 
-```
-User request
-    │
-    ▼
-Claude (PM) — plans, decomposes, writes signatures + requirements
-    │
-    ├──────────────────────────────────┐
-    │                                  │
-    ▼                                  ▼
-Codex #1          Codex #2          Codex #3
-(implements)      (implements)      (implements)
-    │                 │                 │
-    └─────────────────┴─────────────────┘
-                      │
-                      ▼
-           Gate validation (bash, 0 tokens)
-                      │
-                      ▼
-           Claude reviews + integrates
-                      │
-                      ▼
-                   Done
-```
+### 2. N개 병렬 실행
 
-### 7-phase workflow
+독립적인 서브태스크를 여러 Codex 인스턴스가 동시에 구현합니다. 3개 모듈이면 3배 빠릅니다.
 
-| Phase | Who | What |
-|-------|-----|------|
-| 0. Plan | Claude | Analyze request, design data model, confirm scope with user |
-| 1. Decompose | Claude | Break into independently parallelizable subtasks |
-| 2. Configure | Claude | Write signatures + requirements + gates into `pumasi.config.yaml` |
-| 3. Execute | pumasi.sh | Spawn N Codex instances in parallel |
-| 4. Monitor | pumasi.sh | Wait for all workers to complete |
-| 5. Validate | Claude | Run gates (tsc, build, test), read only failing code |
-| 6. Integrate | Claude + Codex | Verify cross-task interfaces, re-delegate fixes to Codex |
+### 3. 동적 게이트 검증 (토큰 0)
+
+각 태스크별로 bash 기반 검증 게이트를 자동 생성합니다. 파일 존재 확인, 타입 체크, 라이브러리 사용 확인 등을 토큰 소비 없이 수행합니다.
+
+### 4. 라운드 기반 의존성 처리
+
+서브태스크 간 의존성이 있으면 라운드로 분리하여 순서를 보장합니다:
+- Round 1: 공유 유틸리티/모델 (병렬)
+- Round 2: Round 1 결과를 사용하는 태스크 (병렬)
+- Round 3: 최종 통합
+
+### 5. Codex 특성 대응
+
+Codex는 맥락을 추론하지 않으므로, 절대경로/함수 시그니처/필수 import 문/제약사항을 명시하는 instruction을 작성합니다. 단, 함수 본문(body)은 작성하지 않고 Codex가 직접 구현합니다.
 
 ---
 
-## Features
+## 사용법
 
-### Role separation
+| 명령어 | 설명 |
+|--------|------|
+| `/pumasi [작업 설명]` | 품앗이 모드로 작업 시작 |
+| `/pumasi` | 인터랙티브 메뉴 |
 
-| Role | Claude | Codex |
-|------|--------|-------|
-| Requirements analysis | Yes | No |
-| Data model design | Yes | No |
-| Function signatures | Yes | No |
-| Function bodies | **Never** | Yes |
-| Gate validation | Yes (run) | No |
-| Bug fixes | Delegates | Implements |
+### 자연어 트리거
 
-### When to use pumasi
+- "품앗이로 [작업]해줘"
+- "품앗이 켜줘"
+- "codex 외주로 [작업]"
+- "codex한테 [작업] 시켜"
 
-| Task count | Recommendation |
-|------------|----------------|
-| 1–2 tasks | Claude codes directly — pumasi overhead not worth it |
-| 3–4 tasks | Pumasi optional — parallel gain roughly offsets setup cost |
-| 5+ tasks | Pumasi strongly recommended — parallel gain is clear |
-
-### When NOT to use pumasi
-
-- Bug fixes or modifications to existing code (context injection becomes too heavy)
-- Single-file work (no parallel benefit)
-- Tasks where gates cannot be defined (fine-tuning UI aesthetics, etc.)
-
-### Pumasi vs `/batch`
-
-| | Pumasi | /batch |
-|--|--------|--------|
-| **Purpose** | Build N independent new modules in parallel | Apply the same change pattern to N existing files |
-| **Workers** | Codex CLI (Codex tokens) | Claude agents (Claude tokens) |
-| **Isolation** | Shared working directory | Full git worktree isolation per agent |
-| **Good for** | Auth + DB + API, each from scratch | jest→vitest migration, CSS→Tailwind conversion |
-
-### Validation gates
-
-```
-Step 0: Install dependencies (npm install if node_modules missing)
-Step 1: Run gates — tsc --noEmit → npm run build → npm test → grep checks
-Step 2: Pass = read only Codex reports. Fail = read only failing code.
-Step 3: Cross-task interface check (types, import paths)
-```
-
-### Round-based dependency handling
-
-```
-Round 1: Shared types / utilities   (N tasks in parallel)
-Round 2: Tasks that depend on Round 1 (M tasks in parallel)
-Round 3: Final integration          (Claude direct)
-```
-
-### Commands
-
-```bash
-pumasi.sh start [--config path] "project context"
-pumasi.sh status [JOB_DIR]
-pumasi.sh status --text [JOB_DIR]
-pumasi.sh wait [JOB_DIR]
-pumasi.sh results [JOB_DIR]
-pumasi.sh stop [JOB_DIR]
-pumasi.sh clean [JOB_DIR]
-```
-
-### Triggers
-
-| Trigger | Description |
-|---------|-------------|
-| `/pumasi [task]` | Start pumasi mode with task description |
-| `/pumasi` | Interactive menu |
-| "품앗이로 만들어줘" | Natural language trigger |
-| "codex 외주로" | Natural language trigger |
-| 3+ independent modules detected | Auto-activates |
+또는 3개 이상 독립 모듈을 동시에 만들어야 할 때 자동 감지.
 
 ---
 
-## Requirements
+## 파일 구조
 
-- [Claude Code](https://docs.anthropic.com/claude-code) CLI
-- [Codex CLI](https://github.com/openai/codex) — `npm install -g @openai/codex`
+| 구성요소 | 설명 |
+|----------|------|
+| 커맨드 | `/pumasi` -- 메인 라우터 |
+| 스킬 | `pumasi` -- 7단계 Codex 병렬 실행 워크플로우 |
+
+---
+
+## 요구사항
+
+- Claude Code CLI
+- [Codex CLI](https://github.com/openai/codex) (`npm install -g @openai/codex`)
 - Node.js 18+
-- OpenAI API key (for Codex)
 
 ---
 
-## License
+## 라이선스
 
 MIT
-
----
-
-<div align="center">
-
-**Claude thinks. Codex builds. You ship.**
-
-</div>

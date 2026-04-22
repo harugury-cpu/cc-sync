@@ -13,6 +13,12 @@ export const MODES = {
     TEAM: 'team',
     RALPLAN: 'ralplan',
 };
+// Deprecated mode names (removed in #1131)
+export const DEPRECATED_MODES = {
+    ULTRAPILOT: 'ultrapilot',
+    SWARM: 'swarm',
+    PIPELINE: 'pipeline',
+};
 // Tool categories
 export const TOOL_CATEGORIES = {
     LSP: 'lsp',
@@ -27,8 +33,6 @@ export const TOOL_CATEGORIES = {
     CODEX: 'codex',
     GEMINI: 'gemini',
     SHARED_MEMORY: 'shared-memory',
-    DEEPINIT: 'deepinit',
-    WIKI: 'wiki',
 };
 // Hook event names
 export const HOOK_EVENTS = {

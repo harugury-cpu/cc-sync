@@ -11,7 +11,6 @@ export interface LspServerConfig {
     extensions: string[];
     installHint: string;
     initializationOptions?: Record<string, unknown>;
-    initializeTimeoutMs?: number;
 }
 /**
  * Known LSP servers and their configurations

@@ -6,54 +6,17 @@
  * and file permissions so that individual mode modules don't duplicate this logic.
  */
 
-import { existsSync, readFileSync, unlinkSync } from 'fs';
-import { join } from 'path';
+import { existsSync, readFileSync, writeFileSync, unlinkSync, renameSync } from 'fs';
 import {
-  getOmcRoot,
   resolveStatePath,
   resolveSessionStatePath,
   ensureSessionStateDir,
   ensureOmcDir,
-  listSessionIds,
-  getWorktreeRoot,
 } from './worktree-paths.js';
-import { atomicWriteJsonSync } from './atomic-write.js';
-
-export function getStateSessionOwner(state: Record<string, unknown> | null | undefined): string | undefined {
-  if (!state || typeof state !== 'object') {
-    return undefined;
-  }
-
-  const meta = state._meta;
-  if (meta && typeof meta === 'object') {
-    const metaSessionId = (meta as Record<string, unknown>).sessionId;
-    if (typeof metaSessionId === 'string' && metaSessionId) {
-      return metaSessionId;
-    }
-  }
-
-  const topLevelSessionId = state.session_id;
-  return typeof topLevelSessionId === 'string' && topLevelSessionId
-    ? topLevelSessionId
-    : undefined;
-}
-
-export function canClearStateForSession(
-  state: Record<string, unknown> | null | undefined,
-  sessionId: string,
-): boolean {
-  const ownerSessionId = getStateSessionOwner(state);
-  return !ownerSessionId || ownerSessionId === sessionId;
-}
 
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-function resolveStateRoot(directory?: string): string {
-  const baseDir = directory || process.cwd();
-  return getWorktreeRoot(baseDir) || baseDir;
-}
 
 /**
  * Resolve the state file path for a given mode.
@@ -61,61 +24,11 @@ function resolveStateRoot(directory?: string): string {
  * Otherwise returns the legacy (global) path.
  */
 function resolveFile(mode: string, directory?: string, sessionId?: string): string {
-  const baseDir = resolveStateRoot(directory);
+  const baseDir = directory || process.cwd();
   if (sessionId) {
     return resolveSessionStatePath(mode, sessionId, baseDir);
   }
   return resolveStatePath(mode, baseDir);
-}
-
-function getLegacyStateCandidates(mode: string, directory?: string): string[] {
-  const baseDir = resolveStateRoot(directory);
-  const normalizedName = mode.endsWith('-state') ? mode : `${mode}-state`;
-
-  return [
-    resolveStatePath(mode, baseDir),
-    join(getOmcRoot(baseDir), `${normalizedName}.json`),
-  ];
-}
-
-/**
- * Find session-scoped state files that belong to the requested session.
- *
- * Normally the state file lives under `.omc/state/sessions/{sessionId}/`.
- * When a file is stranded under a different session directory (for example
- * after session continuation or manual recovery), this scans all session
- * directories and returns any file whose embedded owner still matches the
- * requested session.
- */
-export function findSessionOwnedStateFiles(
-  mode: string,
-  sessionId: string,
-  directory?: string,
-): string[] {
-  const matches = new Set<string>();
-  const baseDir = resolveStateRoot(directory);
-  const expectedPath = resolveSessionStatePath(mode, sessionId, baseDir);
-  if (existsSync(expectedPath)) {
-    matches.add(expectedPath);
-  }
-
-  for (const sid of listSessionIds(baseDir)) {
-    const candidatePath = resolveSessionStatePath(mode, sid, baseDir);
-    if (!existsSync(candidatePath)) {
-      continue;
-    }
-
-    try {
-      const raw = JSON.parse(readFileSync(candidatePath, 'utf-8')) as Record<string, unknown>;
-      if (getStateSessionOwner(raw) === sessionId) {
-        matches.add(candidatePath);
-      }
-    } catch {
-      // Ignore unreadable files and keep scanning.
-    }
-  }
-
-  return [...matches];
 }
 
 // ---------------------------------------------------------------------------
@@ -138,18 +51,17 @@ export function writeModeState(
   sessionId?: string,
 ): boolean {
   try {
-    const baseDir = resolveStateRoot(directory);
+    const baseDir = directory || process.cwd();
     if (sessionId) {
       ensureSessionStateDir(sessionId, baseDir);
     } else {
       ensureOmcDir('state', baseDir);
     }
     const filePath = resolveFile(mode, directory, sessionId);
-    const envelope = {
-      ...state,
-      _meta: { written_at: new Date().toISOString(), mode, ...(sessionId ? { sessionId } : {}) },
-    };
-    atomicWriteJsonSync(filePath, envelope);
+    const envelope = { ...state, _meta: { written_at: new Date().toISOString(), mode } };
+    const tmpPath = filePath + '.tmp';
+    writeFileSync(tmpPath, JSON.stringify(envelope, null, 2), { mode: 0o600 });
+    renameSync(tmpPath, filePath);
     return true;
   } catch {
     return false;
@@ -206,43 +118,25 @@ export function clearModeStateFile(
   sessionId?: string,
 ): boolean {
   let success = true;
-  const baseDir = resolveStateRoot(directory);
-  const unlinkIfPresent = (filePath: string): void => {
-    if (!existsSync(filePath)) {
-      return;
-    }
+  const filePath = resolveFile(mode, directory, sessionId);
 
+  if (existsSync(filePath)) {
     try {
       unlinkSync(filePath);
     } catch {
       success = false;
     }
-  };
-
-  if (sessionId) {
-    unlinkIfPresent(resolveFile(mode, directory, sessionId));
-  } else {
-    for (const legacyPath of getLegacyStateCandidates(mode, baseDir)) {
-      unlinkIfPresent(legacyPath);
-    }
-
-    for (const sid of listSessionIds(baseDir)) {
-      unlinkIfPresent(resolveSessionStatePath(mode, sid, baseDir));
-    }
   }
 
   // Ghost-legacy cleanup: if sessionId provided, also check legacy path
   if (sessionId) {
-    for (const legacyPath of getLegacyStateCandidates(mode, baseDir)) {
-      if (!existsSync(legacyPath)) {
-        continue;
-      }
-
+    const legacyPath = resolveFile(mode, directory); // no sessionId = legacy
+    if (existsSync(legacyPath)) {
       try {
         const content = readFileSync(legacyPath, 'utf-8');
-        const legacyState = JSON.parse(content) as Record<string, unknown>;
+        const legacyState = JSON.parse(content);
         // Only remove if it belongs to this session or is unowned
-        if (canClearStateForSession(legacyState, sessionId)) {
+        if (!legacyState.session_id || legacyState.session_id === sessionId) {
           unlinkSync(legacyPath);
         }
       } catch {

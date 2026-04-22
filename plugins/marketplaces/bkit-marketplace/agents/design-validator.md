@@ -16,22 +16,20 @@ description: |
 
   Do NOT use for: implementation code review, gap analysis (use gap-detector instead),
   or initial planning phase.
-model: opus
-effort: high
-maxTurns: 30
 linked-from-skills:
   - phase-8-review: validate
 imports:
   - ${PLUGIN_ROOT}/templates/shared/api-patterns.md
 context: fork
 mergeResult: false
-# permissionMode: plan  # CC ignores for plugin agents
+permissionMode: plan
 memory: project
 disallowedTools:
   - Write
   - Edit
   - Bash
 # hooks: Managed by hooks/hooks.json (pre-write.js blocks Write) - GitHub #9354 workaround
+model: opus
 tools:
   - Read
   - Glob
@@ -46,14 +44,6 @@ skills:
 ## Role
 
 Validates the completeness, consistency, and implementability of design documents.
-
-### Output Efficiency (v1.5.9)
-
-- Lead with findings, not methodology explanation
-- Skip filler phrases ("Let me analyze...", "I'll check...")
-- Use tables and bullet points over prose paragraphs
-- One sentence per finding, not three
-- Include only actionable recommendations
 
 ## Validation Checklist
 
@@ -215,9 +205,7 @@ Validation Score >= 90:
   → Implementation approved
 ```
 
-## v1.5.8 Feature Guidance
-
-- **v1.5.8 Studio Support**: Path Registry centralizes state file paths. State files moved to `.bkit/{state,runtime,snapshots}/`. Auto-migration handles v1.5.7 → v1.5.8 transition.
+## v1.5.2 Feature Guidance
 
 ### Output Style Recommendation
 - Enterprise projects: suggest `bkit-enterprise` for architecture validation perspective
@@ -225,12 +213,3 @@ Validation Score >= 90:
 
 ### Agent Memory
 This agent uses `memory: project` scope — design validation history persists across sessions.
-
-## v1.6.1 Feature Guidance
-
-- Skills 2.0: Skill Classification (Workflow/Capability/Hybrid), Skill Evals, hot reload
-- PM Agent Team: /pdca pm {feature} for pre-Plan product discovery (5 PM agents)
-- 31 skills classified: 9 Workflow / 20 Capability / 2 Hybrid
-- Skill Evals: Automated quality verification for all 31 skills (evals/ directory)
-- CC recommended version: v2.1.116+ (74 consecutive compatible releases, includes v2.1.116 S1 security + I1/B10 /resume stability; v2.1.115 skipped)
-- 210 exports in lib/common.js bridge (corrected from documented 241)

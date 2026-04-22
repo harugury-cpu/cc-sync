@@ -9,7 +9,7 @@
 
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { getClaudeConfigDir } from '../utils/config-dir.js';
+import { getClaudeConfigDir } from '../utils/paths.js';
 import { listMcpWorkers } from './team-registration.js';
 import { readHeartbeat, isWorkerAlive } from './heartbeat.js';
 import { listTaskIds, readTask } from './task-file-ops.js';
@@ -59,7 +59,7 @@ function peekRecentOutboxMessages(
 
 export interface WorkerStatus {
   workerName: string;
-  provider: 'claude' | 'codex' | 'gemini';
+  provider: 'codex' | 'gemini';
   heartbeat: HeartbeatData | null;
   isAlive: boolean;
   currentTask: TaskFile | null;
@@ -123,17 +123,16 @@ export function getTeamStatus(
 
     // Compute per-worker task stats
     const workerTasks = tasks.filter(t => t.owner === w.name);
-    const failed = workerTasks.filter(t => t.status === 'failed' || (t.status === 'completed' && t.metadata?.permanentlyFailed === true)).length;
-    const completedClean = workerTasks.filter(t => t.status === 'completed' && !t.metadata?.permanentlyFailed).length;
+    const failed = workerTasks.filter(t => t.status === 'completed' && t.metadata?.permanentlyFailed === true).length;
     const taskStats = {
-      completed: completedClean,
+      completed: workerTasks.filter(t => t.status === 'completed').length - failed,
       failed,
       pending: workerTasks.filter(t => t.status === 'pending').length,
       inProgress: workerTasks.filter(t => t.status === 'in_progress').length,
     };
 
     const currentTask = workerTasks.find(t => t.status === 'in_progress') || null;
-    const provider = w.agentType.replace(/^(?:mcp|tmux)-/, '') as 'claude' | 'codex' | 'gemini';
+    const provider = w.agentType.replace('mcp-', '') as 'codex' | 'gemini';
 
     return {
       workerName: w.name,
@@ -157,12 +156,10 @@ export function getTeamStatus(
   }
 
   // Build team summary
-  const permanentlyFailed = tasks.filter(t => t.status === 'completed' && t.metadata?.permanentlyFailed === true).length;
-  const statusFailed = tasks.filter(t => t.status === 'failed').length;
-  const totalFailed = permanentlyFailed + statusFailed;
+  const totalFailed = tasks.filter(t => t.status === 'completed' && t.metadata?.permanentlyFailed === true).length;
   const taskSummary = {
     total: tasks.length,
-    completed: tasks.filter(t => t.status === 'completed').length - permanentlyFailed,
+    completed: tasks.filter(t => t.status === 'completed').length - totalFailed,
     failed: totalFailed,
     pending: tasks.filter(t => t.status === 'pending').length,
     inProgress: tasks.filter(t => t.status === 'in_progress').length,

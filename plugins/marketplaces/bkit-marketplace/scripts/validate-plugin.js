@@ -16,9 +16,9 @@ const PLUGIN_ROOT = process.env.CLAUDE_PLUGIN_ROOT || path.resolve(__dirname, '.
 // ============================================================
 // Configuration
 // ============================================================
-// v2.1.8 fix B18 (QR11 runtime catch): plugin.json lives at .claude-plugin/plugin.json per CC plugin spec
 const REQUIRED_FILES = [
-  '.claude-plugin/plugin.json',
+  'plugin.json',
+  'CLAUDE.md',
   'README.md'
 ];
 
@@ -254,8 +254,7 @@ function validateHooksInContent(content, sourceFile) {
  * @returns {boolean} True if valid
  */
 function validatePluginJson() {
-  // v2.1.8 fix B18: correct path is .claude-plugin/plugin.json per CC plugin spec
-  const pluginPath = path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json');
+  const pluginPath = path.join(PLUGIN_ROOT, 'plugin.json');
 
   try {
     const content = fs.readFileSync(pluginPath, 'utf8');

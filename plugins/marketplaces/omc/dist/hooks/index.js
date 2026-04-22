@@ -30,12 +30,14 @@ createTodoContinuationHook, checkIncompleteTodos } from './todo-continuation/ind
 export { 
 // Hook Bridge (main entry point for shell scripts)
 processHook } from './bridge.js';
+// Edit Error Recovery - now part of unified recovery module
+// See exports from './recovery/index.js' above
 export { 
 // Think Mode
 createThinkModeHook, detectThinkKeyword, detectUltrathinkKeyword, extractPromptText as extractThinkPromptText, removeCodeBlocks as removeThinkCodeBlocks, getHighVariant, isAlreadyHighVariant, getThinkingConfig, getClaudeThinkingConfig, clearThinkModeState, getThinkModeState, isThinkModeActive, processThinkMode, shouldActivateThinkMode, shouldActivateUltrathink, THINKING_CONFIGS } from './think-mode/index.js';
 export { 
 // Rules Injector
-createRulesInjectorHook, getRulesForPath, findProjectRoot, findRuleFiles, parseRuleFrontmatter, shouldApplyRule, createContentHash, isDuplicateByRealPath, isDuplicateByContentHash, loadInjectedRules, saveInjectedRules, clearInjectedRules, RULES_INJECTOR_STORAGE, PROJECT_MARKERS, PROJECT_RULE_SUBDIRS, PROJECT_RULE_FILES, RULE_EXTENSIONS, TRACKED_TOOLS } from './rules-injector/index.js';
+createRulesInjectorHook, getRulesForPath, findProjectRoot, findRuleFiles, parseRuleFrontmatter, shouldApplyRule, createContentHash, isDuplicateByRealPath, isDuplicateByContentHash, loadInjectedRules, saveInjectedRules, clearInjectedRules, RULES_INJECTOR_STORAGE, PROJECT_MARKERS, PROJECT_RULE_SUBDIRS, PROJECT_RULE_FILES, USER_RULE_DIR, RULE_EXTENSIONS, TRACKED_TOOLS } from './rules-injector/index.js';
 export { 
 // OMC Orchestrator
 createOmcOrchestratorHook, isAllowedPath, isWriteEditTool, getGitDiffStats, formatFileChanges, buildVerificationReminder, buildOrchestratorReminder, buildBoulderContinuation, checkBoulderContinuation, processOrchestratorPreTool, processOrchestratorPostTool, HOOK_NAME as OMC_ORCHESTRATOR_HOOK_NAME, ALLOWED_PATH_PREFIX, WRITE_EDIT_TOOLS, DIRECT_WORK_REMINDER, ORCHESTRATOR_DELEGATION_REQUIRED, BOULDER_CONTINUATION_PROMPT, VERIFICATION_REMINDER, SINGLE_TASK_DIRECTIVE } from './omc-orchestrator/index.js';
@@ -76,6 +78,8 @@ createThinkingBlockValidatorHook, isExtendedThinkingModel, hasContentParts, star
 export { 
 // Non-Interactive Environment
 nonInteractiveEnvHook, isNonInteractive, HOOK_NAME as NON_INTERACTIVE_ENV_HOOK_NAME, NON_INTERACTIVE_ENV, SHELL_COMMAND_PATTERNS } from './non-interactive-env/index.js';
+// Session Recovery - now part of unified recovery module
+// See exports from './recovery/index.js' above
 export { 
 // Agent Usage Reminder
 createAgentUsageReminderHook, loadAgentUsageState, saveAgentUsageState, clearAgentUsageState, TARGET_TOOLS, AGENT_TOOLS, REMINDER_MESSAGE } from './agent-usage-reminder/index.js';
@@ -88,6 +92,7 @@ checkPersistentModes, createHookOutput } from './persistent-mode/index.js';
 export { 
 // Plugin Patterns (Popular Community Patterns)
 getFormatter, isFormatterAvailable, formatFile, getLinter, lintFile, validateCommitMessage, runTypeCheck, runTests, runLint, runPreCommitChecks, getPreCommitReminderMessage, getAutoFormatMessage } from './plugin-patterns/index.js';
+// Ralph Verifier is now exported from ./ralph/index.js above
 export { 
 // UltraQA Loop (QA cycling workflow)
 readUltraQAState, writeUltraQAState, clearUltraQAState, startUltraQA, recordFailure, completeUltraQA, stopUltraQA, cancelUltraQA, getGoalCommand, formatProgressMessage } from './ultraqa/index.js';
@@ -101,6 +106,9 @@ createLearnedSkillsHook, processMessageForSkills, isLearnerEnabled, getAllSkills
 USER_SKILLS_DIR, PROJECT_SKILLS_SUBDIR, SKILL_EXTENSION, FEATURE_FLAG_KEY, MAX_SKILL_CONTENT_LENGTH, MIN_QUALITY_SCORE, MAX_SKILLS_PER_SESSION } from './learner/index.js';
 // Autopilot
 export { readAutopilotState, writeAutopilotState, clearAutopilotState, isAutopilotActive, getAutopilotStateAge, initAutopilot, transitionPhase, incrementAgentCount, updateExpansion, updatePlanning, updateExecution, updateQA, updateValidation, ensureAutopilotDir, getSpecPath, getPlanPath, transitionRalphToUltraQA, transitionUltraQAToValidation, transitionToComplete, transitionToFailed, getTransitionPrompt, getExpansionPrompt, getDirectPlanningPrompt, getExecutionPrompt, getQAPrompt, getValidationPrompt, getPhasePrompt, recordValidationVerdict, getValidationStatus, startValidationRound, shouldRetryValidation, getIssuesToFix, getValidationSpawnPrompt, formatValidationResults, generateSummary, formatSummary, formatCompactSummary, formatFailureSummary, formatFileList, cancelAutopilot, clearAutopilot, canResumeAutopilot, resumeAutopilot, formatCancelMessage, STALE_STATE_MAX_AGE_MS, DEFAULT_CONFIG } from './autopilot/index.js';
+export { 
+// Ultrapilot Coordinator
+startUltrapilot, decomposeTask, spawnWorkers, trackProgress, integrateResults, handleSharedFiles, isFileOwnedByWorker, isSharedFile, assignFileToWorker, readUltrapilotState, writeUltrapilotState, initUltrapilot, addWorker, updateWorkerState, completeWorker, failWorker, completeUltrapilot, getCompletedWorkers, getRunningWorkers, getFailedWorkers, recordConflict, DEFAULT_CONFIG as ULTRAPILOT_DEFAULT_CONFIG } from './ultrapilot/index.js';
 // Mode Registry (Centralized State Management)
 export { MODE_CONFIGS, getStateDir, ensureStateDir as ensureModeStateDir, getStateFilePath as getModeStateFilePath, getMarkerFilePath as getModeMarkerFilePath, getGlobalStateFilePath, clearModeState, hasModeState, getActiveModes, clearAllModeStates, 
 // Additional functions from PR #111

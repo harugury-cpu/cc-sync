@@ -6,7 +6,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync, } from 'node:fs';
 import { join } from 'node:path';
 import { MESSAGE_STORAGE, PART_STORAGE, THINKING_TYPES, META_TYPES, PLACEHOLDER_TEXT, } from './constants.js';
-const SYNTHETIC_THINKING_CONTENT = '[Synthetic thinking block inserted to preserve message structure]';
 /**
  * Generate a unique part ID
  */
@@ -231,24 +230,47 @@ export function findMessagesWithOrphanThinking(sessionID) {
     return result;
 }
 /**
- * Prepend a generic synthetic thinking part to a message.
- *
- * Never copy prior assistant thinking into a later message: doing so can leak
- * stale task context into a newer turn and make the model appear to answer an
- * old request instead of the latest user input (issue #1386).
+ * Find the most recent thinking content from previous assistant messages
+ */
+function findLastThinkingContent(sessionID, beforeMessageID) {
+    const messages = readMessages(sessionID);
+    const currentIndex = messages.findIndex((m) => m.id === beforeMessageID);
+    if (currentIndex === -1)
+        return '';
+    for (let i = currentIndex - 1; i >= 0; i--) {
+        const msg = messages[i];
+        if (msg.role !== 'assistant')
+            continue;
+        const parts = readParts(msg.id);
+        for (const part of parts) {
+            if (THINKING_TYPES.has(part.type)) {
+                const thinking = part.thinking;
+                const reasoning = part.text;
+                const content = thinking || reasoning;
+                if (content && content.trim().length > 0) {
+                    return content;
+                }
+            }
+        }
+    }
+    return '';
+}
+/**
+ * Prepend a thinking part to a message
  */
 export function prependThinkingPart(sessionID, messageID) {
     const partDir = join(PART_STORAGE, messageID);
     if (!existsSync(partDir)) {
         mkdirSync(partDir, { recursive: true });
     }
+    const previousThinking = findLastThinkingContent(sessionID, messageID);
     const partId = `prt_0000000000_thinking`;
     const part = {
         id: partId,
         sessionID,
         messageID,
         type: 'thinking',
-        thinking: SYNTHETIC_THINKING_CONTENT,
+        thinking: previousThinking || '[Continuing from previous reasoning]',
         synthetic: true,
     };
     try {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { execFileSync } from 'child_process';
@@ -40,28 +40,6 @@ function writeSkillState(
   );
 }
 
-function writeSubagentTrackingState(
-  tempDir: string,
-  agents: Array<Record<string, unknown>>,
-): void {
-  const stateDir = join(tempDir, '.omc', 'state');
-  mkdirSync(stateDir, { recursive: true });
-  writeFileSync(
-    join(stateDir, 'subagent-tracking.json'),
-    JSON.stringify(
-      {
-        agents,
-        total_spawned: agents.length,
-        total_completed: agents.filter((agent) => agent.status === 'completed').length,
-        total_failed: agents.filter((agent) => agent.status === 'failed').length,
-        last_updated: new Date().toISOString(),
-      },
-      null,
-      2,
-    ),
-  );
-}
-
 describe('persistent-mode skill-state stop integration (issue #1033)', () => {
   it('blocks stop when a skill is actively executing', async () => {
     const sessionId = 'session-skill-1033-block';
@@ -86,42 +64,6 @@ describe('persistent-mode skill-state stop integration (issue #1033)', () => {
     try {
       const result = await checkPersistentModes(sessionId, tempDir);
       expect(result.shouldBlock).toBe(false);
-    } finally {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
-
-  it('allows orchestrator idle when a skill is active but delegated subagents are still running', async () => {
-    const sessionId = 'session-skill-1721-active-agents';
-    const tempDir = makeTempProject();
-
-    try {
-      writeSkillState(tempDir, sessionId, 'ralplan');
-      writeSubagentTrackingState(tempDir, [
-        {
-          agent_id: 'agent-1721',
-          agent_type: 'explore',
-          started_at: new Date().toISOString(),
-          parent_mode: 'none',
-          status: 'running',
-        },
-      ]);
-
-      const result = await checkPersistentModes(sessionId, tempDir);
-      expect(result.shouldBlock).toBe(false);
-
-      const statePath = join(
-        tempDir,
-        '.omc',
-        'state',
-        'sessions',
-        sessionId,
-        'skill-active-state.json',
-      );
-      const persisted = JSON.parse(readFileSync(statePath, 'utf-8')) as {
-        reinforcement_count?: number;
-      };
-      expect(persisted.reinforcement_count).toBe(0);
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }
@@ -157,33 +99,6 @@ describe('persistent-mode skill-state stop integration (issue #1033)', () => {
       });
 
       const result = await checkPersistentModes(sessionId, tempDir);
-      expect(result.shouldBlock).toBe(false);
-    } finally {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
-
-  it('ignores stale legacy skill-active state when session id is unavailable', async () => {
-    const tempDir = makeTempProject();
-
-    try {
-      const stateDir = join(tempDir, '.omc', 'state');
-      mkdirSync(stateDir, { recursive: true });
-      const past = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-      writeFileSync(
-        join(stateDir, 'skill-active-state.json'),
-        JSON.stringify({
-          active: true,
-          skill_name: 'blocker-skill',
-          started_at: past,
-          last_checked_at: past,
-          reinforcement_count: 0,
-          max_reinforcements: 5,
-          stale_ttl_ms: 5 * 60 * 1000,
-        }, null, 2)
-      );
-
-      const result = await checkPersistentModes(undefined, tempDir);
       expect(result.shouldBlock).toBe(false);
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
@@ -267,94 +182,6 @@ describe('persistent-mode skill-state stop integration (issue #1033)', () => {
       const result = await checkPersistentModes(sessionId, tempDir, {
         user_requested: true,
       });
-      expect(result.shouldBlock).toBe(false);
-    } finally {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
-
-  // -----------------------------------------------------------------------
-  // Registry parity: deep-interview and self-improve canonical stop behavior
-  // -----------------------------------------------------------------------
-
-  it('blocks stop when deep-interview skill is actively executing', async () => {
-    const sessionId = 'session-di-stop-block';
-    const tempDir = makeTempProject();
-
-    try {
-      writeSkillState(tempDir, sessionId, 'deep-interview');
-
-      const result = await checkPersistentModes(sessionId, tempDir);
-      expect(result.shouldBlock).toBe(true);
-      expect(result.message).toContain('deep-interview');
-      expect(result.message).toContain('SKILL ACTIVE');
-    } finally {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
-
-  it('blocks stop when self-improve skill is actively executing', async () => {
-    const sessionId = 'session-si-stop-block';
-    const tempDir = makeTempProject();
-
-    try {
-      writeSkillState(tempDir, sessionId, 'self-improve');
-
-      const result = await checkPersistentModes(sessionId, tempDir);
-      expect(result.shouldBlock).toBe(true);
-      expect(result.message).toContain('self-improve');
-      expect(result.message).toContain('SKILL ACTIVE');
-    } finally {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
-
-  it('allows stop when deep-interview skill state is stale', async () => {
-    const sessionId = 'session-di-stop-stale';
-    const tempDir = makeTempProject();
-
-    try {
-      const past = new Date(Date.now() - 35 * 60 * 1000).toISOString(); // 35 min ago
-      writeSkillState(tempDir, sessionId, 'deep-interview', {
-        started_at: past,
-        last_checked_at: past,
-        stale_ttl_ms: 30 * 60 * 1000, // 30 min TTL (heavy protection)
-      });
-
-      const result = await checkPersistentModes(sessionId, tempDir);
-      expect(result.shouldBlock).toBe(false);
-    } finally {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
-
-  it('allows stop when self-improve skill state is stale', async () => {
-    const sessionId = 'session-si-stop-stale';
-    const tempDir = makeTempProject();
-
-    try {
-      const past = new Date(Date.now() - 35 * 60 * 1000).toISOString();
-      writeSkillState(tempDir, sessionId, 'self-improve', {
-        started_at: past,
-        last_checked_at: past,
-        stale_ttl_ms: 30 * 60 * 1000,
-      });
-
-      const result = await checkPersistentModes(sessionId, tempDir);
-      expect(result.shouldBlock).toBe(false);
-    } finally {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
-
-  it('respects session isolation for deep-interview skill state', async () => {
-    const sessionId = 'session-di-iso-a';
-    const tempDir = makeTempProject();
-
-    try {
-      writeSkillState(tempDir, 'session-di-iso-b', 'deep-interview');
-
-      const result = await checkPersistentModes(sessionId, tempDir);
       expect(result.shouldBlock).toBe(false);
     } finally {
       rmSync(tempDir, { recursive: true, force: true });

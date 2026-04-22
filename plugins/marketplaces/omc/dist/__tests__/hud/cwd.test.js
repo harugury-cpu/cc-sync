@@ -42,25 +42,14 @@ describe('renderCwd', () => {
         });
     });
     describe('folder format', () => {
-        it('shows parent/leaf to disambiguate common directory names', () => {
+        it('returns only folder name', () => {
             const result = renderCwd('/Users/testuser/workspace/project', 'folder');
-            expect(result).toContain('workspace/project');
+            expect(result).toContain('project');
+            expect(result).not.toContain('/');
         });
         it('handles nested paths', () => {
             const result = renderCwd('/a/b/c/deep/folder', 'folder');
-            expect(result).toContain('deep/folder');
-        });
-        it('disambiguates ambiguous leaf names like src', () => {
-            const resultA = renderCwd('/home/user/project-a/src', 'folder');
-            const resultB = renderCwd('/home/user/project-b/src', 'folder');
-            expect(resultA).toContain('project-a/src');
-            expect(resultB).toContain('project-b/src');
-            expect(resultA).not.toEqual(resultB);
-        });
-        it('handles filesystem-root paths without crashing', () => {
-            const result = renderCwd('/', 'folder');
-            // basename('/') === '', basename(dirname('/')) === '' — should not include a stray slash
-            expect(result).not.toBeNull();
+            expect(result).toContain('folder');
         });
     });
     describe('styling', () => {

@@ -342,7 +342,12 @@ function formatGeneralError(error: Error, sessionId: string, action: string): st
   lines.push('');
   lines.push(`Type: ${error.name}`);
   lines.push(`Message: ${error.message}`);
-  // Stack traces intentionally omitted to avoid leaking internal paths
+
+  if (error.stack) {
+    lines.push('');
+    lines.push('Stack trace:');
+    lines.push(error.stack);
+  }
 
   return lines.join('\n');
 }

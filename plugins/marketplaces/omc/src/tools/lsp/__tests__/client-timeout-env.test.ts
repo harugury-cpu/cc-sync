@@ -7,13 +7,9 @@ describe('DEFAULT_LSP_REQUEST_TIMEOUT_MS', () => {
     delete process.env.OMC_LSP_TIMEOUT_MS;
   });
 
-  async function importClientModule() {
-    vi.resetModules();
-    return import('../client.js');
-  }
-
   async function importTimeout(): Promise<number> {
-    const mod = await importClientModule();
+    vi.resetModules();
+    const mod = await import('../client.js');
     return mod.DEFAULT_LSP_REQUEST_TIMEOUT_MS;
   }
 
@@ -45,21 +41,5 @@ describe('DEFAULT_LSP_REQUEST_TIMEOUT_MS', () => {
     process.env.OMC_LSP_TIMEOUT_MS = '-5000';
     const timeout = await importTimeout();
     expect(timeout).toBe(15_000);
-  });
-
-  it('should keep non-initialize requests on the base timeout', async () => {
-    const mod = await importClientModule();
-    expect(mod.getLspRequestTimeout({}, 'hover')).toBe(15_000);
-  });
-
-  it('should use kotlin initialize timeout minimum when larger than default', async () => {
-    const mod = await importClientModule();
-    expect(mod.getLspRequestTimeout({ initializeTimeoutMs: 5 * 60 * 1000 }, 'initialize')).toBe(5 * 60 * 1000);
-  });
-
-  it('should preserve larger env-based timeouts over kotlin minimum', async () => {
-    process.env.OMC_LSP_TIMEOUT_MS = '600000';
-    const mod = await importClientModule();
-    expect(mod.getLspRequestTimeout({ initializeTimeoutMs: 5 * 60 * 1000 }, 'initialize')).toBe(600000);
   });
 });

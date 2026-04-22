@@ -1,21 +1,28 @@
 ---
 name: pdca
-classification: workflow
-classification-reason: PDCA process automation independent of model capability evolution
-deprecation-risk: none
-effort: medium
 description: |
-  Unified PDCA cycle management — plan, design, do, analyze, iterate, report.
-  Triggers: pdca, plan, design, analyze, report, status, next, iterate, 계획, 설계, 분석, 보고서.
+  Unified skill for managing the entire PDCA cycle.
+  Auto-triggered by keywords: "plan", "design", "analyze", "report", "status".
+  Replaces legacy /pdca-* commands.
+
+  Use proactively when user mentions PDCA cycle, planning, design documents,
+  gap analysis, iteration, or completion reports.
+
+  Triggers: pdca, 계획, 설계, 분석, 검증, 보고서, 반복, 개선, plan, design, analyze,
+  check, report, status, next, iterate, gap, 計画, 設計, 分析, 検証, 報告,
+  计划, 设计, 分析, 验证, 报告, planificar, diseño, analizar, verificar,
+  planifier, conception, analyser, vérifier, rapport,
+  planen, Entwurf, analysieren, überprüfen, Bericht,
+  pianificare, progettazione, analizzare, verificare, rapporto
+
+  Do NOT use for: simple queries without PDCA context, code-only tasks.
 argument-hint: "[action] [feature]"
 user-invocable: true
 agents:
   analyze: bkit:gap-detector
   iterate: bkit:pdca-iterator
   report: bkit:report-generator
-  qa: bkit:qa-lead
-  team: null
-  pm: null
+  team: bkit:cto-lead
   default: null
 allowed-tools:
   - Read
@@ -34,13 +41,12 @@ imports:
   - ${PLUGIN_ROOT}/templates/design.template.md
   - ${PLUGIN_ROOT}/templates/do.template.md
   - ${PLUGIN_ROOT}/templates/analysis.template.md
-  - ${PLUGIN_ROOT}/templates/qa-report.template.md
-  - ${PLUGIN_ROOT}/templates/qa-test-plan.template.md
   - ${PLUGIN_ROOT}/templates/report.template.md
   - ${PLUGIN_ROOT}/templates/iteration-report.template.md
 next-skill: null
 pdca-phase: null
 task-template: "[PDCA] {feature}"
+# hooks: Managed by hooks/hooks.json (unified-stop.js) - GitHub #9354 workaround
 ---
 
 # PDCA Skill
@@ -51,13 +57,11 @@ task-template: "[PDCA] {feature}"
 
 | Argument | Description | Example |
 |----------|-------------|---------|
-| `pm [feature]` | Run PM Agent Team analysis (pre-Plan) | `/pdca pm user-auth` |
 | `plan [feature]` | Create Plan document | `/pdca plan user-auth` |
 | `design [feature]` | Create Design document | `/pdca design user-auth` |
 | `do [feature]` | Do phase guide (start implementation) | `/pdca do user-auth` |
 | `analyze [feature]` | Run Gap analysis (Check phase) | `/pdca analyze user-auth` |
 | `iterate [feature]` | Auto improvement iteration (Act phase) | `/pdca iterate user-auth` |
-| `qa [feature]` | Run QA phase (L1-L5 tests) | `/pdca qa user-auth` |
 | `report [feature]` | Generate completion report | `/pdca report user-auth` |
 | `archive [feature]` | Archive completed PDCA documents | `/pdca archive user-auth` |
 | `cleanup [feature]` | Cleanup archived features from status | `/pdca cleanup` |
@@ -69,47 +73,13 @@ task-template: "[PDCA] {feature}"
 
 ## Action Details
 
-### pm (PM Analysis Phase)
-
-Run PM Agent Team for product discovery and strategy analysis before Plan phase.
-
-1. **Call pm-lead Agent** (orchestrates 4 sub-agents)
-2. pm-lead runs Phase 1: Context Collection (project info, git history)
-3. pm-lead runs Phase 2: Parallel Analysis (3 agents simultaneously)
-   - pm-discovery: Opportunity Solution Tree (Teresa Torres)
-   - pm-strategy: Value Proposition (JTBD 6-Part) + Lean Canvas
-   - pm-research: 3 Personas + 5 Competitors + TAM/SAM/SOM
-4. pm-lead runs Phase 3: PRD Synthesis via pm-prd agent
-   - Beachhead Segment (Geoffrey Moore) + GTM Strategy
-   - 8-section PRD generation
-5. Output PRD to `docs/00-pm/{feature}.prd.md`
-6. Create Task: `[PM] {feature}`
-7. Update .bkit-memory.json: phase = "pm"
-8. Guide user to next step: `/pdca plan {feature}`
-
-**Output Path**: `docs/00-pm/{feature}.prd.md`
-
-**Requirements**:
-- Agent Teams enabled: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
-- Project level: Dynamic or Enterprise (Starter not supported)
-
 ### plan (Plan Phase)
 
-0. **Template Loading**: Read `templates/plan.template.md` to understand the required Plan document structure and sections. Use this template's sections as your document outline. This is MANDATORY — do not generate Plan documents from memory or assumptions.
-1. **PRD Auto-Reference**: Check if `docs/00-pm/{feature}.prd.md` exists
-   - If found: Read PRD and use as context for Plan document (improves quality significantly)
-   - If not found: Proceed normally (tip: run `/pdca pm {feature}` first for better results)
-2. Check if `docs/01-plan/features/{feature}.plan.md` exists
-3. If not, create based on `plan.template.md`
-4. If exists, display content and suggest modifications
-5. **Checkpoint 1 — Requirements Confirmation**: Present understanding of the feature (problem, scope, constraints) and use AskUserQuestion: "요구사항 이해가 맞나요? 빠진 건 없나요?" Wait for user confirmation before proceeding.
-6. **Checkpoint 2 — Clarifying Questions**: Identify underspecified elements (edge cases, error handling, integration points, compatibility). Present organized question list. Wait for answers before generating the document.
-7. Generate Plan document with user-confirmed requirements
-8. Create Task: `[Plan] {feature}`
-9. Update .bkit-memory.json: phase = "plan"
-10. Write `## Executive Summary` at document top with 4-perspective table (Problem/Solution/Function UX Effect/Core Value), each 1-2 sentences
-11. **Context Anchor Generation**: After generating Plan document, extract Context Anchor (WHY/WHO/RISK/SUCCESS/SCOPE) from Executive Summary, Requirements, and Risk sections. Write as `## Context Anchor` table between Executive Summary and Section 1. This anchor propagates to Design/Do documents for cross-session context continuity.
-12. **MANDATORY**: After completing the document, also output the Executive Summary table in your response so the user sees it immediately without opening the file
+1. Check if `docs/01-plan/features/{feature}.plan.md` exists
+2. If not, create based on `plan.template.md`
+3. If exists, display content and suggest modifications
+4. Create Task: `[Plan] {feature}`
+5. Update .bkit-memory.json: phase = "plan"
 
 **Output Path**: `docs/01-plan/features/{feature}.plan.md`
 
@@ -119,74 +89,23 @@ Run PM Agent Team for product discovery and strategy analysis before Plan phase.
 
 ### design (Design Phase)
 
-0. **Template Loading**: Read `templates/design.template.md` to understand the required Design document structure. Use this template's sections as your document outline. This is MANDATORY — do not generate Design documents from memory or assumptions.
 1. Verify Plan document exists (required - suggest running plan first if missing)
-2. Read Plan document to understand requirements and scope
-3. **PRD Context Loading**: Check if `docs/00-pm/{feature}.prd.md` exists. If found, read the Executive Summary and Beachhead/GTM sections to inform architecture decisions with market context. This prevents strategic context loss at the Plan→Design handoff.
-4. **Context Anchor Embed**: Copy Plan's `## Context Anchor` table to Design document top (between header metadata and ## 1. Overview). If Plan has no Context Anchor (legacy), skip this step gracefully.
-5. **Generate 3 Architecture Options** (inspired by feature-dev Phase 4):
-   - **Option A — Minimal Changes**: Least modification, maximum reuse of existing code. Fast but potentially coupled.
-   - **Option B — Clean Architecture**: Best separation of concerns, most maintainable. More files, more refactoring.
-   - **Option C — Pragmatic Balance**: Good boundaries without over-engineering. Recommended default.
-6. Present comparison table with trade-offs (complexity, maintainability, effort, risk)
-7. **Checkpoint 3 — Architecture Selection**: Use AskUserQuestion: "3가지 설계안 중 어떤 걸 선택하시겠습니까?" Include recommendation. Wait for user selection.
-8. Create `docs/02-design/features/{feature}.design.md` using selected architecture
-9. Use `design.template.md` structure + reference Plan content
-10. **Session Guide Generation**: Analyze Design's `## 11. Implementation Guide` structure to generate Module Map and Recommended Session Plan. Add as `### 11.3 Session Guide` within Implementation Guide section. This enables `/pdca do {feature} --scope module-N` for multi-session incremental implementation.
-11. **Design Anchor Integration (Pencil MCP)**: If the feature involves UI and Pencil MCP is available:
-    - Suggest: "UI 컨셉 페이지를 1-2개 먼저 만든 후 `/design-anchor capture {feature}` 로 디자인 토큰을 잠그세요"
-    - If Design Anchor already exists (`docs/02-design/styles/{feature}.design-anchor.md`), embed it in the Design document as `## Design Anchor` section
-    - This ensures design tokens (colors, typography, spacing) are locked before implementation
-12. Create Task: `[Design] {feature}` (blockedBy: Plan task)
-13. Update .bkit-memory.json: phase = "design"
+2. Create `docs/02-design/features/{feature}.design.md`
+3. Use `design.template.md` structure + reference Plan content
+4. Create Task: `[Design] {feature}` (blockedBy: Plan task)
+5. Update .bkit-memory.json: phase = "design"
 
 **Output Path**: `docs/02-design/features/{feature}.design.md`
 
 ### do (Do Phase)
 
 1. Verify Design document exists (required)
-2. **Read Design document FULLY** (read the entire document, not just a summary. This is critical — full context reload ensures each session starts with complete architectural context)
-3. **Full Upstream Context Loading (Phase 2+3)**: Load the COMPLETE upstream document chain:
-   - Read PRD (`docs/00-pm/{feature}.prd.md`) — extract WHY context (JTBD, value proposition, market positioning)
-   - Read Plan (`docs/01-plan/features/{feature}.plan.md`) — extract Context Anchor, Success Criteria, Requirements
-   - This ensures implementation decisions are guided by strategic intent from PRD→Plan→Design, not just the Design spec
-4. **Decision Record Chain Display**: Extract and display key decisions from PRD→Plan→Design as a unified chain. Format:
-   ```
-   📋 Decision Record Chain
-   [PRD] Target: {market/user segment} — {rationale}
-   [Plan] Architecture: {selected option} — {rationale}
-   [Design] State Mgmt: {selected approach} — {rationale}
-   ```
-5. **Success Criteria Tracking**: Extract Success Criteria from Plan document. Display as implementation checklist — each criterion must be addressed during implementation. Mark criteria that are covered by the current --scope.
-6. **Parse --scope parameter**: If arguments contain `--scope <value>`, extract module list (comma-separated scope keys). Match against Design's Session Guide Module Map. Filter implementation items to show only matching modules.
-7. **Display Context Anchor**: Show the Context Anchor table from Design document header. Format: "📌 Context Anchor" + WHY/WHO/RISK/SUCCESS/SCOPE table. This reminds the user WHY we're building this feature.
-8. **Session Guide Display**:
-   - If no --scope: Show full Module Map from Design + recommend session split + proceed with full implementation guide
-   - If --scope provided: Show only the selected modules' implementation items
-9. Summarize implementation scope:
-   - Files to create: N
-   - Files to modify: M
-   - Estimated changes: ~X lines
-10. **Checkpoint 4 — Implementation Approval**: Present scope summary and use AskUserQuestion: "이 범위로 구현을 시작해도 되겠습니까?" **DO NOT START IMPLEMENTATION WITHOUT USER APPROVAL.**
-11. After approval, provide implementation guide based on `do.template.md`
-12. Reference implementation order from Design document (filtered by --scope if provided)
-13. **Code Comment Convention (Phase 3)**: During implementation, add Design reference comments for key architectural decisions:
-    - At module/file level: `// Design Ref: §{section} — {decision rationale}`
-    - At critical logic: `// Plan SC: {success criteria being addressed}`
-    - These comments create traceable links from code back to design decisions
-14. Create Task: `[Do] {feature}` (blockedBy: Design task)
-15. Update .bkit-memory.json: phase = "do"
-
-**--scope Parameter**:
-```
-/pdca do feature                      # Full scope (backward compatible) + session guide
-/pdca do feature --scope module-1     # Only module-1
-/pdca do feature --scope module-1,module-2  # Multiple modules
-```
+2. Provide implementation guide based on `do.template.md`
+3. Reference implementation order from Design document
+4. Create Task: `[Do] {feature}` (blockedBy: Design task)
+5. Update .bkit-memory.json: phase = "do"
 
 **Guide Provided**:
-- Context Anchor (WHY/WHO/RISK/SUCCESS/SCOPE)
-- Session scope (filtered or full)
 - Implementation order checklist
 - Key files/components list
 - Dependency installation commands
@@ -194,99 +113,13 @@ Run PM Agent Team for product discovery and strategy analysis before Plan phase.
 ### analyze (Check Phase)
 
 1. Verify Do completion status (implementation code exists)
-2. **Full Upstream Context Loading (Phase 2+3)**: Load the COMPLETE upstream document chain for comprehensive evaluation:
-   - Read PRD (`docs/00-pm/{feature}.prd.md`) — verify strategic alignment (was the right problem solved?)
-   - Read Plan (`docs/01-plan/features/{feature}.plan.md`) — verify Requirements fulfillment + Success Criteria
-   - Read Design (`docs/02-design/features/{feature}.design.md`) — verify structural implementation match
-   - This 3-layer verification catches gaps that single-document comparison misses
-3. **Context Anchor Embed**: Copy Context Anchor from Design to Analysis document header.
-4. **Strategic Alignment Check (Phase 3)**: Before structural gap analysis, verify:
-   - Does the implementation address the PRD's core problem (WHY)?
-   - Are Plan Success Criteria met or on track?
-   - Were key Design decisions (architecture, data model, API) followed?
-   - Flag strategic misalignments as Critical regardless of structural match rate
-5. **Plan Success Criteria Reference**: Evaluate each Success Criteria from Plan:
-   - Mark as ✅ Met / ⚠️ Partial / ❌ Not Met
-   - Include evidence (file:line or test result)
-   - Criteria violations are automatically Critical severity
-6. **Call gap-detector Agent** (v2.3.0: Static Analysis + Runtime Verification Plan)
-   - gap-detector performs static analysis (Structural + Functional + Contract)
-   - gap-detector outputs a **Runtime Verification Plan** (L1/L2/L3 test specs)
-7. Compare Design document vs implementation code on 3 static axes:
-   - **Structural Match**: File existence, route coverage, component list
-   - **Functional Depth**: Placeholder detection, Page UI Checklist verification, actual logic completeness
-   - **API Contract**: 3-way verification (Design §4 ↔ Server route.ts ↔ Client fetch calls)
-8. **Runtime Verification (v2.3.0)**: After gap-detector completes, execute runtime tests.
-   - **Preferred**: Run existing tests from `tests/e2e/{feature}.spec.ts` (written during Do phase)
-   - **Fallback**: If no test file exists, generate from gap-detector's Runtime Verification Plan
-   - Test scenarios are defined in Design §8 Test Plan, implemented during Do phase, executed here
-
-   **L1 — API Endpoint Tests** (always run if server is available):
-   - Execute each curl command from gap-detector's L1 plan
-   - Check: HTTP status code matches expected
-   - Check: Response JSON shape matches expected (has .data, .error, .pagination)
-   - Check: Auth guard returns 401 for protected endpoints
-   - Check: Zod validation returns 400 with fieldErrors for invalid input
-   - Check: Rate limiting returns 429 after threshold
-   - Detect server: `curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/`
-   - If no server running: skip L1, warn user, use static-only formula
-
-   **L2 — UI Action Tests** (run if Playwright is installed):
-   - Generate Playwright test file from gap-detector's L2 plan
-   - Write to `tests/e2e/{feature}-actions.spec.ts`
-   - Run: `npx playwright test tests/e2e/{feature}-actions.spec.ts`
-   - Each test: navigate to page → perform action → assert result
-   - Check: API calls triggered by UI match expected endpoints
-   - If Playwright not installed: skip L2, suggest `pnpm add -D @playwright/test`
-
-   **L3 — E2E Scenario Tests** (run if Playwright is installed):
-   - Generate Playwright test file from gap-detector's L3 plan
-   - Write to `tests/e2e/{feature}-e2e.spec.ts`
-   - Run: `npx playwright test tests/e2e/{feature}-e2e.spec.ts`
-   - Full user journey: multi-page flows with state persistence
-   - Check: complete flow from start to end without errors
-
-   **Match Rate Formula (v2.3.0)**:
-   ```
-   If runtime executed:
-     Overall = (Structural × 0.15) + (Functional × 0.25)
-             + (Contract × 0.25) + (Runtime × 0.35)
-   If static only (no server):
-     Overall = (Structural × 0.2) + (Functional × 0.4) + (Contract × 0.4)
-   ```
-9. Calculate Match Rate and generate Gap list. Report all rates separately.
-10. **Decision Record Verification (Phase 3)**: Check if key decisions from Decision Record Chain were followed in implementation. Flag deviations.
-11. **Checkpoint 5 — Review Decision**: Present issues by severity (Critical/Important only, confidence ≥80%). Use AskUserQuestion with options:
-    - "지금 모두 수정" — proceed to iterate
-    - "Critical만 수정" — iterate critical only
-    - "그대로 진행" — accept current state
-    Wait for user decision before proceeding.
-12. Create Task: `[Check] {feature}` (blockedBy: Do task)
-13. Update .bkit-memory.json: phase = "check", matchRate
+2. **Call gap-detector Agent**
+3. Compare Design document vs implementation code
+4. Calculate Match Rate and generate Gap list
+5. Create Task: `[Check] {feature}` (blockedBy: Do task)
+6. Update .bkit-memory.json: phase = "check", matchRate
 
 **Output Path**: `docs/03-analysis/{feature}.analysis.md`
-
-### qa (QA Phase)
-
-1. Verify Iterate completion (Match Rate ≥ target or max iterations reached)
-2. **Delegate to qa-phase skill**: Invoke the standalone `/qa-phase {feature}` skill,
-   which owns L1-L5 test planning, generation, execution, and reporting.
-3. The qa-phase skill:
-   - Reads Design doc §8 Test Plan
-   - Calls `qa-test-planner` to refine L1-L5 test specs
-   - Calls `qa-test-generator` to emit runnable test files
-   - Executes L1 (API) / L2 (UI actions) / L3 (E2E) tests via Chrome MCP
-   - Optional L4 (perf) / L5 (security) for Enterprise level
-4. Emit one of:
-   - `QA_PASS` → auto-advance to `report` phase
-   - `QA_FAIL` → fall back to `iterate` phase
-   - `QA_SKIP` → mark qa as skipped, proceed to `report`
-5. Create Task: `[QA] {feature}`
-6. Update `.bkit/state/pdca-status.json`: phase = "qa", qaStatus = <PASS|FAIL|SKIP>
-
-**Output Path**: `docs/05-qa/{feature}.qa-report.md`
-
-**Agent**: `bkit:qa-lead` (mapped via frontmatter `agents.qa`)
 
 ### iterate (Act Phase)
 
@@ -303,27 +136,11 @@ Run PM Agent Team for product discovery and strategy analysis before Plan phase.
 
 ### report (Completion Report)
 
-0. **Template Loading**: Read `templates/report.template.md` to understand the required Report document structure. Use this template's sections as your document outline. This is MANDATORY — do not generate Report documents from memory or assumptions.
 1. Verify Check >= 90% (warn if below)
-2. **Full Upstream Context Loading (Phase 2+3)**: Load ALL upstream documents for comprehensive reporting:
-   - Read PRD — compare original value proposition vs delivered value
-   - Read Plan — compare planned Requirements/Success Criteria vs actual results
-   - Read Design — note architecture decisions and deviations
-   - Read Analysis — include final Match Rate and resolved gaps
-   - This ensures the report reflects the FULL journey from PRD→Code
-3. **Call report-generator Agent**
-4. Integrated report of PRD, Plan, Design, Implementation, Analysis
-5. **Decision Record Summary (Phase 3)**: Include section "Key Decisions & Outcomes":
-   - List decisions from PRD→Plan→Design chain
-   - For each: was it followed? what was the outcome?
-   - This creates a learnable record for future PDCA cycles
-6. **Success Criteria Final Status**: Include Plan Success Criteria with final status:
-   - Each criterion: ✅ Met (with evidence) / ❌ Not Met (with reason)
-   - Overall Success Rate: X/Y criteria met
-7. Include `## Executive Summary` with `### 1.3 Value Delivered` reflecting actual results (4 perspectives with metrics)
-8. **MANDATORY**: After completing the report, also output the Executive Summary table in your response
-9. Create Task: `[Report] {feature}`
-10. Update .bkit-memory.json: phase = "completed"
+2. **Call report-generator Agent**
+3. Integrated report of Plan, Design, Implementation, Analysis
+4. Create Task: `[Report] {feature}`
+5. Update .bkit-memory.json: phase = "completed"
 
 **Output Path**: `docs/04-report/{feature}.report.md`
 
@@ -509,8 +326,7 @@ Iteration: 2/5
 **Phase Guide**:
 | Current | Next | Suggestion |
 |---------|------|------------|
-| None | pm | `/pdca pm [feature]` (recommended) or `/pdca plan [feature]` |
-| pm | plan | `/pdca plan [feature]` (PRD auto-referenced) |
+| None | plan | `/pdca plan [feature]` |
 | plan | design | `/pdca design [feature]` |
 | design | do | Implementation start guide |
 | do | check | `/pdca analyze [feature]` |
@@ -537,8 +353,6 @@ Each PDCA phase automatically integrates with Task System:
 ```
 Task Creation Pattern:
 ┌────────────────────────────────────────┐
-│ [PM] {feature}                         │
-│   ↓ (optional, pre-Plan)               │
 │ [Plan] {feature}                       │
 │   ↓ (blockedBy)                        │
 │ [Design] {feature}                     │
@@ -561,7 +375,6 @@ Task Creation Pattern:
 
 | Action | Agent | Role |
 |--------|-------|------|
-| pm | pm-lead | Orchestrate PM Agent Team (4 sub-agents) |
 | analyze | gap-detector | Compare Design vs Implementation |
 | iterate | pdca-iterator | Auto code fix and re-verification |
 | report | report-generator | Generate completion report |
@@ -569,9 +382,6 @@ Task Creation Pattern:
 ## Usage Examples
 
 ```bash
-# Run PM analysis (recommended before planning)
-/pdca pm user-authentication
-
 # Start new feature
 /pdca plan user-authentication
 
@@ -653,7 +463,6 @@ Auto-suggest related action when detecting these keywords:
 
 | Keyword | Suggested Action |
 |---------|------------------|
-| "pm", "product discovery", "PRD", "market analysis" | pm |
 | "plan", "planning", "roadmap" | plan |
 | "design", "architecture", "spec" | design |
 | "implement", "develop", "build" | do |
@@ -662,34 +471,3 @@ Auto-suggest related action when detecting these keywords:
 | "complete", "report", "summary" | report |
 | "archive", "store" | archive |
 | "cleanup", "clean", "remove old" | cleanup |
-
-## Slash Invoke Pattern (CC 2.1.0+)
-
-Skills 2.0 enables direct slash invocation for all PDCA commands:
-
-- `/pdca plan [feature]` — Create Plan document
-- `/pdca design [feature]` — Create Design document
-- `/pdca do [feature]` — Implementation guide
-- `/pdca analyze [feature]` — Gap analysis (Check phase)
-- `/pdca iterate [feature]` — Auto-improvement (Act phase)
-- `/pdca qa [feature]` — Run QA phase (L1-L5 tests)
-- `/pdca report [feature]` — Completion report
-- `/pdca status` — Current PDCA status
-- `/pdca next` — Next phase guide
-- `/plan-plus [feature]` — Brainstorming-enhanced planning
-
-Hot reload: SKILL.md changes reflect without session restart (CC 2.1.0+).
-
-## PDCA Auto-Monitoring (CC v2.1.71+)
-
-CC v2.1.71 introduces `/loop` command and Cron tools for automated monitoring.
-
-### Usage Examples
-- `/loop 5m /pdca status` - Check PDCA status every 5 minutes
-- `/loop 10m /pdca analyze [feature]` - Run Gap analysis every 10 minutes
-- Use Cron tools for session-level scheduled checks
-
-### CTO Team Integration
-- Long CTO Team sessions benefit from `/loop` for progress monitoring
-- stdin freeze fixed in v2.1.71 ensures reliable long sessions
-- Background agent recovery (v2.1.71) makes `background: true` agents reliable

@@ -20,39 +20,32 @@
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
-import { join, dirname, resolve, parse } from 'node:path';
-import { tmpdir } from 'node:os';
+import { join, dirname, resolve } from 'node:path';
+import { tmpdir, homedir } from 'node:os';
 import { execSync } from 'node:child_process';
-import { getClaudeConfigDir } from './lib/config-dir.mjs';
 import { readStdin } from './lib/stdin.mjs';
 
 const THRESHOLD = parseInt(process.env.OMC_CONTEXT_GUARD_THRESHOLD || '75', 10);
-const CRITICAL_THRESHOLD = 95;
 const MAX_BLOCKS = 2;
-const SESSION_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,255}$/;
-const GIT_PROBE_TIMEOUT_MS = 1000;
 
 /**
  * Detect if stop was triggered by context-limit related reasons.
  * Mirrors the logic in persistent-mode.cjs to stay consistent.
  */
 function isContextLimitStop(data) {
-  const reasons = [
-    data.stop_reason,
-    data.stopReason,
-    data.end_turn_reason,
-    data.endTurnReason,
-    data.reason,
-  ]
-    .filter((value) => typeof value === 'string' && value.trim().length > 0)
-    .map((value) => value.toLowerCase().replace(/[\s-]+/g, '_'));
+  const reason = (data.stop_reason || data.stopReason || '').toLowerCase();
   const contextPatterns = [
     'context_limit', 'context_window', 'context_exceeded',
     'context_full', 'max_context', 'token_limit',
     'max_tokens', 'conversation_too_long', 'input_too_long',
   ];
 
-  return reasons.some((reason) => contextPatterns.some(p => reason.includes(p)));
+  if (contextPatterns.some(p => reason.includes(p))) return true;
+
+  const endTurnReason = (data.end_turn_reason || data.endTurnReason || '').toLowerCase();
+  if (endTurnReason && contextPatterns.some(p => endTurnReason.includes(p))) return true;
+
+  return false;
 }
 
 /**
@@ -69,28 +62,6 @@ function isUserAbort(data) {
     exactPatterns.some(p => reason === p) ||
     substringPatterns.some(p => reason.includes(p))
   );
-}
-
-function hasLocalGitMarker(startDir) {
-  if (!startDir) return false;
-
-  let current = resolve(startDir);
-  const { root } = parse(current);
-
-  while (true) {
-    if (existsSync(join(current, '.git'))) return true;
-    if (current === root) return false;
-    current = dirname(current);
-  }
-}
-
-function runGitRevParse(args, cwd) {
-  return execSync(`git rev-parse ${args.join(' ')}`, {
-    cwd,
-    encoding: 'utf-8',
-    stdio: ['pipe', 'pipe', 'pipe'],
-    timeout: GIT_PROBE_TIMEOUT_MS,
-  }).trim();
 }
 
 /**
@@ -118,21 +89,27 @@ function resolveTranscriptPath(transcriptPath, cwd) {
   // transcript path encodes the worktree CWD, but the file lives under
   // the main repo's encoded path.
   const effectiveCwd = cwd || process.cwd();
-  if (!hasLocalGitMarker(effectiveCwd)) return transcriptPath;
-
   try {
-    const gitCommonDir = runGitRevParse(['--git-common-dir'], effectiveCwd);
+    const gitCommonDir = execSync('git rev-parse --git-common-dir', {
+      cwd: effectiveCwd,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
 
     const absoluteCommonDir = resolve(effectiveCwd, gitCommonDir);
     const mainRepoRoot = dirname(absoluteCommonDir);
 
-    const worktreeTop = runGitRevParse(['--show-toplevel'], effectiveCwd);
+    const worktreeTop = execSync('git rev-parse --show-toplevel', {
+      cwd: effectiveCwd,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
 
     if (mainRepoRoot !== worktreeTop) {
       const lastSep = transcriptPath.lastIndexOf('/');
       const sessionFile = lastSep !== -1 ? transcriptPath.substring(lastSep + 1) : '';
       if (sessionFile) {
-        const configDir = getClaudeConfigDir();
+        const configDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
         const projectsDir = join(configDir, 'projects');
         if (existsSync(projectsDir)) {
           const encodedMain = mainRepoRoot.replace(/[/\\]/g, '-');
@@ -190,21 +167,9 @@ function estimateContextPercent(transcriptPath) {
  * Retry guard: track how many times we've blocked this transcript.
  * Prevents infinite block loops by capping at MAX_BLOCKS.
  */
-function getGuardFilePath(sessionId) {
-  const configDir = getClaudeConfigDir();
-  const guardDir = join(configDir, 'projects', '.omc-guards');
-  try {
-    mkdirSync(guardDir, { recursive: true, mode: 0o700 });
-  } catch (err) {
-    // On Windows, concurrent hooks can throw EEXIST even with recursive:true
-    if (err?.code !== 'EEXIST') throw err;
-  }
-  return join(guardDir, `context-guard-${sessionId}.json`);
-}
-
 function getBlockCount(sessionId) {
-  if (!sessionId || !SESSION_ID_PATTERN.test(sessionId)) return 0;
-  const guardFile = getGuardFilePath(sessionId);
+  if (!sessionId) return 0;
+  const guardFile = join(tmpdir(), `omc-context-guard-${sessionId}.json`);
   try {
     if (existsSync(guardFile)) {
       const data = JSON.parse(readFileSync(guardFile, 'utf-8'));
@@ -215,15 +180,15 @@ function getBlockCount(sessionId) {
 }
 
 function incrementBlockCount(sessionId) {
-  if (!sessionId || !SESSION_ID_PATTERN.test(sessionId)) return;
-  const guardFile = getGuardFilePath(sessionId);
+  if (!sessionId) return;
+  const guardFile = join(tmpdir(), `omc-context-guard-${sessionId}.json`);
   try {
     let count = 0;
     if (existsSync(guardFile)) {
       const data = JSON.parse(readFileSync(guardFile, 'utf-8'));
       count = data.blockCount || 0;
     }
-    writeFileSync(guardFile, JSON.stringify({ blockCount: count + 1 }), { mode: 0o600 });
+    writeFileSync(guardFile, JSON.stringify({ blockCount: count + 1 }));
   } catch { /* ignore */ }
 }
 
@@ -257,11 +222,6 @@ async function main() {
     const transcriptPath = resolveTranscriptPath(rawTranscriptPath, data.cwd);
     const pct = estimateContextPercent(transcriptPath);
 
-    if (pct >= CRITICAL_THRESHOLD) {
-      console.log(JSON.stringify({ continue: true, suppressOutput: true }));
-      return;
-    }
-
     if (pct >= THRESHOLD) {
       // Check retry guard
       const blockCount = getBlockCount(sessionId);
@@ -274,7 +234,6 @@ async function main() {
       incrementBlockCount(sessionId);
 
       console.log(JSON.stringify({
-        continue: false,
         decision: 'block',
         reason: buildStopRecoveryAdvice(pct, blockCount + 1)
       }));

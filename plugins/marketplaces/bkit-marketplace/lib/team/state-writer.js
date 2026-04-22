@@ -1,10 +1,10 @@
 /**
  * Team State Writer Module
  * @module lib/team/state-writer
- * @version 2.0.0
+ * @version 1.5.3
  *
  * bkit Studio와 공유하기 위한 팀 상태 디스크 영속화 모듈.
- * .bkit/runtime/agent-state.json에 팀 런타임 상태를 원자적으로 기록.
+ * .bkit/agent-state.json에 팀 런타임 상태를 원자적으로 기록.
  *
  * Design Reference: docs/02-design/features/team-visibility.design.md Section 4
  */
@@ -68,8 +68,8 @@ function createDefaultAgentState() {
  * @returns {string} 절대 경로
  */
 function getAgentStatePath() {
-  const { STATE_PATHS } = require('../core/paths');
-  return STATE_PATHS.agentState();
+  const { PROJECT_DIR } = getCore();
+  return path.join(PROJECT_DIR, '.bkit', 'agent-state.json');
 }
 
 /**

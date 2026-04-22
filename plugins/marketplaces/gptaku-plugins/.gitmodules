@@ -28,9 +28,3 @@
 [submodule "plugins/nopal"]
 	path = plugins/nopal
 	url = https://github.com/fivetaku/nopal.git
-[submodule "plugins/insane-search"]
-	path = plugins/insane-search
-	url = https://github.com/fivetaku/insane-search.git
-[submodule "plugins/insane-design"]
-	path = plugins/insane-design
-	url = https://github.com/fivetaku/insane-design.git

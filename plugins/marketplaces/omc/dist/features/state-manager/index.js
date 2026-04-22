@@ -3,7 +3,7 @@
  *
  * Unified state management that standardizes state file locations:
  * - Local state: .omc/state/{name}.json
- * - Global state: XDG-aware user OMC state with legacy ~/.omc/state fallback
+ * - Global state: ~/.omc/state/{name}.json
  *
  * Features:
  * - Type-safe read/write operations
@@ -13,9 +13,9 @@
  */
 import * as fs from "fs";
 import * as path from "path";
+import * as os from "os";
 import { atomicWriteJsonSync } from "../../lib/atomic-write.js";
 import { OmcPaths, getWorktreeRoot, validateWorkingDirectory, } from "../../lib/worktree-paths.js";
-import { getGlobalOmcStateRoot, getLegacyOmcPath } from "../../utils/paths.js";
 import { StateLocation, DEFAULT_STATE_CONFIG, } from "./types.js";
 // Standard state directories
 /** Get the absolute path to the local state directory, resolved from the git worktree root. */
@@ -26,7 +26,7 @@ function getLocalStateDir() {
  * @deprecated for mode state. Global state directory is only used for analytics and daemon state.
  * Mode state should use LOCAL_STATE_DIR exclusively.
  */
-const GLOBAL_STATE_DIR = getGlobalOmcStateRoot();
+const GLOBAL_STATE_DIR = path.join(os.homedir(), ".omc", "state");
 /** Maximum age for state files before they are considered stale (4 hours) */
 const MAX_STATE_AGE_MS = 4 * 60 * 60 * 1000;
 // Read cache: avoids re-reading unchanged state files within TTL
@@ -65,12 +65,8 @@ export function getStatePath(name, location) {
 /**
  * Get legacy paths for a state file (for migration)
  */
-export function getLegacyPaths(name, location = StateLocation.LOCAL) {
-    const legacyPaths = [...(LEGACY_LOCATIONS[name] || [])];
-    if (location === StateLocation.GLOBAL) {
-        legacyPaths.push(getLegacyOmcPath("state", `${name}.json`));
-    }
-    return legacyPaths;
+export function getLegacyPaths(name) {
+    return LEGACY_LOCATIONS[name] || [];
 }
 /**
  * Ensure state directory exists
@@ -90,7 +86,7 @@ export function ensureStateDir(location) {
 export function readState(name, location = StateLocation.LOCAL, options) {
     const checkLegacy = options?.checkLegacy ?? DEFAULT_STATE_CONFIG.checkLegacy;
     const standardPath = getStatePath(name, location);
-    const legacyPaths = checkLegacy ? getLegacyPaths(name, location) : [];
+    const legacyPaths = checkLegacy ? getLegacyPaths(name) : [];
     // Try standard location first
     if (fs.existsSync(standardPath)) {
         try {
@@ -249,7 +245,7 @@ export function clearState(name, location) {
         }
     }
     // Remove from legacy locations
-    const legacyPaths = getLegacyPaths(name, location ?? StateLocation.LOCAL);
+    const legacyPaths = getLegacyPaths(name);
     for (const legacyPath of legacyPaths) {
         const resolvedPath = path.isAbsolute(legacyPath)
             ? legacyPath
@@ -592,7 +588,7 @@ function withFileLock(filePath, fn) {
             if (Date.now() >= deadline) {
                 throw new Error(`Timed out acquiring state lock: ${lockPath}`);
             }
-            // Brief pause before retry (sync spin intentional — this is a sync lock function)
+            // Brief busy-wait before retry
             const waitEnd = Date.now() + LOCK_POLL_MS;
             while (Date.now() < waitEnd) {
                 /* spin */

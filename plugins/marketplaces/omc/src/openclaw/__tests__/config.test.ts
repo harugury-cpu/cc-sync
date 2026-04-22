@@ -6,7 +6,7 @@ vi.mock("fs", () => ({
   readFileSync: vi.fn(),
 }));
 
-vi.mock("../../utils/config-dir.js", () => ({
+vi.mock("../../utils/paths.js", () => ({
   getClaudeConfigDir: vi.fn(() => "/home/user/.claude"),
 }));
 

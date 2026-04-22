@@ -5,14 +5,19 @@
  * Design System 구축 완료 후 다음 단계 제안
  * Phase 5 (Design System) → Phase 6 (UI Integration)
  *
- * @version 1.6.0
+ * @version 1.4.4
  * @module scripts/phase5-design-stop
  */
 
 const path = require('path');
 
-const { debugLog } = require('../lib/core/debug');
-const { readBkitMemory, writeBkitMemory } = require('../lib/pdca/status');
+let common = null;
+function getCommon() {
+  if (!common) {
+    common = require('../lib/common.js');
+  }
+  return common;
+}
 
 /**
  * Generate phase completion message
@@ -61,15 +66,17 @@ function formatOutput(result) {
  * Main execution
  */
 async function main() {
+  const lib = getCommon();
+
   try {
-    debugLog('Phase5Stop', 'Design System phase completed');
+    lib.debugLog('Phase5Stop', 'Design System phase completed');
 
     const result = generatePhaseCompletion();
 
     console.log(formatOutput(result));
 
     // Update pipeline status
-    const memory = readBkitMemory();
+    const memory = lib.readBkitMemory();
     if (memory) {
       if (!memory.pipelineStatus) {
         memory.pipelineStatus = {};
@@ -81,11 +88,11 @@ async function main() {
       if (!memory.pipelineStatus.completedPhases.includes(5)) {
         memory.pipelineStatus.completedPhases.push(5);
       }
-      writeBkitMemory(memory);
+      lib.writeBkitMemory(memory);
     }
 
   } catch (e) {
-    debugLog('Phase5Stop', 'Error', { error: e.message });
+    lib.debugLog('Phase5Stop', 'Error', { error: e.message });
     console.log(JSON.stringify({ status: 'error', error: e.message }));
   }
 }

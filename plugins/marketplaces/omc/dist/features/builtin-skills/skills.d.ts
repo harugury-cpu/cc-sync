@@ -9,7 +9,6 @@
  * Adapted from oh-my-opencode's builtin-skills feature.
  */
 import type { BuiltinSkill } from './types.js';
-export declare function renderBundledSkillBody(skillName: string, body: string): string;
 /**
  * Get all builtin skills
  *

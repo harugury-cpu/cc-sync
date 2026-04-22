@@ -3,12 +3,13 @@
  *
  * Automatically injects relevant rule files when Claude accesses files.
  * Supports project-level (.claude/rules, .github/instructions) and
- * user-level rules under [$CLAUDE_CONFIG_DIR|~/.claude].
+ * user-level (~/.claude/rules) rule files.
  *
  * Ported from oh-my-opencode's rules-injector hook.
  */
 
 import { readFileSync } from 'fs';
+import { homedir } from 'os';
 import { isAbsolute, relative, resolve } from 'path';
 import { findProjectRoot, findRuleFiles } from './finder.js';
 import {
@@ -76,8 +77,9 @@ export function createRulesInjectorHook(workingDirectory: string) {
 
     const projectRoot = findProjectRoot(resolved);
     const cache = getSessionCache(sessionId);
+    const home = homedir();
 
-    const ruleFileCandidates = findRuleFiles(projectRoot, resolved);
+    const ruleFileCandidates = findRuleFiles(projectRoot, home, resolved);
     const toInject: RuleToInject[] = [];
 
     for (const candidate of ruleFileCandidates) {
@@ -164,8 +166,9 @@ export function createRulesInjectorHook(workingDirectory: string) {
       if (!resolved) return [];
 
       const projectRoot = findProjectRoot(resolved);
+      const home = homedir();
 
-      const ruleFileCandidates = findRuleFiles(projectRoot, resolved);
+      const ruleFileCandidates = findRuleFiles(projectRoot, home, resolved);
       const rules: RuleToInject[] = [];
 
       for (const candidate of ruleFileCandidates) {

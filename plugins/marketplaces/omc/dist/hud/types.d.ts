@@ -5,9 +5,7 @@
  */
 import type { AutopilotStateForHud } from './elements/autopilot.js';
 import type { ApiKeySource } from './elements/api-key-source.js';
-import type { SessionSummaryState } from './elements/session-summary.js';
-import type { MissionBoardConfig, MissionBoardState } from './mission-board.js';
-export type { AutopilotStateForHud, ApiKeySource, SessionSummaryState };
+export type { AutopilotStateForHud, ApiKeySource };
 export interface BackgroundTask {
     id: string;
     description: string;
@@ -30,33 +28,22 @@ export interface OmcHudState {
 }
 export interface StatuslineStdin {
     /** Transcript path for parsing conversation history */
-    transcript_path?: string;
+    transcript_path: string;
     /** Current working directory */
-    cwd?: string;
-    /** Model information from Claude Code statusline stdin */
-    model?: {
-        id?: string;
-        display_name?: string;
+    cwd: string;
+    /** Model information */
+    model: {
+        id: string;
+        display_name: string;
     };
-    /** Context window metrics from Claude Code statusline stdin */
-    context_window?: {
-        context_window_size?: number;
+    /** Context window metrics */
+    context_window: {
+        context_window_size: number;
         used_percentage?: number;
         current_usage?: {
-            input_tokens?: number;
-            cache_creation_input_tokens?: number;
-            cache_read_input_tokens?: number;
-        };
-    };
-    /** Rate limits from Claude Code statusline stdin */
-    rate_limits?: {
-        five_hour?: {
-            used_percentage?: number;
-            resets_at?: number | string;
-        };
-        seven_day?: {
-            used_percentage?: number;
-            resets_at?: number | string;
+            input_tokens: number;
+            cache_creation_input_tokens: number;
+            cache_read_input_tokens: number;
         };
     };
 }
@@ -93,11 +80,6 @@ export interface SessionHealth {
     messageCount: number;
     health: 'healthy' | 'warning' | 'critical';
 }
-export interface LastRequestTokenUsage {
-    inputTokens: number;
-    outputTokens: number;
-    reasoningTokens?: number;
-}
 export interface TranscriptData {
     agents: ActiveAgent[];
     todos: TodoItem[];
@@ -105,13 +87,9 @@ export interface TranscriptData {
     lastActivatedSkill?: SkillInvocation;
     pendingPermission?: PendingPermission;
     thinkingState?: ThinkingState;
-    lastRequestTokenUsage?: LastRequestTokenUsage;
-    sessionTotalTokens?: number;
     toolCallCount: number;
     agentCallCount: number;
     skillCallCount: number;
-    /** Name of the last tool_use block seen in transcript */
-    lastToolName: string | null;
 }
 export interface RalphStateForHud {
     active: boolean;
@@ -150,14 +128,6 @@ export interface RateLimits {
     monthlyPercent?: number;
     /** When the monthly limit resets (null if unavailable) */
     monthlyResetsAt?: Date | null;
-    /** Extra (metered) usage percentage (0-100), derived from spent/limit or API utilization */
-    extraUsagePercent?: number;
-    /** Extra usage amount spent in USD */
-    extraUsageSpentUsd?: number;
-    /** Extra usage limit in USD */
-    extraUsageLimitUsd?: number;
-    /** When the extra usage period resets (null if unavailable) */
-    extraUsageResetsAt?: Date | null;
 }
 /**
  * Categorized error reasons for API usage fetch failures.
@@ -175,8 +145,6 @@ export interface UsageResult {
     rateLimits: RateLimits | null;
     /** Error reason when API call fails (undefined on success or no credentials) */
     error?: UsageErrorReason;
-    /** True when serving cached data that may be outdated (429 or lock contention) */
-    stale?: boolean;
 }
 /**
  * Custom rate limit provider configuration.
@@ -238,8 +206,6 @@ export interface CustomProviderResult {
 export interface HudRenderContext {
     /** Context window percentage (0-100) */
     contextPercent: number;
-    /** Stable display scope for context smoothing (e.g. session/worktree key) */
-    contextDisplayScope?: string | null;
     /** Model display name */
     modelName: string;
     /** Ralph loop state */
@@ -258,8 +224,6 @@ export interface HudRenderContext {
     backgroundTasks: BackgroundTask[];
     /** Working directory */
     cwd: string;
-    /** Mission-board snapshot (opt-in) */
-    missionBoard?: MissionBoardState | null;
     /** Last activated skill from transcript */
     lastSkill: SkillInvocation | null;
     /** Rate limits result from built-in Anthropic/z.ai providers (includes error state) */
@@ -274,10 +238,6 @@ export interface HudRenderContext {
     thinkingState: ThinkingState | null;
     /** Session health metrics */
     sessionHealth: SessionHealth | null;
-    /** Last-request token usage parsed from transcript message.usage */
-    lastRequestTokenUsage?: LastRequestTokenUsage | null;
-    /** Session token total (input + output) when transcript parsing is reliable enough to calculate it */
-    sessionTotalTokens?: number | null;
     /** Installed OMC version (e.g. "4.1.10") */
     omcVersion: string | null;
     /** Latest available version from npm registry (null if up to date or unknown) */
@@ -294,10 +254,6 @@ export interface HudRenderContext {
     apiKeySource: ApiKeySource | null;
     /** Active profile name (derived from CLAUDE_CONFIG_DIR), null if default */
     profileName: string | null;
-    /** Cached session summary state (generated by scripts/session-summary.mjs) */
-    sessionSummary: SessionSummaryState | null;
-    /** Name of the last tool called in this session */
-    lastToolName?: string | null;
 }
 export type HudPreset = 'minimal' | 'focused' | 'full' | 'opencode' | 'dense';
 /**
@@ -329,18 +285,15 @@ export type CwdFormat = 'relative' | 'absolute' | 'folder';
 /**
  * Model name format options:
  * - short: 'Opus', 'Sonnet', 'Haiku'
- * - versioned: 'Opus 4.7', 'Sonnet 4.5', 'Haiku 4.5'
- * - full: raw model ID like 'claude-opus-4-7-20260416'
+ * - versioned: 'Opus 4.6', 'Sonnet 4.5', 'Haiku 4.5'
+ * - full: raw model ID like 'claude-opus-4-6-20260205'
  */
 export type ModelFormat = 'short' | 'versioned' | 'full';
-export type CallCountsFormat = 'auto' | 'emoji' | 'ascii';
 export interface HudElementConfig {
     cwd: boolean;
     cwdFormat: CwdFormat;
-    useHyperlinks?: boolean;
     gitRepo: boolean;
     gitBranch: boolean;
-    gitStatus: boolean;
     gitInfoPosition: 'above' | 'below';
     model: boolean;
     modelFormat: ModelFormat;
@@ -361,9 +314,7 @@ export interface HudElementConfig {
     thinking: boolean;
     thinkingFormat: ThinkingFormat;
     apiKeySource: boolean;
-    hostname: boolean;
     profile: boolean;
-    missionBoard?: boolean;
     promptTime: boolean;
     sessionHealth: boolean;
     showSessionDuration?: boolean;
@@ -371,9 +322,6 @@ export interface HudElementConfig {
     showTokens?: boolean;
     useBars: boolean;
     showCallCounts?: boolean;
-    callCountsFormat?: CallCountsFormat;
-    showLastTool?: boolean;
-    sessionSummary: boolean;
     maxOutputLines: number;
     safeMode: boolean;
 }
@@ -393,47 +341,19 @@ export interface ContextLimitWarningConfig {
     /** Automatically queue /compact when threshold is exceeded (default: false) */
     autoCompact: boolean;
 }
-/**
- * Layout configuration for HUD element ordering.
- * Each group is an ordered array of element names.
- * Elements can be moved between groups (e.g., contextBar from main to line1).
- * Presets control on/off; layout controls order and placement.
- */
-export interface LayoutConfig {
-    /** Elements on the git/info line (above or below main, per gitInfoPosition) */
-    line1?: string[];
-    /** Elements on the main statusline */
-    main?: string[];
-    /** Elements rendered as separate detail lines below the main line */
-    detail?: string[];
-}
-/**
- * Default element order matching the current hardcoded order in render.ts.
- * Used as fallback when no layout is configured.
- */
-export declare const DEFAULT_ELEMENT_ORDER: Required<LayoutConfig>;
 export interface HudConfig {
     preset: HudPreset;
     elements: HudElementConfig;
     thresholds: HudThresholds;
     staleTaskThresholdMinutes: number;
     contextLimitWarning: ContextLimitWarningConfig;
-    /** Mission-board collection/rendering settings. */
-    missionBoard?: MissionBoardConfig;
-    /** Built-in usage API polling interval / success-cache TTL in milliseconds. */
-    usageApiPollIntervalMs: number;
     /** Optional custom rate limit provider; omit to use built-in Anthropic/z.ai */
     rateLimitsProvider?: RateLimitsProviderConfig;
-    /** Optional main HUD element ordering convenience setting. */
-    elementOrder?: string[];
     /** Optional maximum width (columns) for statusline output. */
     maxWidth?: number;
     /** Controls maxWidth behavior: truncate with ellipsis (default) or wrap at " | " HUD element boundaries. */
     wrapMode?: 'truncate' | 'wrap';
-    /** Optional element ordering. Overrides default order when set. Presets still control on/off. */
-    layout?: LayoutConfig;
 }
-export declare const DEFAULT_HUD_USAGE_POLL_INTERVAL_MS: number;
 export declare const DEFAULT_HUD_CONFIG: HudConfig;
 export declare const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>>;
 //# sourceMappingURL=types.d.ts.map

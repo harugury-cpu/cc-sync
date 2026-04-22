@@ -3,7 +3,7 @@
 
 # skills
 
-30 skill directories for workflow automation and specialized behaviors.
+37 skill directories for workflow automation and specialized behaviors.
 
 ## Purpose
 
@@ -31,7 +31,17 @@ Skills are reusable workflow templates that can be invoked via `/oh-my-claudecod
 | `plan/SKILL.md` | omc-plan | Strategic planning with interview workflow |
 | `ralplan/SKILL.md` | ralplan | Iterative planning (Planner+Architect+Critic) with RALPLAN-DR structured deliberation (`--deliberate` for high-risk) |
 | `deep-interview/SKILL.md` | deep-interview | Socratic deep interview with mathematical ambiguity gating (Ouroboros-inspired) |
+| `analyze/SKILL.md` | analyze | Deep analysis and investigation |
 | `ralph-init/SKILL.md` | ralph-init | Initialize PRD for structured ralph |
+
+### Code Quality Skills
+
+| File | Skill | Purpose |
+|-----------|-------|---------|
+| `code-review/SKILL.md` | code-review | Comprehensive code review |
+| `security-review/SKILL.md` | security-review | Security vulnerability detection |
+| `tdd/SKILL.md` | tdd | Test-driven development workflow |
+| `build-fix/SKILL.md` | build-fix | Fix build and TypeScript errors |
 
 ### Exploration Skills
 
@@ -40,24 +50,17 @@ Skills are reusable workflow templates that can be invoked via `/oh-my-claudecod
 | `deepinit/SKILL.md` | deepinit | Generate hierarchical AGENTS.md |
 | `sciomc/SKILL.md` | sciomc | Parallel scientist orchestration |
 
-### Visual Skills
-
-| File | Skill | Purpose |
-|-----------|-------|---------|
-| `visual-verdict/SKILL.md` | visual-verdict | Structured visual QA verdict for screenshot/reference comparisons |
-
 ### Utility Skills
 
 | File | Skill | Purpose |
 |-----------|-------|---------|
-| `ai-slop-cleaner/SKILL.md` | ai-slop-cleaner | Regression-safe cleanup workflow for AI-generated code slop |
 | `learner/SKILL.md` | learner | Extract reusable skill from session |
-| `ask/SKILL.md` | ask | Ask Claude, Codex, or Gemini via `omc ask` and capture an artifact |
+| `ask-codex/SKILL.md` | ask-codex | Ask Codex via `omc ask codex` and capture an artifact |
+| `ask-gemini/SKILL.md` | ask-gemini | Ask Gemini via `omc ask gemini` and capture an artifact |
 | `note/SKILL.md` | note | Save notes for compaction resilience |
 | `cancel/SKILL.md` | cancel | Cancel any active OMC mode |
 | `hud/SKILL.md` | hud | Configure HUD display |
 | `omc-doctor/SKILL.md` | omc-doctor | Diagnose installation issues |
-| `setup/SKILL.md` | setup | Unified setup entrypoint for install, diagnostics, and MCP configuration |
 | `omc-setup/SKILL.md` | omc-setup | One-time setup wizard |
 | `omc-help/SKILL.md` | omc-help | Usage guide |
 | `mcp-setup/SKILL.md` | mcp-setup | Configure MCP servers |
@@ -69,7 +72,7 @@ Skills are reusable workflow templates that can be invoked via `/oh-my-claudecod
 |-----------|-------|---------|
 | `project-session-manager/SKILL.md` | project-session-manager (+ `psm` alias) | Isolated dev environments |
 | `writer-memory/SKILL.md` | writer-memory | Agentic memory for writers |
-| `release/SKILL.md` | release | Generic release assistant — analyzes repo CI/rules, caches in `.omc/RELEASE_RULE.md`, guides the release |
+| `release/SKILL.md` | release | Automated release workflow |
 
 ## For AI Agents
 
@@ -86,10 +89,6 @@ triggers:
   - "keyword2"
 agent: executor  # Optional: which agent to use
 model: sonnet    # Optional: model override
-pipeline: [skill-name, follow-up-skill]  # Optional: standardized multi-skill flow
-next-skill: follow-up-skill              # Optional: explicit handoff target
-next-skill-args: --direct                # Optional: arguments for the next skill
-handoff: .omc/plans/example.md           # Optional: artifact/context handed to next skill
 ---
 
 # Skill Name
@@ -143,8 +142,6 @@ Any configurable options.
 4. Invoke `qa-tester` for verification
 ```
 
-If `pipeline` / `next-skill` metadata is present, OMC appends a standardized **Skill Pipeline** handoff block to the rendered skill prompt so downstream steps are explicit.
-
 **Conditional behavior:**
 ```markdown
 ## Workflow
@@ -176,10 +173,10 @@ None - pure markdown files.
 | Category | Skills | Trigger Keywords |
 |----------|--------|------------------|
 | Execution | autopilot, ultrawork, ralph, team, ultraqa | "autopilot", "ulw", "ralph", "team" |
-| Cleanup | ai-slop-cleaner | "deslop", "anti-slop", cleanup/refactor + slop smells |
-| Planning | omc-plan, ralplan, deep-interview, ralph-init | "plan this", "interview me", "ouroboros" |
+| Planning | omc-plan, ralplan, deep-interview, analyze, ralph-init | "plan this", "analyze", "interview me", "ouroboros" |
+| Quality | code-review, security-review, tdd, build-fix | "review", "security", "tdd" |
 | Exploration | deepinit, sciomc, external-context | "deepinit", "research" |
-| Utility | learner, note, cancel, hud, setup, omc-doctor, omc-setup, omc-help, mcp-setup | "stop", "cancel" |
+| Utility | learner, note, cancel, hud, omc-doctor, omc-setup, omc-help, mcp-setup | "stop", "cancel" |
 | Domain | psm, writer-memory, release | psm context |
 
 ## Auto-Activation

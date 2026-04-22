@@ -14,9 +14,7 @@ const outfile = 'dist/hooks/skill-bridge.cjs';
 // Ensure output directory exists
 await mkdir(dirname(outfile), { recursive: true });
 
-const watchMode = process.argv.includes('--watch');
-
-const buildConfig = {
+await esbuild.build({
   entryPoints: ['src/hooks/learner/bridge.ts'],
   bundle: true,
   platform: 'node',
@@ -29,13 +27,6 @@ const buildConfig = {
     'buffer', 'crypto', 'http', 'https', 'url',
     'child_process', 'assert', 'module'
   ],
-};
+});
 
-if (watchMode) {
-  const ctx = await esbuild.context(buildConfig);
-  await ctx.watch();
-  console.log(`Watching ${outfile}...`);
-} else {
-  await esbuild.build(buildConfig);
-  console.log(`Built ${outfile}`);
-}
+console.log(`Built ${outfile}`);

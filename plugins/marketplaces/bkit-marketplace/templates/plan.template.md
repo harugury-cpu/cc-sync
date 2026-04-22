@@ -1,7 +1,7 @@
 ---
 template: plan
-version: 1.3
-description: PDCA Plan phase document template with Context Anchor and Architecture considerations
+version: 1.2
+description: PDCA Plan phase document template with Architecture and Convention considerations
 variables:
   - feature: Feature name
   - date: Creation date (YYYY-MM-DD)
@@ -19,31 +19,6 @@ variables:
 > **Author**: {author}
 > **Date**: {date}
 > **Status**: Draft
-
----
-
-## Executive Summary
-
-| Perspective | Content |
-|-------------|---------|
-| **Problem** | {Core problem this feature solves} |
-| **Solution** | {Selected solution approach} |
-| **Function/UX Effect** | {Expected functional and UX impact} |
-| **Core Value** | {Core value proposition} |
-
----
-
-## Context Anchor
-
-> Auto-generated from Executive Summary. Propagated to Design/Do documents for context continuity.
-
-| Key | Value |
-|-----|-------|
-| **WHY** | {Core problem — extracted from Executive Summary Problem} |
-| **WHO** | {Target users — extracted from Scope or Requirements} |
-| **RISK** | {Top risk — extracted from Risks section} |
-| **SUCCESS** | {Measurable criteria — extracted from Success Criteria} |
-| **SCOPE** | {Phase breakdown — extracted from Scope section} |
 
 ---
 
@@ -124,40 +99,9 @@ variables:
 
 ---
 
-## 6. Impact Analysis
+## 6. Architecture Considerations
 
-> **Purpose**: List every existing consumer of the resources being changed.
-> Changes can break existing functionality in unexpected ways.
-> This section forces a full inventory of current usage before making changes.
-
-### 6.1 Changed Resources
-
-| Resource | Type | Change Description |
-|----------|------|--------------------|
-| {e.g., BilliContract model} | DB Model / API / Schema / Config | {What is being added, modified, or removed} |
-
-### 6.2 Current Consumers
-
-For each changed resource above, list **all** existing code paths that use it:
-
-| Resource | Operation | Code Path | Impact |
-|----------|-----------|-----------|--------|
-| {resource} | CREATE | {e.g., user-app/contract/new → createBilliContract} | {None / Needs verification / Breaking} |
-| {resource} | READ | {e.g., admin/queries/contract.ts → GET_CONTRACT_DETAIL} | {None / Needs verification / Breaking} |
-| {resource} | UPDATE | {e.g., admin/hooks/use-contracts.ts → useUpdateContract} | {None / Needs verification / Breaking} |
-| {resource} | DELETE | {e.g., admin/queries/contract.ts → DELETE_CONTRACT} | {None / Needs verification / Breaking} |
-
-### 6.3 Verification
-
-- [ ] All consumers listed above verified to work with the proposed changes
-- [ ] No auth/permission changes break existing operations
-- [ ] No field additions/removals break existing queries or mutations
-
----
-
-## 7. Architecture Considerations
-
-### 7.1 Project Level Selection
+### 6.1 Project Level Selection
 
 | Level | Characteristics | Recommended For | Selected |
 |-------|-----------------|-----------------|:--------:|
@@ -165,7 +109,7 @@ For each changed resource above, list **all** existing code paths that use it:
 | **Dynamic** | Feature-based modules, BaaS integration (bkend.ai) | Web apps with backend, SaaS MVPs, fullstack apps | ☐ |
 | **Enterprise** | Strict layer separation, DI, microservices | High-traffic systems, complex architectures | ☐ |
 
-### 7.2 Key Architectural Decisions
+### 6.2 Key Architectural Decisions
 
 | Decision | Options | Selected | Rationale |
 |----------|---------|----------|-----------|
@@ -177,7 +121,7 @@ For each changed resource above, list **all** existing code paths that use it:
 | Testing | Jest / Vitest / Playwright | {selected} | {reason} |
 | Backend | BaaS (bkend.ai) / Custom Server / Serverless | {selected} | Dynamic -> bkend.ai recommended |
 
-### 7.3 Clean Architecture Approach
+### 6.3 Clean Architecture Approach
 
 ```
 Selected Level: {Starter/Dynamic/Enterprise}
@@ -199,9 +143,9 @@ Folder Structure Preview:
 
 ---
 
-## 8. Convention Prerequisites
+## 7. Convention Prerequisites
 
-### 8.1 Existing Project Conventions
+### 7.1 Existing Project Conventions
 
 Check which conventions already exist in the project:
 
@@ -212,7 +156,7 @@ Check which conventions already exist in the project:
 - [ ] Prettier configuration (`.prettierrc`)
 - [ ] TypeScript configuration (`tsconfig.json`)
 
-### 8.2 Conventions to Define/Verify
+### 7.2 Conventions to Define/Verify
 
 | Category | Current State | To Define | Priority |
 |----------|---------------|-----------|:--------:|
@@ -222,7 +166,7 @@ Check which conventions already exist in the project:
 | **Environment variables** | {exists/missing} | {env var list} | Medium |
 | **Error handling** | {exists/missing} | {error patterns} | Medium |
 
-### 8.3 Environment Variables Needed
+### 7.3 Environment Variables Needed
 
 | Variable | Purpose | Scope | To Be Created |
 |----------|---------|-------|:-------------:|
@@ -231,7 +175,7 @@ Check which conventions already exist in the project:
 | `AUTH_SECRET` | Auth secret key | Server | ☐ |
 | {variable} | {purpose} | {scope} | ☐ |
 
-### 8.4 Pipeline Integration
+### 7.4 Pipeline Integration
 
 If using 9-phase Development Pipeline, check the following:
 
@@ -258,7 +202,7 @@ If using 9-phase Development Pipeline, check the following:
 
 ---
 
-## 9. Next Steps
+## 8. Next Steps
 
 1. [ ] Write design document (`{feature}.design.md`)
 2. [ ] Team review and approval

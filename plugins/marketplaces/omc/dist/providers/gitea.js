@@ -1,11 +1,11 @@
 import { execFileSync } from 'node:child_process';
-import { validateUrlForSSRF } from '../utils/ssrf-guard.js';
 function validateGiteaUrl(raw) {
     try {
         const u = new URL(raw);
         if (u.protocol !== 'https:' && u.protocol !== 'http:')
             return null;
-        if (!validateUrlForSSRF(raw).allowed)
+        const host = u.hostname.toLowerCase();
+        if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.local'))
             return null;
         return u.origin;
     }
@@ -123,14 +123,10 @@ export class GiteaProvider {
     }
     viewIssueviaRest(number, owner, repo) {
         const baseUrl = validateGiteaUrl(process.env.GITEA_URL ?? '');
-        const token = process.env.GITEA_TOKEN;
         if (!baseUrl || !owner || !repo)
             return null;
         try {
-            const args = ['-sS'];
-            if (token)
-                args.push('-H', `Authorization: token ${token}`);
-            args.push(`${baseUrl}/api/v1/repos/${owner}/${repo}/issues/${number}`);
+            const args = ['-sS', `${baseUrl}/api/v1/repos/${owner}/${repo}/issues/${number}`];
             const raw = execFileSync('curl', args, {
                 encoding: 'utf-8',
                 timeout: 10000,

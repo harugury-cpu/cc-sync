@@ -6,13 +6,10 @@
 
 export type ExecutionMode =
   | 'autopilot'
-  | 'autoresearch'
   | 'team'
   | 'ralph'
   | 'ultrawork'
-  | 'ultraqa'
-  | 'deep-interview'
-  | 'self-improve';
+  | 'ultraqa';
 
 export interface ModeConfig {
   /** Display name for the mode */

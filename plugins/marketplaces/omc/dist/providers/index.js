@@ -12,49 +12,6 @@ import { AzureDevOpsProvider } from './azure-devops.js';
 import { GiteaProvider } from './gitea.js';
 // Singleton provider registry
 let providerRegistry = null;
-// TTL cache for git remote URL lookups keyed on resolved cwd
-const REMOTE_URL_CACHE_TTL_MS = 60_000;
-const remoteUrlCache = new Map();
-/**
- * Reset the remote URL cache. Intended for use in tests.
- */
-export function resetProviderCache() {
-    remoteUrlCache.clear();
-}
-function getCachedRemoteUrl(cwd) {
-    const entry = remoteUrlCache.get(cwd);
-    if (!entry)
-        return undefined; // cache miss
-    if (Date.now() > entry.expiresAt) {
-        remoteUrlCache.delete(cwd);
-        return undefined; // expired
-    }
-    return entry.url; // may be null (cached "not a git repo")
-}
-function setCachedRemoteUrl(cwd, url) {
-    remoteUrlCache.set(cwd, { url, expiresAt: Date.now() + REMOTE_URL_CACHE_TTL_MS });
-}
-function getRemoteUrl(cwd) {
-    const resolvedCwd = cwd ?? process.cwd();
-    const cached = getCachedRemoteUrl(resolvedCwd);
-    if (cached !== undefined)
-        return cached;
-    try {
-        const url = execSync('git remote get-url origin', {
-            cwd: resolvedCwd,
-            encoding: 'utf-8',
-            timeout: 3000,
-            stdio: ['pipe', 'pipe', 'pipe'],
-        }).trim();
-        const result = url || null;
-        setCachedRemoteUrl(resolvedCwd, result);
-        return result;
-    }
-    catch {
-        setCachedRemoteUrl(resolvedCwd, null);
-        return null;
-    }
-}
 /**
  * Detect provider from a git remote URL by matching known hostnames.
  */
@@ -168,19 +125,39 @@ export function parseRemoteUrl(url) {
  * by reading the origin remote URL.
  */
 export function detectProviderFromCwd(cwd) {
-    const url = getRemoteUrl(cwd);
-    if (!url)
+    try {
+        const url = execSync('git remote get-url origin', {
+            cwd,
+            encoding: 'utf-8',
+            timeout: 3000,
+            stdio: ['pipe', 'pipe', 'pipe'],
+        }).trim();
+        if (!url)
+            return 'unknown';
+        return detectProvider(url);
+    }
+    catch {
         return 'unknown';
-    return detectProvider(url);
+    }
 }
 /**
  * Parse the remote URL for the current working directory.
  */
 export function parseRemoteFromCwd(cwd) {
-    const url = getRemoteUrl(cwd);
-    if (!url)
+    try {
+        const url = execSync('git remote get-url origin', {
+            cwd,
+            encoding: 'utf-8',
+            timeout: 3000,
+            stdio: ['pipe', 'pipe', 'pipe'],
+        }).trim();
+        if (!url)
+            return null;
+        return parseRemoteUrl(url);
+    }
+    catch {
         return null;
-    return parseRemoteUrl(url);
+    }
 }
 /**
  * Initialize the provider registry with all available providers.

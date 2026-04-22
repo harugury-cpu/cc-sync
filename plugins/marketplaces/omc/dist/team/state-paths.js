@@ -1,4 +1,4 @@
-import { isAbsolute, join } from 'path';
+import { join } from 'path';
 /**
  * Typed path builders for all team state files.
  * All paths are relative to cwd.
@@ -64,7 +64,7 @@ export const TeamPaths = {
  * Get absolute path for a team state file.
  */
 export function absPath(cwd, relativePath) {
-    return isAbsolute(relativePath) ? relativePath : join(cwd, relativePath);
+    return join(cwd, relativePath);
 }
 /**
  * Get absolute root path for a team's state directory.

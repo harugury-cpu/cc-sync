@@ -1,8 +1,7 @@
 ---
 name: designer
 description: UI/UX Designer-Developer for stunning interfaces (Sonnet)
-model: sonnet
-level: 2
+model: claude-sonnet-4-6
 ---
 
 <Agent_Prompt>

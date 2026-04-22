@@ -35,9 +35,10 @@ This directory contains all TypeScript source code organized into modules:
 | `config/` | Configuration loading (`loader.ts`) |
 | `commands/` | Command expansion utilities |
 | `mcp/` | MCP server configuration and team runtime convergence helpers |
-| `cli/` | CLI entry points and command surfaces |
+| `cli/` | CLI entry points (`index.ts`, `analytics.ts`) |
 | `hud/` | Heads-up display components |
 | `installer/` | Installation system |
+| `analytics/` | Usage analytics collection |
 | `__tests__/` | Test files |
 
 ## For AI Agents

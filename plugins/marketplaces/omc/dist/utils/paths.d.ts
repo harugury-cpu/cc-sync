@@ -12,6 +12,11 @@
  */
 export declare function toForwardSlash(path: string): string;
 /**
+ * Get Claude config directory path.
+ * Respects the CLAUDE_CONFIG_DIR environment variable when set.
+ */
+export declare function getClaudeConfigDir(): string;
+/**
  * Get a path suitable for use in shell commands
  * Converts backslashes to forward slashes for cross-platform compatibility
  */
@@ -25,35 +30,6 @@ export declare function getDataDir(): string;
  * Get Windows-appropriate config directory
  */
 export declare function getConfigDir(): string;
-/**
- * Get Windows-appropriate state directory.
- */
-export declare function getStateDir(): string;
-/**
- * Legacy global OMC directory under the user's home directory.
- */
-export declare function getLegacyOmcDir(): string;
-/**
- * Global OMC config directory.
- *
- * Precedence:
- * 1. OMC_HOME (existing explicit override)
- * 2. XDG-aware config root on Linux/Unix
- * 3. Legacy ~/.omc elsewhere
- */
-export declare function getGlobalOmcConfigRoot(): string;
-/**
- * Global OMC state directory.
- *
- * When OMC_HOME is set, preserve that existing override semantics by treating
- * it as the shared root and resolving state beneath it.
- */
-export declare function getGlobalOmcStateRoot(): string;
-export declare function getGlobalOmcConfigPath(...segments: string[]): string;
-export declare function getGlobalOmcStatePath(...segments: string[]): string;
-export declare function getLegacyOmcPath(...segments: string[]): string;
-export declare function getGlobalOmcConfigCandidates(...segments: string[]): string[];
-export declare function getGlobalOmcStateCandidates(...segments: string[]): string[];
 /**
  * Get the plugin cache base directory for oh-my-claudecode.
  * This is the directory containing version subdirectories.
@@ -78,14 +54,8 @@ export interface PurgeCacheResult {
     removed: number;
     /** Paths that were removed */
     removedPaths: string[];
-    /** Number of stale version directories replaced with symlinks to the active version */
-    symlinked: number;
-    /** Paths that were converted to symlinks */
-    symlinkPaths: string[];
     /** Errors encountered (non-fatal) */
     errors: string[];
 }
-export declare function purgeStalePluginCacheVersions(options?: {
-    skipGracePeriod?: boolean;
-}): PurgeCacheResult;
+export declare function purgeStalePluginCacheVersions(): PurgeCacheResult;
 //# sourceMappingURL=paths.d.ts.map

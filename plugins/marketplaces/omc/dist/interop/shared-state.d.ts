@@ -6,7 +6,6 @@
  *
  * Uses atomic writes for safety and supports task/message passing.
  */
-import { type ArtifactDescriptor } from '../shared/artifact-descriptor.js';
 export interface InteropConfig {
     sessionId: string;
     createdAt: string;
@@ -20,13 +19,11 @@ export interface SharedTask {
     target: 'omc' | 'omx';
     type: 'analyze' | 'implement' | 'review' | 'test' | 'custom';
     description: string;
-    descriptionArtifact?: ArtifactDescriptor;
     context?: Record<string, unknown>;
     files?: string[];
     createdAt: string;
     status: 'pending' | 'in_progress' | 'completed' | 'failed';
     result?: string;
-    resultArtifact?: ArtifactDescriptor;
     error?: string;
     completedAt?: string;
 }
@@ -35,7 +32,6 @@ export interface SharedMessage {
     source: 'omc' | 'omx';
     target: 'omc' | 'omx';
     content: string;
-    contentArtifact?: ArtifactDescriptor;
     metadata?: Record<string, unknown>;
     timestamp: string;
     read: boolean;

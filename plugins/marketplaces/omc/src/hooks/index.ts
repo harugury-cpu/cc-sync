@@ -115,6 +115,9 @@ export {
   type HookOutput
 } from './bridge.js';
 
+// Edit Error Recovery - now part of unified recovery module
+// See exports from './recovery/index.js' above
+
 export {
   // Think Mode
   createThinkModeHook,
@@ -159,6 +162,7 @@ export {
   PROJECT_MARKERS,
   PROJECT_RULE_SUBDIRS,
   PROJECT_RULE_FILES,
+  USER_RULE_DIR,
   RULE_EXTENSIONS,
   TRACKED_TOOLS,
   type RuleMetadata,
@@ -410,6 +414,9 @@ export {
   type ShellHook
 } from './non-interactive-env/index.js';
 
+// Session Recovery - now part of unified recovery module
+// See exports from './recovery/index.js' above
+
 export {
   // Agent Usage Reminder
   createAgentUsageReminderHook,
@@ -461,6 +468,8 @@ export {
   type CommitConfig,
   type PreCommitResult
 } from './plugin-patterns/index.js';
+
+// Ralph Verifier is now exported from ./ralph/index.js above
 
 export {
   // UltraQA Loop (QA cycling workflow)
@@ -630,6 +639,37 @@ export {
   type ValidationCoordinatorResult,
   type CancelResult
 } from './autopilot/index.js';
+
+export {
+  // Ultrapilot Coordinator
+  startUltrapilot,
+  decomposeTask,
+  spawnWorkers,
+  trackProgress,
+  integrateResults,
+  handleSharedFiles,
+  isFileOwnedByWorker,
+  isSharedFile,
+  assignFileToWorker,
+  readUltrapilotState,
+  writeUltrapilotState,
+  initUltrapilot,
+  addWorker,
+  updateWorkerState,
+  completeWorker,
+  failWorker,
+  completeUltrapilot,
+  getCompletedWorkers,
+  getRunningWorkers,
+  getFailedWorkers,
+  recordConflict,
+  DEFAULT_CONFIG as ULTRAPILOT_DEFAULT_CONFIG,
+  type UltrapilotConfig,
+  type UltrapilotState,
+  type WorkerState,
+  type IntegrationResult,
+  type FileOwnership
+} from './ultrapilot/index.js';
 
 // Mode Registry (Centralized State Management)
 export {
@@ -820,3 +860,4 @@ export {
   type CodeSimplifierConfig,
   type CodeSimplifierHookResult,
 } from './code-simplifier/index.js';
+

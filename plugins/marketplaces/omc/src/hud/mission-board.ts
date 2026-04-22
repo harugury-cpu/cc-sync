@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { atomicWriteJsonSync } from '../lib/atomic-write.js';
 import { getOmcRoot } from '../lib/worktree-paths.js';
 import { truncateToWidth } from '../utils/string-width.js';
-import { canonicalizeWorkers } from '../team/worker-canonicalization.js';
 
 export type MissionBoardSource = 'session' | 'team';
 export type MissionBoardStatus = 'blocked' | 'waiting' | 'running' | 'done';
@@ -376,12 +375,7 @@ function collectTeamMission(teamRoot: string, teamName: string, config: Required
   const teamConfig = readJsonSafe<TeamConfigLike>(join(teamRoot, 'config.json'));
   if (!teamConfig) return null;
 
-  const workers = canonicalizeWorkers((Array.isArray(teamConfig.workers) ? teamConfig.workers : []).map((worker, index) => ({
-    name: worker.name ?? '',
-    index: index + 1,
-    role: worker.role ?? 'worker',
-    assigned_tasks: Array.isArray(worker.assigned_tasks) ? worker.assigned_tasks : [],
-  }))).workers;
+  const workers = Array.isArray(teamConfig.workers) ? teamConfig.workers : [];
   const tasksDir = join(teamRoot, 'tasks');
   const tasks = existsSync(tasksDir)
     ? readdirSync(tasksDir)
@@ -492,7 +486,7 @@ function collectTeamMission(teamRoot: string, teamName: string, config: Required
     createdAt,
     updatedAt,
     status: deriveTeamStatus(taskCounts, agents),
-    workerCount: workers.length,
+    workerCount: teamConfig.worker_count || workers.length,
     taskCounts,
     agents,
     timeline: timeline.slice(-config.maxTimelineEvents),

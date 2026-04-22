@@ -1,7 +1,7 @@
 /**
  * Task Classification Module
  * @module lib/task/classification
- * @version 2.0.0
+ * @version 1.4.7
  */
 
 /**
@@ -70,8 +70,8 @@ function getPdcaGuidance(classification) {
   const guidance = {
     trivial: 'Trivial change. No PDCA needed.',
     minor: 'Minor change. Consider brief documentation.',
-    feature: 'Feature-level change. Design doc recommended. After implementation, use /simplify for code quality.',
-    major: 'Major change. Full PDCA cycle strongly recommended. Use /simplify after Check phase for code cleanup.'
+    feature: 'Feature-level change. Design doc recommended.',
+    major: 'Major change. Full PDCA cycle strongly recommended.'
   };
   return guidance[classification] || '';
 }

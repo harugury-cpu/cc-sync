@@ -1,14 +1,14 @@
-# PDCA Iteration Report: {feature}
+# PDCA Iteration Report: {{FEATURE_NAME}}
 
 ## Overview
 
 | Item | Value |
 |------|-------|
-| Feature | {feature} |
-| Date | {date} |
-| Total Iterations | {total_iterations} |
-| Final Status | {status} |
-| Duration | {duration} |
+| Feature | {{FEATURE_NAME}} |
+| Date | {{DATE}} |
+| Total Iterations | {{TOTAL_ITERATIONS}} |
+| Final Status | {{STATUS}} |
+| Duration | {{DURATION}} |
 
 ## Iteration Configuration
 
@@ -19,13 +19,13 @@ evaluators:
   - qa-monitor
 
 thresholds:
-  gap_analysis: {gap_threshold}%
-  code_quality: {quality_threshold}%
-  functional: {functional_threshold}%
+  gap_analysis: {{GAP_THRESHOLD}}%
+  code_quality: {{QUALITY_THRESHOLD}}%
+  functional: {{FUNCTIONAL_THRESHOLD}}%
 
 limits:
-  max_iterations: {max_iterations}
-  fixes_per_iteration: {fix_limit}
+  max_iterations: {{MAX_ITERATIONS}}
+  fixes_per_iteration: {{FIX_LIMIT}}
 ```
 
 ## Score Progression
@@ -49,11 +49,11 @@ Score (%)
 
 | Iteration | Gap Analysis | Code Quality | Functional | Overall |
 |-----------|--------------|--------------|------------|---------|
-| Initial | {init_gap}% | {init_quality}% | {init_func}% | {init_overall}% |
+| Initial | {{INIT_GAP}}% | {{INIT_QUALITY}}% | {{INIT_FUNC}}% | {{INIT_OVERALL}}% |
 {{#ITERATIONS}}
-| {iter_num} | {gap}% | {quality}% | {func}% | {overall}% |
+| {{ITER_NUM}} | {{GAP}}% | {{QUALITY}}% | {{FUNC}}% | {{OVERALL}}% |
 {{/ITERATIONS}}
-| **Final** | **{final_gap}%** | **{final_quality}%** | **{final_func}%** | **{final_overall}%** |
+| **Final** | **{{FINAL_GAP}}%** | **{{FINAL_QUALITY}}%** | **{{FINAL_FUNC}}%** | **{{FINAL_OVERALL}}%** |
 
 ## Issues Fixed
 
@@ -61,36 +61,36 @@ Score (%)
 
 | Severity | Initial | Fixed | Remaining |
 |----------|---------|-------|-----------|
-| 🔴 Critical | {critical_init} | {critical_fixed} | {critical_remain} |
-| 🟡 Warning | {warning_init} | {warning_fixed} | {warning_remain} |
-| 🟢 Info | {info_init} | {info_fixed} | {info_remain} |
+| 🔴 Critical | {{CRITICAL_INIT}} | {{CRITICAL_FIXED}} | {{CRITICAL_REMAIN}} |
+| 🟡 Warning | {{WARNING_INIT}} | {{WARNING_FIXED}} | {{WARNING_REMAIN}} |
+| 🟢 Info | {{INFO_INIT}} | {{INFO_FIXED}} | {{INFO_REMAIN}} |
 
 ### By Category
 
 | Category | Initial | Fixed | Remaining |
 |----------|---------|-------|-----------|
-| Design-Impl Gap | {gap_init} | {gap_fixed} | {gap_remain} |
-| Security | {sec_init} | {sec_fixed} | {sec_remain} |
-| Code Quality | {qual_init} | {qual_fixed} | {qual_remain} |
-| Functional | {func_init} | {func_fixed} | {func_remain} |
+| Design-Impl Gap | {{GAP_INIT}} | {{GAP_FIXED}} | {{GAP_REMAIN}} |
+| Security | {{SEC_INIT}} | {{SEC_FIXED}} | {{SEC_REMAIN}} |
+| Code Quality | {{QUAL_INIT}} | {{QUAL_FIXED}} | {{QUAL_REMAIN}} |
+| Functional | {{FUNC_INIT}} | {{FUNC_FIXED}} | {{FUNC_REMAIN}} |
 
 ## Iteration Details
 
 {{#ITERATIONS}}
-### Iteration {iter_num}
+### Iteration {{ITER_NUM}}
 
-**Scores:** Gap {gap}% | Quality {quality}% | Functional {func}%
+**Scores:** Gap {{GAP}}% | Quality {{QUALITY}}% | Functional {{FUNC}}%
 
 **Issues Addressed:**
 {{#ISSUES}}
-- [{severity}] {description}
-  - Location: `{location}`
-  - Fix: {fix_description}
+- [{{SEVERITY}}] {{DESCRIPTION}}
+  - Location: `{{LOCATION}}`
+  - Fix: {{FIX_DESCRIPTION}}
 {{/ISSUES}}
 
 **Files Modified:**
 {{#FILES}}
-- {action}: `{path}`
+- {{ACTION}}: `{{PATH}}`
 {{/FILES}}
 
 ---
@@ -101,22 +101,22 @@ Score (%)
 ### Created Files
 
 {{#CREATED_FILES}}
-- `{path}`
-  - Purpose: {purpose}
+- `{{PATH}}`
+  - Purpose: {{PURPOSE}}
 {{/CREATED_FILES}}
 
 ### Modified Files
 
 {{#MODIFIED_FILES}}
-- `{path}`
-  - Changes: {changes}
+- `{{PATH}}`
+  - Changes: {{CHANGES}}
 {{/MODIFIED_FILES}}
 
 ### Deleted Files
 
 {{#DELETED_FILES}}
-- `{path}`
-  - Reason: {reason}
+- `{{PATH}}`
+  - Reason: {{REASON}}
 {{/DELETED_FILES}}
 
 ## Remaining Issues
@@ -125,14 +125,14 @@ Score (%)
 The following issues could not be auto-fixed and require manual attention:
 
 {{#REMAINING_ISSUES}}
-### {issue_num}. {title}
+### {{ISSUE_NUM}}. {{TITLE}}
 
-- **Severity:** {severity}
-- **Category:** {category}
-- **Location:** `{location}`
-- **Description:** {description}
-- **Reason Not Fixed:** {reason}
-- **Suggested Action:** {suggestion}
+- **Severity:** {{SEVERITY}}
+- **Category:** {{CATEGORY}}
+- **Location:** `{{LOCATION}}`
+- **Description:** {{DESCRIPTION}}
+- **Reason Not Fixed:** {{REASON}}
+- **Suggested Action:** {{SUGGESTION}}
 
 {{/REMAINING_ISSUES}}
 {{/HAS_REMAINING_ISSUES}}
@@ -146,13 +146,13 @@ The following issues could not be auto-fixed and require manual attention:
 ### Immediate Actions
 
 {{#IMMEDIATE_ACTIONS}}
-1. {action}
+1. {{ACTION}}
 {{/IMMEDIATE_ACTIONS}}
 
 ### Follow-up Tasks
 
 {{#FOLLOWUP_TASKS}}
-- [ ] {task}
+- [ ] {{TASK}}
 {{/FOLLOWUP_TASKS}}
 
 ## Quality Metrics
@@ -161,26 +161,26 @@ The following issues could not be auto-fixed and require manual attention:
 
 | Metric | Before | After | Change |
 |--------|--------|-------|--------|
-| Design-Impl Match | {before_gap}% | {after_gap}% | {change_gap} |
-| Security Score | {before_sec} | {after_sec} | {change_sec} |
-| Complexity Avg | {before_complex} | {after_complex} | {change_complex} |
-| Code Duplication | {before_dup} | {after_dup} | {change_dup} |
+| Design-Impl Match | {{BEFORE_GAP}}% | {{AFTER_GAP}}% | {{CHANGE_GAP}} |
+| Security Score | {{BEFORE_SEC}} | {{AFTER_SEC}} | {{CHANGE_SEC}} |
+| Complexity Avg | {{BEFORE_COMPLEX}} | {{AFTER_COMPLEX}} | {{CHANGE_COMPLEX}} |
+| Code Duplication | {{BEFORE_DUP}} | {{AFTER_DUP}} | {{CHANGE_DUP}} |
 
 ## Next Steps
 
 ```
 {{#SUCCESS}}
 ✅ Iteration successful. Proceed with:
-   1. Review changes: /pdca-analyze {feature}
+   1. Review changes: /pdca-analyze {{FEATURE_NAME}}
    2. Manual testing of critical paths
-   3. Create completion report: /pdca-report {feature}
+   3. Create completion report: /pdca-report {{FEATURE_NAME}}
 {{/SUCCESS}}
 
 {{#PARTIAL}}
 ⚠️ Partial success. Manual intervention needed:
    1. Review remaining issues above
    2. Make manual fixes or design decisions
-   3. Re-run iteration: /pdca-iterate {feature}
+   3. Re-run iteration: /pdca-iterate {{FEATURE_NAME}}
 {{/PARTIAL}}
 
 {{#FAILURE}}
@@ -188,7 +188,7 @@ The following issues could not be auto-fixed and require manual attention:
    1. Review failure reasons in report
    2. Update design document if needed
    3. Address blocking issues manually
-   4. Re-attempt: /pdca-iterate {feature}
+   4. Re-attempt: /pdca-iterate {{FEATURE_NAME}}
 {{/FAILURE}}
 ```
 
@@ -202,16 +202,16 @@ The following issues could not be auto-fixed and require manual attention:
 
 ```yaml
 api_endpoints:
-  match_rate: {gap_threshold}%
+  match_rate: {{GAP_THRESHOLD}}%
   weight: 30%
 data_models:
-  match_rate: {model_threshold}%
+  match_rate: {{MODEL_THRESHOLD}}%
   weight: 30%
 components:
-  match_rate: {comp_threshold}%
+  match_rate: {{COMP_THRESHOLD}}%
   weight: 20%
 error_handling:
-  coverage: {error_threshold}%
+  coverage: {{ERROR_THRESHOLD}}%
   weight: 20%
 ```
 
@@ -236,20 +236,20 @@ maintainability:
 
 | Tool | Invocations | Success Rate |
 |------|-------------|--------------|
-| Read | {read_count} | {read_success}% |
-| Write | {write_count} | {write_success}% |
-| Edit | {edit_count} | {edit_success}% |
-| Grep | {grep_count} | {grep_success}% |
-| Bash | {bash_count} | {bash_success}% |
+| Read | {{READ_COUNT}} | {{READ_SUCCESS}}% |
+| Write | {{WRITE_COUNT}} | {{WRITE_SUCCESS}}% |
+| Edit | {{EDIT_COUNT}} | {{EDIT_SUCCESS}}% |
+| Grep | {{GREP_COUNT}} | {{GREP_SUCCESS}}% |
+| Bash | {{BASH_COUNT}} | {{BASH_SUCCESS}}% |
 
 ### C. Performance Metrics
 
 | Metric | Value |
 |--------|-------|
-| Total Duration | {total_duration} |
-| Avg Iteration Time | {avg_iter_time} |
-| Evaluation Time | {eval_time} |
-| Fix Application Time | {fix_time} |
+| Total Duration | {{TOTAL_DURATION}} |
+| Avg Iteration Time | {{AVG_ITER_TIME}} |
+| Evaluation Time | {{EVAL_TIME}} |
+| Fix Application Time | {{FIX_TIME}} |
 
 ---
 

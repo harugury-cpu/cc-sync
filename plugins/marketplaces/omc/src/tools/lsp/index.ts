@@ -25,15 +25,6 @@ export {
 export type { LspServerConfig } from './servers.js';
 
 export {
-  resolveDevContainerContext,
-  hostPathToContainerPath,
-  containerPathToHostPath,
-  hostUriToContainerUri,
-  containerUriToHostUri
-} from './devcontainer.js';
-export type { DevContainerContext } from './devcontainer.js';
-
-export {
   uriToPath,
   formatPosition,
   formatRange,

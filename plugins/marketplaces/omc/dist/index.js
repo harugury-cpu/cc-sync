@@ -18,7 +18,6 @@ import { getDefaultMcpServers, toSdkMcpFormat } from './mcp/servers.js';
 import { omcToolsServer, getOmcToolNames } from './mcp/omc-tools-server.js';
 import { createMagicKeywordProcessor, detectMagicKeywords } from './features/magic-keywords.js';
 import { continuationSystemPromptAddition } from './features/continuation-enforcement.js';
-import { appendSkininthegamebrosGuidance } from './agents/skininthegamebros-guidance.js';
 import { createBackgroundTaskManager, shouldRunInBackground as shouldRunInBackgroundFn } from './features/background-tasks.js';
 export { loadConfig, getAgentDefinitions, omcSystemPrompt };
 export { getDefaultMcpServers, toSdkMcpFormat } from './mcp/servers.js';
@@ -31,20 +30,19 @@ export {
 REPO_OWNER, REPO_NAME, GITHUB_API_URL, CLAUDE_CONFIG_DIR, VERSION_FILE, 
 // Auto-update functions
 getInstalledVersion, saveVersionMetadata, checkForUpdates, performUpdate, formatUpdateNotification, shouldCheckForUpdates, backgroundUpdateCheck, compareVersions } from './features/auto-update.js';
-export * from './shared/index.js';
+export * from './shared/types.js';
 // Hooks module exports
 export * from './hooks/index.js';
 // Features module exports (boulder-state, context-injector)
 export { BOULDER_DIR, BOULDER_FILE, BOULDER_STATE_PATH, NOTEPAD_DIR, NOTEPAD_BASE_PATH, PLANNER_PLANS_DIR, PLAN_EXTENSION, getBoulderFilePath, readBoulderState, writeBoulderState, appendSessionId, clearBoulderState, findPlannerPlans, getPlanProgress, getPlanName, createBoulderState, getPlanSummaries, hasBoulder, getActivePlanPath, 
 // Context Injector
 ContextCollector, contextCollector, injectPendingContext, injectContextIntoText, createContextInjectorHook } from './features/index.js';
-export { searchSessionHistory, parseSinceSpec } from './features/index.js';
 // Agent module exports (modular agent system)
 export { isGptModel, isClaudeModel, getDefaultModelForCategory, 
 // Utilities
 createAgentToolRestrictions, mergeAgentConfig, buildDelegationTable, buildUseAvoidSection, createEnvContext, getAvailableAgents, buildKeyTriggersSection, validateAgentConfig, deepMerge, loadAgentPrompt, 
 // Individual agents with metadata (rebranded intuitive names)
-architectAgent, ARCHITECT_PROMPT_METADATA, exploreAgent, EXPLORE_PROMPT_METADATA, DOCUMENT_SPECIALIST_PROMPT_METADATA, tracerAgent, TRACER_PROMPT_METADATA, executorAgent, EXECUTOR_PROMPT_METADATA, designerAgent, FRONTEND_ENGINEER_PROMPT_METADATA, writerAgent, DOCUMENT_WRITER_PROMPT_METADATA, criticAgent, CRITIC_PROMPT_METADATA, analystAgent, ANALYST_PROMPT_METADATA, plannerAgent, PLANNER_PROMPT_METADATA, } from './agents/index.js';
+architectAgent, ARCHITECT_PROMPT_METADATA, exploreAgent, EXPLORE_PROMPT_METADATA, DOCUMENT_SPECIALIST_PROMPT_METADATA, executorAgent, EXECUTOR_PROMPT_METADATA, designerAgent, FRONTEND_ENGINEER_PROMPT_METADATA, writerAgent, DOCUMENT_WRITER_PROMPT_METADATA, criticAgent, CRITIC_PROMPT_METADATA, analystAgent, ANALYST_PROMPT_METADATA, plannerAgent, PLANNER_PROMPT_METADATA, } from './agents/index.js';
 /** @deprecated Use documentSpecialistAgent instead */
 export { documentSpecialistAgent as researcherAgent } from './agents/document-specialist.js';
 // Command expansion utilities for SDK integration
@@ -89,7 +87,7 @@ export function createOmcSession(options) {
         }
     }
     // Build system prompt
-    let systemPrompt = appendSkininthegamebrosGuidance(omcSystemPrompt, 'system');
+    let systemPrompt = omcSystemPrompt;
     // Add continuation enforcement
     if (config.features?.continuationEnforcement !== false) {
         systemPrompt += continuationSystemPromptAddition;
@@ -103,7 +101,9 @@ export function createOmcSession(options) {
         systemPrompt += contextAddition;
     }
     // Get agent definitions
-    const agents = getAgentDefinitions({ config });
+    const agents = getAgentDefinitions({
+        enableHarshCritic: config.features?.harshCritic === true,
+    });
     // Build MCP servers configuration
     const externalMcpServers = getDefaultMcpServers({
         exaApiKey: config.mcpServers?.exa?.apiKey,
@@ -176,7 +176,7 @@ export function enhancePrompt(prompt, config) {
  * Get the system prompt for the orchestrator (for direct use)
  */
 export function getOmcSystemPrompt(options) {
-    let prompt = appendSkininthegamebrosGuidance(omcSystemPrompt, 'system');
+    let prompt = omcSystemPrompt;
     if (options?.includeContinuation !== false) {
         prompt += continuationSystemPromptAddition;
     }

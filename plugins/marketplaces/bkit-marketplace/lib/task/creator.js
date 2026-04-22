@@ -1,7 +1,7 @@
 /**
  * Task Creation Module
  * @module lib/task/creator
- * @version 2.0.0
+ * @version 1.4.7
  */
 
 // Lazy require
@@ -123,12 +123,9 @@ function generateTaskGuidance(phase, feature, blockedByPhase = '') {
  */
 function createPdcaTaskChain(feature, options = {}) {
   const { debugLog } = getCore();
-  const { updatePdcaStatus, PDCA_PHASES } = getPdca();
-  const { savePdcaTaskId } = require('./tracker');
+  const { updatePdcaStatus, savePdcaTaskId } = getPdca();
 
-  // Derive phases from PDCA_PHASES (Single Source of Truth)
-  const phases = Object.keys(PDCA_PHASES)
-    .filter(p => !['pm', 'archived'].includes(p));
+  const phases = ['plan', 'design', 'do', 'check', 'report'];
   const tasks = {};
 
   for (let i = 0; i < phases.length; i++) {

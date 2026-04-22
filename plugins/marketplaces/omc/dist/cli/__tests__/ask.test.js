@@ -11,18 +11,14 @@ const REPO_ROOT = join(__dirname, '..', '..', '..');
 const CLI_ENTRY = join(REPO_ROOT, 'src', 'cli', 'index.ts');
 const TSX_LOADER = join(REPO_ROOT, 'node_modules', 'tsx', 'dist', 'loader.mjs');
 const ADVISOR_SCRIPT = join(REPO_ROOT, 'scripts', 'run-provider-advisor.js');
-function buildChildEnv(envOverrides = {}, options = {}) {
-    if (options.preserveClaudeSessionEnv) {
-        return { ...process.env, ...envOverrides };
-    }
+const ASK_CODEX_WRAPPER = join(REPO_ROOT, 'scripts', 'ask-codex.sh');
+const ASK_GEMINI_WRAPPER = join(REPO_ROOT, 'scripts', 'ask-gemini.sh');
+function runCli(args, cwd, envOverrides = {}) {
     const { CLAUDECODE: _cc, ...cleanEnv } = process.env;
-    return { ...cleanEnv, ...envOverrides };
-}
-function runCli(args, cwd, envOverrides = {}, options = {}) {
     const result = spawnSync(process.execPath, ['--import', TSX_LOADER, CLI_ENTRY, ...args], {
         cwd,
         encoding: 'utf-8',
-        env: buildChildEnv(envOverrides, options),
+        env: { ...cleanEnv, ...envOverrides },
     });
     return {
         status: result.status,
@@ -31,11 +27,12 @@ function runCli(args, cwd, envOverrides = {}, options = {}) {
         error: result.error?.message,
     };
 }
-function runAdvisorScript(args, cwd, envOverrides = {}, options = {}) {
+function runAdvisorScript(args, cwd, envOverrides = {}) {
+    const { CLAUDECODE: _cc2, ...cleanEnv2 } = process.env;
     const result = spawnSync(process.execPath, [ADVISOR_SCRIPT, ...args], {
         cwd,
         encoding: 'utf-8',
-        env: buildChildEnv(envOverrides, options),
+        env: { ...cleanEnv2, ...envOverrides },
     });
     return {
         status: result.status,
@@ -44,11 +41,12 @@ function runAdvisorScript(args, cwd, envOverrides = {}, options = {}) {
         error: result.error?.message,
     };
 }
-function runAdvisorScriptWithPrelude(preludePath, args, cwd, envOverrides = {}, options = {}) {
-    const result = spawnSync(process.execPath, ['--import', preludePath, ADVISOR_SCRIPT, ...args], {
+function runWrapperScript(wrapperPath, args, cwd, envOverrides = {}) {
+    const { CLAUDECODE: _cc3, ...cleanEnv3 } = process.env;
+    const result = spawnSync(wrapperPath, args, {
         cwd,
         encoding: 'utf-8',
-        env: buildChildEnv(envOverrides, options),
+        env: { ...cleanEnv3, ...envOverrides },
     });
     return {
         status: result.status,
@@ -83,120 +81,12 @@ function writeFakeProviderBinary(dir, provider) {
     chmodSync(binPath, 0o755);
     return binDir;
 }
-function writeSpawnSyncCapturePrelude(dir) {
-    const preludePath = join(dir, 'spawn-sync-capture-prelude.mjs');
-    writeFileSync(preludePath, [
-        "import childProcess from 'node:child_process';",
-        "import { writeFileSync } from 'node:fs';",
-        "import { syncBuiltinESMExports } from 'node:module';",
-        '',
-        "Object.defineProperty(process, 'platform', { value: 'win32' });",
-        'const capturePath = process.env.SPAWN_CAPTURE_PATH;',
-        "const mode = process.env.SPAWN_CAPTURE_MODE || 'success';",
-        'const calls = [];',
-        'childProcess.spawnSync = (command, args = [], options = {}) => {',
-        '  calls.push({',
-        '    command,',
-        '    args,',
-        '    options: {',
-        "      shell: options.shell ?? false,",
-        "      encoding: options.encoding ?? null,",
-        "      stdio: options.stdio ?? null,",
-        "      input: options.input ?? null,",
-        '      env: {',
-        "        CLAUDECODE: options.env?.CLAUDECODE ?? null,",
-        "        CLAUDE_SESSION_ID: options.env?.CLAUDE_SESSION_ID ?? null,",
-        "        CLAUDECODE_SESSION_ID: options.env?.CLAUDECODE_SESSION_ID ?? null,",
-        "        CLAUDE_CODE_ENTRYPOINT: options.env?.CLAUDE_CODE_ENTRYPOINT ?? null,",
-        "        RUST_LOG: options.env?.RUST_LOG ?? null,",
-        "        RUST_BACKTRACE: options.env?.RUST_BACKTRACE ?? null,",
-        '      },',
-        '    },',
-        '  });',
-        "  if (mode === 'missing' && command === 'where') {",
-        "    return { status: 1, stdout: '', stderr: '', pid: 0, output: [], signal: null };",
-        '  }',
-        "  if (mode === 'missing' && (command === 'codex' || command === 'gemini') && Array.isArray(args) && args[0] === '--version') {",
-        "    return { status: 1, stdout: '', stderr: \"'\" + command + \"' is not recognized\", pid: 0, output: [], signal: null };",
-        '  }',
-        "  const isVersionProbe = Array.isArray(args) && args[0] === '--version';",
-        '  return {',
-        '    status: 0,',
-        "    stdout: isVersionProbe ? 'fake 1.0.0\\n' : 'FAKE_PROVIDER_OK',",
-        "    stderr: '',",
-        '    pid: 0,',
-        '    output: [],',
-        '    signal: null,',
-        '  };',
-        '};',
-        'syncBuiltinESMExports();',
-        'process.on(\'exit\', () => {',
-        '  if (capturePath) {',
-        "    writeFileSync(capturePath, JSON.stringify(calls), 'utf8');",
-        '  }',
-        '});',
-        '',
-    ].join('\n'), 'utf8');
-    return preludePath;
-}
-function writeSpawnSyncCapturePreludeNative(dir) {
-    const preludePath = join(dir, 'spawn-sync-capture-prelude-native.mjs');
-    writeFileSync(preludePath, [
-        "import childProcess from 'node:child_process';",
-        "import { writeFileSync } from 'node:fs';",
-        "import { syncBuiltinESMExports } from 'node:module';",
-        '',
-        '// No platform override — tests native (non-Windows) behavior',
-        'const capturePath = process.env.SPAWN_CAPTURE_PATH;',
-        'const calls = [];',
-        'childProcess.spawnSync = (command, args = [], options = {}) => {',
-        '  calls.push({',
-        '    command,',
-        '    args,',
-        '    options: {',
-        "      shell: options.shell ?? false,",
-        "      encoding: options.encoding ?? null,",
-        "      stdio: options.stdio ?? null,",
-        "      input: options.input ?? null,",
-        '    },',
-        '  });',
-        "  const isVersionProbe = Array.isArray(args) && args[0] === '--version';",
-        '  return {',
-        '    status: 0,',
-        "    stdout: isVersionProbe ? 'fake 1.0.0\\n' : 'FAKE_PROVIDER_OK',",
-        "    stderr: '',",
-        '    pid: 0,',
-        '    output: [],',
-        '    signal: null,',
-        '  };',
-        '};',
-        'syncBuiltinESMExports();',
-        "process.on('exit', () => {",
-        '  if (capturePath) {',
-        "    writeFileSync(capturePath, JSON.stringify(calls), 'utf8');",
-        '  }',
-        '});',
-        '',
-    ].join('\n'), 'utf8');
-    return preludePath;
-}
-function writeFakeCodexBinary(dir) {
+function writeFakeOmcBinary(dir) {
     const binDir = join(dir, 'bin');
     mkdirSync(binDir, { recursive: true });
-    const binPath = join(binDir, 'codex');
-    writeFileSync(binPath, `#!/bin/sh
-if [ "$1" = "--version" ]; then echo "fake"; exit 0; fi
-if [ "$1" = "exec" ]; then
-  echo "CODEX_OK"
-  if [ -n "\${RUST_LOG:-}" ] || [ -n "\${RUST_BACKTRACE:-}" ]; then
-    echo "RUST_LEAK:\${RUST_LOG:-}:\${RUST_BACKTRACE:-}" 1>&2
-  fi
-  exit 0
-fi
-echo "unexpected" 1>&2
-exit 9
-`, 'utf8');
-    chmodSync(binPath, 0o755);
+    const omcPath = join(binDir, 'omc');
+    writeFileSync(omcPath, '#!/bin/sh\necho "PATH_OMC_SHOULD_NOT_BE_CALLED" 1>&2\nexit 79\n', 'utf8');
+    chmodSync(omcPath, 0o755);
     return binDir;
 }
 describe('parseAskArgs', () => {
@@ -262,50 +152,6 @@ describe('omc ask command', () => {
             rmSync(wd, { recursive: true, force: true });
         }
     });
-    it('allows codex ask inside a Claude Code session', () => {
-        const wd = mkdtempSync(join(tmpdir(), 'omc-ask-cli-codex-nested-'));
-        try {
-            const stubPath = writeAdvisorStub(wd);
-            const result = runCli(['ask', 'codex', '--prompt', 'cli nested codex prompt'], wd, {
-                OMC_ASK_ADVISOR_SCRIPT: stubPath,
-                CLAUDECODE: '1',
-            }, { preserveClaudeSessionEnv: true });
-            expect(result.error).toBeUndefined();
-            expect(result.status).toBe(0);
-            expect(result.stderr).not.toContain('Nested launches are not supported');
-            const payload = JSON.parse(result.stdout);
-            expect(payload).toEqual({
-                provider: 'codex',
-                prompt: 'cli nested codex prompt',
-                originalTask: 'cli nested codex prompt',
-                passthrough: null,
-            });
-        }
-        finally {
-            rmSync(wd, { recursive: true, force: true });
-        }
-    });
-    it('allows gemini ask inside a Claude Code session', () => {
-        const wd = mkdtempSync(join(tmpdir(), 'omc-ask-cli-gemini-nested-'));
-        try {
-            const stubPath = writeAdvisorStub(wd);
-            const result = runCli(['ask', 'gemini', '--prompt', 'cli nested gemini prompt'], wd, {
-                OMC_ASK_ADVISOR_SCRIPT: stubPath,
-                CLAUDECODE: '1',
-            }, { preserveClaudeSessionEnv: true });
-            expect(result.error).toBeUndefined();
-            expect(result.status).toBe(0);
-            expect(result.stderr).not.toContain('Nested launches are not supported');
-            const payload = JSON.parse(result.stdout);
-            expect(payload.provider).toBe('gemini');
-            expect(payload.prompt).toBe('cli nested gemini prompt');
-            expect(payload.originalTask).toBe('cli nested gemini prompt');
-            expect(payload.passthrough).toBeNull();
-        }
-        finally {
-            rmSync(wd, { recursive: true, force: true });
-        }
-    });
     it('loads --agent-prompt role from resolved prompts dir and prepends role content', () => {
         const wd = mkdtempSync(join(tmpdir(), 'omc-ask-agent-prompt-'));
         try {
@@ -365,207 +211,6 @@ describe('run-provider-advisor script contract', () => {
             rmSync(wd, { recursive: true, force: true });
         }
     });
-    it.each([
-        ['claude', ['claude', '--prompt', 'nested claude prompt']],
-        ['codex', ['codex', '--prompt', 'nested codex prompt']],
-        ['gemini', ['gemini', '--prompt', 'nested gemini prompt']],
-    ])('strips Claude session env vars for %s advisor spawns', (provider, args) => {
-        const wd = mkdtempSync(join(tmpdir(), `omc-ask-${provider}-advisor-env-`));
-        try {
-            const capturePath = join(wd, 'spawn-sync-calls.json');
-            const preludePath = writeSpawnSyncCapturePrelude(wd);
-            const result = runAdvisorScriptWithPrelude(preludePath, args, wd, {
-                SPAWN_CAPTURE_PATH: capturePath,
-                CLAUDECODE: '1',
-                CLAUDE_SESSION_ID: 'session-123',
-                CLAUDECODE_SESSION_ID: 'session-legacy',
-                CLAUDE_CODE_ENTRYPOINT: 'plugin',
-            }, { preserveClaudeSessionEnv: true });
-            expect(result.error).toBeUndefined();
-            expect(result.status).toBe(0);
-            const calls = JSON.parse(readFileSync(capturePath, 'utf8'));
-            expect(calls).toHaveLength(2);
-            for (const call of calls) {
-                expect(call.options.env).toMatchObject({
-                    CLAUDECODE: null,
-                    CLAUDE_SESSION_ID: null,
-                    CLAUDECODE_SESSION_ID: null,
-                    CLAUDE_CODE_ENTRYPOINT: null,
-                });
-            }
-        }
-        finally {
-            rmSync(wd, { recursive: true, force: true });
-        }
-    });
-    it('sanitizes Rust env vars for codex so artifacts do not capture Rust stderr logs', () => {
-        const wd = mkdtempSync(join(tmpdir(), 'omc-ask-codex-rust-env-'));
-        try {
-            const binDir = writeFakeCodexBinary(wd);
-            const result = runAdvisorScript(['codex', '--prompt', 'keep artifact small'], wd, {
-                PATH: `${binDir}:${process.env.PATH || ''}`,
-                RUST_LOG: 'trace',
-                RUST_BACKTRACE: '1',
-            });
-            expect(result.error).toBeUndefined();
-            expect(result.status).toBe(0);
-            expect(result.stderr).toBe('');
-            const artifactPath = result.stdout.trim();
-            const artifact = readFileSync(artifactPath, 'utf8');
-            expect(artifact).toContain('CODEX_OK');
-            expect(artifact).not.toContain('RUST_LEAK');
-            expect(artifact).not.toContain('trace');
-        }
-        finally {
-            rmSync(wd, { recursive: true, force: true });
-        }
-    });
-    it('pipes the Windows codex prompt over stdin to avoid shell arg splitting', () => {
-        const wd = mkdtempSync(join(tmpdir(), 'omc-ask-codex-win32-shell-'));
-        try {
-            const capturePath = join(wd, 'spawn-sync-calls.json');
-            const preludePath = writeSpawnSyncCapturePrelude(wd);
-            const result = runAdvisorScriptWithPrelude(preludePath, ['codex', '--prompt', 'windows cmd support 你好'], wd, { SPAWN_CAPTURE_PATH: capturePath });
-            expect(result.error).toBeUndefined();
-            expect(result.status).toBe(0);
-            const calls = JSON.parse(readFileSync(capturePath, 'utf8'));
-            expect(calls).toHaveLength(2);
-            expect(calls[0]).toMatchObject({
-                command: 'codex',
-                args: ['--version'],
-                options: { shell: true, encoding: 'utf8', stdio: 'ignore', input: null },
-            });
-            expect(calls[1]).toMatchObject({
-                command: 'codex',
-                args: ['exec', '--dangerously-bypass-approvals-and-sandbox', '-'],
-                options: { shell: true, encoding: 'utf8', stdio: null, input: 'windows cmd support 你好' },
-            });
-        }
-        finally {
-            rmSync(wd, { recursive: true, force: true });
-        }
-    });
-    it('pipes the Windows gemini prompt over stdin to avoid --prompt conflicts and AttachConsole failures', () => {
-        const wd = mkdtempSync(join(tmpdir(), 'omc-ask-gemini-win32-stdin-'));
-        try {
-            const capturePath = join(wd, 'spawn-sync-calls.json');
-            const preludePath = writeSpawnSyncCapturePrelude(wd);
-            const result = runAdvisorScriptWithPrelude(preludePath, ['gemini', '--prompt', 'ship safely 你好'], wd, { SPAWN_CAPTURE_PATH: capturePath });
-            expect(result.error).toBeUndefined();
-            expect(result.status).toBe(0);
-            const calls = JSON.parse(readFileSync(capturePath, 'utf8'));
-            expect(calls).toHaveLength(2);
-            expect(calls[0]).toMatchObject({
-                command: 'gemini',
-                args: ['--version'],
-                options: { shell: true, encoding: 'utf8', stdio: 'ignore', input: null },
-            });
-            expect(calls[1]).toMatchObject({
-                command: 'gemini',
-                args: ['--yolo'],
-                options: { shell: true, encoding: 'utf8', stdio: null, input: 'ship safely 你好' },
-            });
-        }
-        finally {
-            rmSync(wd, { recursive: true, force: true });
-        }
-    });
-    it('pipes multiline codex prompts over stdin on non-Windows shells', () => {
-        const wd = mkdtempSync(join(tmpdir(), 'omc-ask-codex-multiline-stdin-'));
-        const multilinePrompt = 'line one\nline two\nline three';
-        try {
-            const capturePath = join(wd, 'spawn-sync-calls.json');
-            const preludePath = writeSpawnSyncCapturePrelude(wd);
-            const result = runAdvisorScriptWithPrelude(preludePath, ['codex', '--prompt', multilinePrompt], wd, { SPAWN_CAPTURE_PATH: capturePath });
-            expect(result.error).toBeUndefined();
-            expect(result.status).toBe(0);
-            const calls = JSON.parse(readFileSync(capturePath, 'utf8'));
-            expect(calls).toHaveLength(2);
-            expect(calls[1]).toMatchObject({
-                command: 'codex',
-                args: ['exec', '--dangerously-bypass-approvals-and-sandbox', '-'],
-                options: { shell: true, encoding: 'utf8', stdio: null, input: multilinePrompt },
-            });
-        }
-        finally {
-            rmSync(wd, { recursive: true, force: true });
-        }
-    });
-    it('pipes long gemini prompts over stdin on non-Windows shells', () => {
-        const wd = mkdtempSync(join(tmpdir(), 'omc-ask-gemini-long-stdin-'));
-        const longPrompt = `prefix ${'x'.repeat(520)}`;
-        try {
-            const capturePath = join(wd, 'spawn-sync-calls.json');
-            const preludePath = writeSpawnSyncCapturePrelude(wd);
-            const result = runAdvisorScriptWithPrelude(preludePath, ['gemini', '--prompt', longPrompt], wd, { SPAWN_CAPTURE_PATH: capturePath });
-            expect(result.error).toBeUndefined();
-            expect(result.status).toBe(0);
-            const calls = JSON.parse(readFileSync(capturePath, 'utf8'));
-            expect(calls).toHaveLength(2);
-            expect(calls[1]).toMatchObject({
-                command: 'gemini',
-                args: ['--yolo'],
-                options: { shell: true, encoding: 'utf8', stdio: null, input: longPrompt },
-            });
-        }
-        finally {
-            rmSync(wd, { recursive: true, force: true });
-        }
-    });
-    it('shows install guidance when a Windows codex binary is missing under shell:true', () => {
-        const wd = mkdtempSync(join(tmpdir(), 'omc-ask-codex-win32-missing-'));
-        try {
-            const capturePath = join(wd, 'spawn-sync-calls.json');
-            const preludePath = writeSpawnSyncCapturePrelude(wd);
-            const result = runAdvisorScriptWithPrelude(preludePath, ['codex', '--prompt', 'windows missing binary'], wd, {
-                SPAWN_CAPTURE_PATH: capturePath,
-                SPAWN_CAPTURE_MODE: 'missing',
-            });
-            expect(result.error).toBeUndefined();
-            expect(result.status).toBe(1);
-            expect(result.stdout).toBe('');
-            expect(result.stderr).toContain('Missing required local CLI binary: codex');
-            expect(result.stderr).toContain('codex --version');
-            const calls = JSON.parse(readFileSync(capturePath, 'utf8'));
-            expect(calls).toHaveLength(2);
-            expect(calls[0]).toMatchObject({
-                command: 'codex',
-                args: ['--version'],
-                options: { shell: true, encoding: 'utf8', stdio: 'ignore', input: null },
-            });
-            expect(calls[1]).toMatchObject({
-                command: 'where',
-                args: ['codex'],
-            });
-        }
-        finally {
-            rmSync(wd, { recursive: true, force: true });
-        }
-    });
-    it.each([
-        ['codex', ['codex', '--prompt', 'short prompt']],
-        ['gemini', ['gemini', '--prompt', 'short prompt']],
-        ['claude', ['claude', '--prompt', 'short prompt']],
-    ])('closes stdin for %s on non-Windows to prevent hang in piped environments', (provider, args) => {
-        const wd = mkdtempSync(join(tmpdir(), `omc-ask-${provider}-stdin-close-`));
-        try {
-            const capturePath = join(wd, 'spawn-sync-calls.json');
-            const preludePath = writeSpawnSyncCapturePreludeNative(wd);
-            const result = runAdvisorScriptWithPrelude(preludePath, args, wd, { SPAWN_CAPTURE_PATH: capturePath });
-            expect(result.error).toBeUndefined();
-            expect(result.status).toBe(0);
-            const calls = JSON.parse(readFileSync(capturePath, 'utf8'));
-            expect(calls).toHaveLength(2);
-            // Version probe always ignores stdio
-            expect(calls[0].options.stdio).toBe('ignore');
-            // Provider spawn must close stdin to prevent hangs when parent stdin is a pipe
-            expect(calls[1].options.stdio).toEqual(['ignore', 'pipe', 'pipe']);
-            expect(calls[1].options.input).toBeNull();
-        }
-        finally {
-            rmSync(wd, { recursive: true, force: true });
-        }
-    });
 });
 describe('resolveAskAdvisorScriptPath', () => {
     it('resolves canonical env and supports package-root relative paths', () => {
@@ -574,6 +219,64 @@ describe('resolveAskAdvisorScriptPath', () => {
             .toBe('/tmp/pkg-root/scripts/custom.js');
         expect(resolveAskAdvisorScriptPath(packageRoot, { OMC_ASK_ADVISOR_SCRIPT: '/opt/custom.js' }))
             .toBe('/opt/custom.js');
+    });
+});
+describe('ask wrapper scripts contract', () => {
+    it('ask-codex wrapper dispatches provider, forwards prompt, and ignores PATH omc shadow', () => {
+        const wd = mkdtempSync(join(tmpdir(), 'omc-ask-wrapper-codex-'));
+        try {
+            const stubPath = writeAdvisorStub(wd);
+            const fakePathBin = writeFakeOmcBinary(wd);
+            const result = runWrapperScript(ASK_CODEX_WRAPPER, ['--print', 'wrapper prompt'], wd, {
+                OMC_ASK_ADVISOR_SCRIPT: stubPath,
+                ASK_WRAPPER_TOKEN: 'wrapper-token',
+                PATH: `${fakePathBin}:${process.env.PATH || ''}`,
+            });
+            expect(result.error).toBeUndefined();
+            expect(result.status).toBe(0);
+            expect(result.stderr).not.toContain('PATH_OMC_SHOULD_NOT_BE_CALLED');
+            const payload = JSON.parse(result.stdout);
+            expect(payload).toEqual({
+                provider: 'codex',
+                prompt: 'wrapper prompt',
+                originalTask: 'wrapper prompt',
+                passthrough: 'wrapper-token',
+            });
+        }
+        finally {
+            rmSync(wd, { recursive: true, force: true });
+        }
+    });
+    it('ask-gemini wrapper dispatches provider and forwards positional prompt text', () => {
+        const wd = mkdtempSync(join(tmpdir(), 'omc-ask-wrapper-gemini-'));
+        try {
+            const stubPath = writeAdvisorStub(wd);
+            const result = runWrapperScript(ASK_GEMINI_WRAPPER, ['ship', 'this', 'feature'], wd, { OMC_ASK_ADVISOR_SCRIPT: stubPath });
+            expect(result.error).toBeUndefined();
+            expect(result.status).toBe(0);
+            const payload = JSON.parse(result.stdout);
+            expect(payload.provider).toBe('gemini');
+            expect(payload.prompt).toBe('ship this feature');
+            expect(payload.originalTask).toBe('ship this feature');
+        }
+        finally {
+            rmSync(wd, { recursive: true, force: true });
+        }
+    });
+    it('wrapper propagates non-zero advisor exit code', () => {
+        const wd = mkdtempSync(join(tmpdir(), 'omc-ask-wrapper-exit-'));
+        try {
+            const stubPath = writeAdvisorStub(wd);
+            const result = runWrapperScript(ASK_CODEX_WRAPPER, ['--prompt', 'should fail'], wd, {
+                OMC_ASK_ADVISOR_SCRIPT: stubPath,
+                ASK_STUB_EXIT_CODE: '23',
+            });
+            expect(result.error).toBeUndefined();
+            expect(result.status).toBe(23);
+        }
+        finally {
+            rmSync(wd, { recursive: true, force: true });
+        }
     });
 });
 //# sourceMappingURL=ask.test.js.map

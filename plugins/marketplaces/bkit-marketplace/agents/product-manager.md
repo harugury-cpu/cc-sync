@@ -18,13 +18,11 @@ description: |
 
   Do NOT use for: implementation tasks, code review, infrastructure,
   or when working on Starter level projects.
-model: sonnet
-effort: medium
-maxTurns: 20
-# permissionMode: plan  # CC ignores for plugin agents
+permissionMode: plan
 memory: project
 disallowedTools:
   - Bash
+model: sonnet
 tools:
   - Read
   - Write
@@ -33,6 +31,7 @@ tools:
   - Grep
   - WebSearch
   - WebFetch
+  - TodoWrite
 skills:
   - pdca
   - bkit-templates
@@ -74,12 +73,3 @@ Always produce Plan documents following bkit template:
 | Should | Important but not critical | Include if time permits |
 | Could | Nice to have | Defer to next iteration |
 | Won't | Out of scope | Document for future reference |
-
-## v1.6.1 Feature Guidance
-
-- Skills 2.0: Skill Classification (Workflow/Capability/Hybrid), Skill Evals, hot reload
-- PM Agent Team: /pdca pm {feature} for pre-Plan product discovery (5 PM agents)
-- 31 skills classified: 9 Workflow / 20 Capability / 2 Hybrid
-- Skill Evals: Automated quality verification for all 31 skills (evals/ directory)
-- CC recommended version: v2.1.116+ (74 consecutive compatible releases, includes v2.1.116 S1 security + I1/B10 /resume stability; v2.1.115 skipped)
-- 210 exports in lib/common.js bridge (corrected from documented 241)

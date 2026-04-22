@@ -1,121 +1,87 @@
-<!-- OMC:START -->
-<!-- OMC:VERSION:4.8.2 -->
+# Claude AI Instructions for oh-my-claudecode
 
-# oh-my-claudecode - Intelligent Multi-Agent Orchestration
+This file provides context for Claude when working on this repository via GitHub Actions.
 
-You are running with oh-my-claudecode (OMC), a multi-agent orchestration layer for Claude Code.
-Coordinate specialized agents, tools, and skills so work is completed accurately and efficiently.
+## Repository Overview
 
-<operating_principles>
-- Delegate specialized work to the most appropriate agent.
-- Prefer evidence over assumptions: verify outcomes before final claims.
-- Choose the lightest-weight path that preserves quality.
-- Consult official docs before implementing with SDKs/frameworks/APIs.
-</operating_principles>
+oh-my-claudecode is a Claude Code plugin that provides multi-agent orchestration capabilities.
 
-<delegation_rules>
-Delegate for: multi-file changes, refactors, debugging, reviews, planning, research, verification.
-Work directly for: trivial ops, small clarifications, single commands.
-Route code to `executor` (use `model=opus` for complex work). Uncertain SDK usage → `document-specialist` (repo docs first; Context Hub / `chub` when available, graceful web fallback otherwise).
-</delegation_rules>
+### Key Features
+- **22 specialized agents** with intelligent model routing (Haiku/Sonnet/Opus tiers)
+- **35 slash commands** including /oh-my-claudecode:ultrawork, /oh-my-claudecode:deepinit, /oh-my-claudecode:ralph
+- **Smart delegation** - automatically routes tasks to appropriate specialist agents
+- **Background execution** - runs long-running tasks asynchronously
+- **Cost optimization** - chillwork mode prefers cheaper model tiers
 
-<model_routing>
-`haiku` (quick lookups), `sonnet` (standard), `opus` (architecture, deep analysis).
-Direct writes OK for: `~/.claude/**`, `.omc/**`, `.claude/**`, `CLAUDE.md`, `AGENTS.md`.
-</model_routing>
-
-<agent_catalog>
-Prefix: `oh-my-claudecode:`. See `agents/*.md` for full prompts.
-
-explore (haiku), analyst (opus), planner (opus), architect (opus), debugger (sonnet), executor (sonnet), verifier (sonnet), tracer (sonnet), security-reviewer (sonnet), code-reviewer (opus), test-engineer (sonnet), designer (sonnet), writer (haiku), qa-tester (sonnet), scientist (sonnet), document-specialist (sonnet), git-master (sonnet), code-simplifier (opus), critic (opus)
-</agent_catalog>
-
-<tools>
-External AI: `/team N:executor "task"`, `omc team N:codex|gemini "..."`, `omc ask <claude|codex|gemini>`, `/ccg`
-OMC State: `state_read`, `state_write`, `state_clear`, `state_list_active`, `state_get_status`
-Teams: `TeamCreate`, `TeamDelete`, `SendMessage`, `TaskCreate`, `TaskList`, `TaskGet`, `TaskUpdate`
-Notepad: `notepad_read`, `notepad_write_priority`, `notepad_write_working`, `notepad_write_manual`
-Project Memory: `project_memory_read`, `project_memory_write`, `project_memory_add_note`, `project_memory_add_directive`
-Code Intel: LSP (`lsp_hover`, `lsp_goto_definition`, `lsp_find_references`, `lsp_diagnostics`, etc.), AST (`ast_grep_search`, `ast_grep_replace`), `python_repl`
-</tools>
-
-<skills>
-Invoke via `/oh-my-claudecode:<name>`. Trigger patterns auto-detect keywords.
-
-Workflow: `autopilot`, `ralph`, `ultrawork`, `team`, `ccg`, `ultraqa`, `omc-plan`, `ralplan`, `sciomc`, `external-context`, `deepinit`, `deep-interview`, `ai-slop-cleaner`
-Keyword triggers: "autopilot"→autopilot, "ralph"→ralph, "ulw"→ultrawork, "ccg"→ccg, "ralplan"→ralplan, "deep interview"→deep-interview, "deslop"/"anti-slop"/cleanup+slop-smell→ai-slop-cleaner, "deep-analyze"→analysis mode, "tdd"→TDD mode, "deepsearch"→codebase search, "ultrathink"→deep reasoning, "cancelomc"→cancel. Team orchestration is explicit via `/team`.
-Utilities: `ask-codex`, `ask-gemini`, `cancel`, `note`, `learner`, `omc-setup`, `mcp-setup`, `hud`, `omc-doctor`, `omc-help`, `trace`, `release`, `project-session-manager`, `skill`, `writer-memory`, `ralph-init`, `configure-notifications`, `learn-about-omc` (`trace` is the evidence-driven tracing lane)
-</skills>
-
-<team_pipeline>
-Stages: `team-plan` → `team-prd` → `team-exec` → `team-verify` → `team-fix` (loop).
-Fix loop bounded by max attempts. `team ralph` links both modes.
-</team_pipeline>
-
-<verification>
-Verify before claiming completion. Size appropriately: small→haiku, standard→sonnet, large/security→opus.
-If verification fails, keep iterating.
-</verification>
-
-<execution_protocols>
-Broad requests: explore first, then plan. 2+ independent tasks in parallel. `run_in_background` for builds/tests.
-Keep authoring and review as separate passes: writer pass creates or revises content, reviewer/verifier pass evaluates it later in a separate lane.
-Never self-approve in the same active context; use `code-reviewer` or `verifier` for the approval pass.
-Before concluding: zero pending tasks, tests passing, verifier evidence collected.
-</execution_protocols>
-
-<commit_protocol>
-Use git trailers to preserve decision context in every commit message.
-Format: conventional commit subject line, optional body, then structured trailers.
-
-Trailers (include when applicable — skip for trivial commits like typos or formatting):
-- `Constraint:` active constraint that shaped this decision
-- `Rejected:` alternative considered | reason for rejection
-- `Directive:` warning or instruction for future modifiers of this code
-- `Confidence:` high | medium | low
-- `Scope-risk:` narrow | moderate | broad
-- `Not-tested:` edge case or scenario not covered by tests
-
-Example:
+### Installation
+```bash
+/plugin marketplace add Yeachan-Heo/oh-my-claudecode
 ```
-fix(auth): prevent silent session drops during long-running ops
 
-Auth service returns inconsistent status codes on token expiry,
-so the interceptor catches all 4xx and triggers inline refresh.
+## Code Structure
 
-Constraint: Auth service does not support token introspection
-Constraint: Must not add latency to non-expired-token paths
-Rejected: Extend token TTL to 24h | security policy violation
-Rejected: Background refresh on timer | race condition with concurrent requests
-Confidence: high
-Scope-risk: narrow
-Directive: Error handling is intentionally broad (all 4xx) — do not narrow without verifying upstream behavior
-Not-tested: Auth service cold-start latency >500ms
 ```
-</commit_protocol>
+.claude-plugin/          # Plugin metadata
+  plugin.json            # Main plugin config
+  marketplace.json       # Marketplace registration
+agents/                  # Agent definitions (YAML)
+skills/                  # Skill definitions (Markdown)
+commands/                # Slash command definitions
+hooks/                   # Hook scripts
+src/                     # Source code (if any)
+tests/                   # Test files
+```
 
-<hooks_and_context>
-Hooks inject `<system-reminder>` tags. Key patterns: `hook success: Success` (proceed), `[MAGIC KEYWORD: ...]` (invoke skill), `The boulder never stops` (ralph/ultrawork active).
-Persistence: `<remember>` (7 days), `<remember priority>` (permanent).
-Kill switches: `DISABLE_OMC`, `OMC_SKIP_HOOKS` (comma-separated).
-</hooks_and_context>
+## When Responding to Issues
 
-<cancellation>
-`/oh-my-claudecode:cancel` ends execution modes. Cancel when done+verified or blocked. Don't cancel if work incomplete.
-</cancellation>
+### Installation Issues
+- Recommend running `/oh-my-claudecode:omc-doctor` to diagnose problems
+- Check if user installed via correct method: `/plugin marketplace add Yeachan-Heo/oh-my-claudecode`
+- Common issues: outdated Claude Code version, missing dependencies
 
-<worktree_paths>
-State: `.omc/state/`, `.omc/state/sessions/{sessionId}/`, `.omc/notepad.md`, `.omc/project-memory.json`, `.omc/plans/`, `.omc/research/`, `.omc/logs/`
-</worktree_paths>
+### Bug Reports
+- Ask for Claude Code version if not provided
+- Request reproduction steps
+- Check if issue exists in `agents/` or `skills/` definitions
 
-<contribution_rules>
-**PRs must always target `dev`, never `main`.** `main` is release-only and is only ever merged into by the maintainer via the release workflow. If you open a PR and realize it targets `main`, use `gh pr edit --base dev` to fix it before asking for review.
+### Feature Requests
+- Acknowledge the request
+- Consider if it fits the plugin's philosophy (intelligent delegation, persistence)
+- Label appropriately
 
-**Never commit `dist/` or `bridge/`.** These are build artifacts generated by `npm run build`. They are gitignored. If they appear in your diff, run `git restore dist/ bridge/` before committing. Committing them inflates PR size, creates merge conflicts, and obscures the actual changes under review.
-</contribution_rules>
+## When Reviewing PRs
 
-## Setup
+### Agent Definitions
+- Verify YAML syntax is correct
+- Check that `subagent_type` matches the file name
+- Ensure model tier is appropriate (haiku for simple, sonnet for medium, opus for complex)
+- Verify description matches the agent's purpose
 
-Say "setup omc" or run `/oh-my-claudecode:omc-setup`.
+### Skill Definitions
+- Check Markdown formatting
+- Verify the skill follows existing patterns
+- Ensure instructions are clear and complete
 
-<!-- OMC:END -->
+### Code Quality
+- Follow existing code patterns
+- Include tests for new functionality
+- Update version numbers if adding features
+
+## Agent Tiers
+
+| Tier | Model | Use For |
+|------|-------|---------|
+| LOW | Haiku | Simple lookups, fast searches |
+| MEDIUM | Sonnet | Standard implementation work |
+| HIGH | Opus | Complex reasoning, architecture |
+
+## Common Labels
+
+- `bug` - Something isn't working
+- `enhancement` - Feature request
+- `question` - User needs help
+- `documentation` - Docs improvement
+- `installation` - Setup/install issues
+- `agents` - Related to agent definitions
+- `stale` - No recent activity
+- `pinned` - Keep open, don't auto-close

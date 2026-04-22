@@ -5,8 +5,7 @@
  * Supports auto-detection and installation hints.
  */
 import { spawnSync } from 'child_process';
-import { existsSync } from 'fs';
-import { extname, isAbsolute } from 'path';
+import { extname } from 'path';
 /**
  * Known LSP servers and their configurations
  */
@@ -19,11 +18,11 @@ export const LSP_SERVERS = {
         installHint: 'npm install -g typescript-language-server typescript'
     },
     python: {
-        name: 'Python Language Server (ty)',
-        command: 'ty',
-        args: ['server'],
+        name: 'Python Language Server (pylsp)',
+        command: 'pylsp',
+        args: [],
         extensions: ['.py', '.pyw'],
-        installHint: 'Install ty from https://github.com/astral-sh/ty'
+        installHint: 'pip install python-lsp-server'
     },
     rust: {
         name: 'Rust Analyzer',
@@ -104,11 +103,10 @@ export const LSP_SERVERS = {
     },
     kotlin: {
         name: 'Kotlin Language Server',
-        command: 'kotlin-lsp',
-        args: ['--stdio'],
+        command: 'kotlin-language-server',
+        args: [],
         extensions: ['.kt', '.kts'],
-        installHint: 'Install from https://github.com/Kotlin/kotlin-lsp (brew install JetBrains/utils/kotlin-lsp)',
-        initializeTimeoutMs: 5 * 60 * 1000
+        installHint: 'Install from https://github.com/fwcd/kotlin-language-server'
     },
     elixir: {
         name: 'ElixirLS',
@@ -137,21 +135,12 @@ export const LSP_SERVERS = {
         args: [],
         extensions: ['.swift'],
         installHint: 'Install Swift from https://swift.org/download or via Xcode'
-    },
-    verilog: {
-        name: 'Verible Verilog Language Server',
-        command: 'verible-verilog-ls',
-        args: ['--rules_config_search'],
-        extensions: ['.v', '.vh', '.sv', '.svh'],
-        installHint: 'Download from https://github.com/chipsalliance/verible/releases'
     }
 };
 /**
  * Check if a command exists in PATH
  */
 export function commandExists(command) {
-    if (isAbsolute(command))
-        return existsSync(command);
     const checkCommand = process.platform === 'win32' ? 'where' : 'which';
     const result = spawnSync(checkCommand, [command], { stdio: 'ignore' });
     return result.status === 0;
@@ -222,11 +211,7 @@ export function getServerForLanguage(language) {
         'cs': 'csharp',
         'dart': 'dart',
         'flutter': 'dart',
-        'swift': 'swift',
-        'verilog': 'verilog',
-        'systemverilog': 'verilog',
-        'sv': 'verilog',
-        'v': 'verilog'
+        'swift': 'swift'
     };
     const serverKey = langMap[language.toLowerCase()];
     if (serverKey && LSP_SERVERS[serverKey]) {

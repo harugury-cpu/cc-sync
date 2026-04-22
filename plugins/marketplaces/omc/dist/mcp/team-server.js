@@ -6,32 +6,17 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema, } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { randomUUID } from 'node:crypto';
 import { spawn } from 'child_process';
 import { join } from 'path';
-import { fileURLToPath } from 'url';
-const __ownDir = (() => {
-    // CJS bundle: __dirname is reliable and takes precedence
-    if (typeof __dirname !== 'undefined' && __dirname)
-        return __dirname;
-    // ESM: derive from import.meta.url
-    try {
-        return fileURLToPath(new URL('.', import.meta.url));
-    }
-    catch {
-        return process.cwd();
-    }
-})();
 import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'fs';
 import { readFile } from 'fs/promises';
-import { killWorkerPanes, killTeamSession } from '../team/tmux-session.js';
+import { homedir } from 'os';
+import { killWorkerPanes } from '../team/tmux-session.js';
 import { validateTeamName } from '../team/team-name.js';
 import { NudgeTracker } from '../team/idle-nudge.js';
-import { clearScopedTeamState, convergeJobWithResultArtifact, isJobTerminal, } from './team-job-convergence.js';
-import { isProcessAlive } from '../platform/index.js';
-import { getGlobalOmcStatePath } from '../utils/paths.js';
+import { clearScopedTeamState, convergeJobWithResultArtifact, isJobTerminal, isPidAlive, } from './team-job-convergence.js';
 const omcTeamJobs = new Map();
-const OMC_JOBS_DIR = process.env.OMC_JOBS_DIR || getGlobalOmcStatePath('team-jobs');
+const OMC_JOBS_DIR = process.env.OMC_JOBS_DIR || join(homedir(), '.omc', 'team-jobs');
 const DEPRECATION_CODE = 'deprecated_cli_only';
 const TEAM_CLI_REPLACEMENT_HINTS = {
     omc_run_team_start: 'omc team start',
@@ -57,7 +42,6 @@ function buildCliReplacement(toolName, args) {
     if (toolName === 'omc_run_team_start') {
         const teamName = typeof parsed.teamName === 'string' ? parsed.teamName.trim() : '';
         const cwd = typeof parsed.cwd === 'string' ? parsed.cwd.trim() : '';
-        const newWindow = parsed.newWindow === true;
         const agentTypes = Array.isArray(parsed.agentTypes)
             ? parsed.agentTypes.filter((item) => typeof item === 'string' && item.trim().length > 0)
             : [];
@@ -73,8 +57,6 @@ function buildCliReplacement(toolName, args) {
             flags.push('--name', quoteCliValue(teamName));
         if (cwd)
             flags.push('--cwd', quoteCliValue(cwd));
-        if (newWindow)
-            flags.push('--new-window');
         if (agentTypes.length > 0) {
             const uniqueAgentTypes = new Set(agentTypes);
             if (uniqueAgentTypes.size === 1) {
@@ -156,8 +138,8 @@ async function loadPaneIds(jobId) {
     }
 }
 function validateJobId(job_id) {
-    if (!/^omc-[a-z0-9]{1,16}$/.test(job_id)) {
-        throw new Error(`Invalid job_id: "${job_id}". Must match /^omc-[a-z0-9]{1,16}$/`);
+    if (!/^omc-[a-z0-9]{1,12}$/.test(job_id)) {
+        throw new Error(`Invalid job_id: "${job_id}". Must match /^omc-[a-z0-9]{1,12}$/`);
     }
 }
 function saveJobState(jobId, job) {
@@ -188,7 +170,6 @@ const startSchema = z.object({
         description: z.string().describe('Full task description'),
     })).describe('Tasks to distribute to workers'),
     cwd: z.string().describe('Working directory (absolute path)'),
-    newWindow: z.boolean().optional().describe('Spawn workers in a dedicated tmux window instead of splitting the current window'),
 });
 const statusSchema = z.object({
     job_id: z.string().describe('Job ID returned by omc_run_team_start'),
@@ -198,7 +179,7 @@ const waitSchema = z.object({
     timeout_ms: z.number().optional().describe('Maximum wait time in ms (default: 300000, max: 3600000)'),
     nudge_delay_ms: z.number().optional().describe('Milliseconds a pane must be idle before nudging (default: 30000)'),
     nudge_max_count: z.number().optional().describe('Maximum nudges per pane (default: 3)'),
-    nudge_message: z.string().optional().describe('Message sent as nudge (default: "Continue working on your assigned task and report concrete progress (not ACK-only).")'),
+    nudge_message: z.string().optional().describe('Message sent as nudge (default: "Continue working on your assigned task.")'),
 });
 const cleanupSchema = z.object({
     job_id: z.string().describe('Job ID returned by omc_run_team_start'),
@@ -212,8 +193,8 @@ async function handleStart(args) {
     }
     const input = startSchema.parse(args);
     validateTeamName(input.teamName);
-    const jobId = `omc-${Date.now().toString(36)}${randomUUID().slice(0, 8)}`;
-    const runtimeCliPath = join(__ownDir, 'runtime-cli.cjs');
+    const jobId = `omc-${Date.now().toString(36)}`;
+    const runtimeCliPath = join(__dirname, 'runtime-cli.cjs');
     const job = { status: 'running', startedAt: Date.now(), teamName: input.teamName, cwd: input.cwd };
     omcTeamJobs.set(jobId, job);
     const child = spawn('node', [runtimeCliPath], {
@@ -280,7 +261,7 @@ export async function handleStatus(args) {
     if (isJobTerminal(job)) {
         return makeJobResponse(job_id, job);
     }
-    if (job.pid != null && !isProcessAlive(job.pid)) {
+    if (job.pid != null && !isPidAlive(job.pid)) {
         job = saveJobState(job_id, {
             ...job,
             status: 'failed',
@@ -325,7 +306,7 @@ export async function handleWait(args) {
             }
             return out;
         }
-        if (job.pid != null && !isProcessAlive(job.pid)) {
+        if (job.pid != null && !isPidAlive(job.pid)) {
             job = saveJobState(job_id, {
                 ...job,
                 status: 'failed',
@@ -369,16 +350,7 @@ export async function handleCleanup(args) {
         return { content: [{ type: 'text', text: `Job ${job_id} not found` }] };
     const panes = await loadPaneIds(job_id);
     let paneCleanupMessage = 'No pane IDs recorded for this job — pane cleanup skipped.';
-    if (panes?.sessionName && (panes.ownsWindow === true || !panes.sessionName.includes(':'))) {
-        const sessionMode = panes.ownsWindow === true
-            ? (panes.sessionName.includes(':') ? 'dedicated-window' : 'detached-session')
-            : 'detached-session';
-        await killTeamSession(panes.sessionName, panes.paneIds, panes.leaderPaneId, { sessionMode });
-        paneCleanupMessage = panes.ownsWindow
-            ? 'Cleaned up team tmux window.'
-            : `Cleaned up ${panes.paneIds.length} worker pane(s).`;
-    }
-    else if (panes?.paneIds?.length) {
+    if (panes?.paneIds?.length) {
         await killWorkerPanes({
             paneIds: panes.paneIds,
             leaderPaneId: panes.leaderPaneId,
@@ -415,7 +387,6 @@ const TOOLS = [
                     description: 'Tasks to distribute to workers',
                 },
                 cwd: { type: 'string', description: 'Working directory (absolute path)' },
-                newWindow: { type: 'boolean', description: 'Spawn workers in a dedicated tmux window instead of splitting the current window' },
             },
             required: ['teamName', 'agentTypes', 'tasks', 'cwd'],
         },
@@ -441,7 +412,7 @@ const TOOLS = [
                 timeout_ms: { type: 'number', description: 'Maximum wait time in ms (default: 300000, max: 3600000)' },
                 nudge_delay_ms: { type: 'number', description: 'Milliseconds a pane must be idle before nudging (default: 30000)' },
                 nudge_max_count: { type: 'number', description: 'Maximum nudges per pane (default: 3)' },
-                nudge_message: { type: 'string', description: 'Message sent as nudge (default: "Continue working on your assigned task and report concrete progress (not ACK-only).")' },
+                nudge_message: { type: 'string', description: 'Message sent as nudge (default: "Continue working on your assigned task.")' },
             },
             required: ['job_id'],
         },
@@ -463,10 +434,9 @@ const server = new Server({ name: 'team', version: '1.0.0' }, { capabilities: { 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
-    // Dispatch live handlers first. The deprecation guard below currently overlaps
-    // with these same tool names but is kept as a safety net for future tool
-    // renames — if a tool name is removed from this dispatch block, the
-    // deprecation guard will catch stale callers and return a migration hint.
+    if (isDeprecatedTeamToolName(name)) {
+        return createDeprecatedCliOnlyEnvelopeWithArgs(name, args);
+    }
     try {
         if (name === 'omc_run_team_start')
             return await handleStart(args ?? {});
@@ -476,14 +446,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             return await handleWait(args ?? {});
         if (name === 'omc_run_team_cleanup')
             return await handleCleanup(args ?? {});
+        return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
     }
     catch (error) {
         return { content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : String(error)}` }], isError: true };
     }
-    if (isDeprecatedTeamToolName(name)) {
-        return createDeprecatedCliOnlyEnvelopeWithArgs(name, args);
-    }
-    return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
 });
 async function main() {
     const transport = new StdioServerTransport();

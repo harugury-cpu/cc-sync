@@ -1,12 +1,18 @@
 ---
 name: mobile-app
-classification: capability
-classification-reason: Specialized domain knowledge with limited model overlap
-deprecation-risk: low
-effort: low
 description: |
-  Mobile app development guide — React Native, Flutter, Expo for cross-platform.
-  Triggers: mobile app, React Native, Flutter, Expo, iOS, Android, 모바일 앱.
+  Mobile app development guide for cross-platform apps.
+  Covers React Native, Flutter, and Expo frameworks.
+
+  Use proactively when user wants to build mobile apps or convert web apps to mobile.
+
+  Triggers: mobile app, React Native, Flutter, Expo, iOS, Android, 모바일 앱, モバイルアプリ, 移动应用,
+  aplicación móvil, app móvil, desarrollo móvil,
+  application mobile, développement mobile,
+  mobile Anwendung, mobile App, mobile Entwicklung,
+  applicazione mobile, app mobile, sviluppo mobile
+
+  Do NOT use for: web-only projects, backend-only development, or desktop apps.
 agent: bkit:pipeline-guide
 allowed-tools:
   - Read
@@ -16,7 +22,7 @@ allowed-tools:
   - Grep
   - Bash
   - WebSearch
-user-invocable: true
+user-invocable: false
 ---
 
 # Mobile App Development Expertise

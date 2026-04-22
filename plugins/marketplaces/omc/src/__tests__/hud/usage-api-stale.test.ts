@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
 
 const CLAUDE_CONFIG_DIR = '/tmp/test-claude';
-const CACHE_PATH = `${CLAUDE_CONFIG_DIR}/plugins/oh-my-claudecode/.usage-cache-zai.json`;
+const CACHE_PATH = `${CLAUDE_CONFIG_DIR}/plugins/oh-my-claudecode/.usage-cache.json`;
 const CACHE_DIR = `${CLAUDE_CONFIG_DIR}/plugins/oh-my-claudecode`;
 
 function createFsMock(initialFiles: Record<string, string>) {
@@ -70,14 +70,13 @@ function createFsMock(initialFiles: Record<string, string>) {
 }
 
 function setupMocks(fsModule: ReturnType<typeof createFsMock>['fsModule'], httpStatus: number, httpBody: string) {
-  vi.doMock('../../utils/config-dir.js', () => ({
+  vi.doMock('../../utils/paths.js', () => ({
     getClaudeConfigDir: () => CLAUDE_CONFIG_DIR,
   }));
   vi.doMock('../../utils/ssrf-guard.js', () => ({
     validateAnthropicBaseUrl: () => ({ allowed: true }),
   }));
-  vi.doMock('child_process', async () => ({
-    ...(await vi.importActual<typeof import('child_process')>('child_process')),
+  vi.doMock('child_process', () => ({
     execSync: vi.fn(),
   }));
   vi.doMock('fs', () => fsModule);
@@ -117,7 +116,7 @@ describe('usage API stale data handling', () => {
 
   afterEach(() => {
     process.env = { ...originalEnv };
-    vi.unmock('../../utils/config-dir.js');
+    vi.unmock('../../utils/paths.js');
     vi.unmock('../../utils/ssrf-guard.js');
     vi.unmock('fs');
     vi.unmock('child_process');
@@ -233,8 +232,7 @@ describe('usage API stale data handling', () => {
     vi.doMock('../../utils/ssrf-guard.js', () => ({
       validateAnthropicBaseUrl: () => ({ allowed: true }),
     }));
-    vi.doMock('child_process', async () => ({
-      ...(await vi.importActual<typeof import('child_process')>('child_process')),
+    vi.doMock('child_process', () => ({
       execSync: vi.fn(),
     }));
     vi.doMock('fs', () => fsModule);
@@ -245,100 +243,5 @@ describe('usage API stale data handling', () => {
     // Should discard the data and show error
     expect(result.rateLimits).toBeNull();
     expect(result.error).toBe('rate_limited');
-  });
-
-  it('preserves last-known-good usage on transient network failures and marks it stale', async () => {
-    const lastSuccess = Date.now() - 5 * 60_000;
-    const expiredCache = JSON.stringify({
-      timestamp: Date.now() - 91_000,
-      source: 'zai',
-      lastSuccessAt: lastSuccess,
-      data: {
-        fiveHourPercent: 11,
-        fiveHourResetsAt: null,
-      },
-    });
-
-    const { files, fsModule } = createFsMock({ [CACHE_PATH]: expiredCache });
-    setupMocks(fsModule, 500, '');
-
-    const { getUsage } = await import('../../hud/usage-api.js');
-    const result = await getUsage();
-
-    expect(result).toEqual({
-      rateLimits: {
-        fiveHourPercent: 11,
-        fiveHourResetsAt: null,
-      },
-      error: 'network',
-      stale: true,
-    });
-
-    const written = JSON.parse(files.get(CACHE_PATH)!);
-    expect(written.data).toEqual({
-      fiveHourPercent: 11,
-      fiveHourResetsAt: null,
-    });
-    expect(written.error).toBe(true);
-    expect(written.errorReason).toBe('network');
-    expect(written.lastSuccessAt).toBe(lastSuccess);
-  });
-
-  it('does not preserve stale fallback data past the max stale window on transient failures', async () => {
-    const sixteenMinutesAgo = Date.now() - 16 * 60_000;
-    const expiredCache = JSON.stringify({
-      timestamp: Date.now() - 91_000,
-      source: 'zai',
-      lastSuccessAt: sixteenMinutesAgo,
-      data: {
-        fiveHourPercent: 11,
-        fiveHourResetsAt: null,
-      },
-    });
-
-    const { files, fsModule } = createFsMock({ [CACHE_PATH]: expiredCache });
-    setupMocks(fsModule, 500, '');
-
-    const { getUsage } = await import('../../hud/usage-api.js');
-    const result = await getUsage();
-
-    expect(result).toEqual({
-      rateLimits: null,
-      error: 'network',
-    });
-
-    const written = JSON.parse(files.get(CACHE_PATH)!);
-    expect(written.data).toBeNull();
-    expect(written.error).toBe(true);
-    expect(written.errorReason).toBe('network');
-    expect(written.lastSuccessAt).toBe(sixteenMinutesAgo);
-  });
-
-  it('reuses stale transient failure cache long enough to avoid immediate retry hammering', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-03-10T00:00:00Z'));
-
-    const validTransientFailureCache = JSON.stringify({
-      timestamp: Date.now() - 90_000,
-      source: 'zai',
-      lastSuccessAt: Date.now() - 90_000,
-      data: { fiveHourPercent: 11 },
-      error: true,
-      errorReason: 'network',
-    });
-
-    const { fsModule } = createFsMock({ [CACHE_PATH]: validTransientFailureCache });
-    setupMocks(fsModule, 500, '');
-
-    const httpsModule = await import('https') as unknown as { default: { request: ReturnType<typeof vi.fn> } };
-    const { getUsage } = await import('../../hud/usage-api.js');
-    const result = await getUsage();
-
-    expect(result.rateLimits?.fiveHourPercent).toBe(11);
-    expect(result.error).toBe('network');
-    expect(result.stale).toBe(true);
-    expect(httpsModule.default.request).not.toHaveBeenCalled();
-
-    vi.useRealTimers();
   });
 });

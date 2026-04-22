@@ -11,12 +11,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // ---------------------------------------------------------------------------
 // Mocks — must be set up before importing the module under test
 // ---------------------------------------------------------------------------
-// Mock tmux-utils so tmux calls don't require a real tmux install
-vi.mock('../../cli/tmux-utils.js', async (importOriginal) => {
+// Mock child_process so tmux calls don't require a real tmux install
+vi.mock('child_process', async (importOriginal) => {
     const actual = await importOriginal();
     return {
         ...actual,
-        tmuxExecAsync: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+        execFile: vi.fn((_cmd, _args, cb) => {
+            cb(null, '', '');
+            return {};
+        }),
     };
 });
 // Mock sendToWorker from tmux-session to avoid real tmux calls
@@ -31,12 +34,20 @@ vi.mock('../tmux-session.js', async (importOriginal) => {
 });
 import { NudgeTracker, DEFAULT_NUDGE_CONFIG, capturePane, isPaneIdle } from '../idle-nudge.js';
 import { sendToWorker, paneLooksReady, paneHasActiveTask } from '../tmux-session.js';
-import { tmuxExecAsync } from '../../cli/tmux-utils.js';
+import { execFile } from 'child_process';
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 function mockCaptureOutput(output) {
-    vi.mocked(tmuxExecAsync).mockResolvedValue({ stdout: output, stderr: '' });
+    vi.mocked(execFile).mockImplementation(((_cmd, args, cb) => {
+        if (Array.isArray(args) && args[0] === 'capture-pane') {
+            cb(null, output, '');
+        }
+        else {
+            cb(null, '', '');
+        }
+        return {};
+    }));
 }
 /** Pane content that looks idle (shows prompt, no active task) */
 const IDLE_PANE_CONTENT = [
@@ -79,18 +90,9 @@ describe('idle detection helpers', () => {
         expect(paneLooksReady('some output\n> ')).toBe(true);
         expect(paneLooksReady('Working on task...')).toBe(false);
     });
-    it('paneLooksReady treats bootstrapping panes as not ready even with model hints', () => {
-        expect(paneLooksReady('model: loading\ngpt-5.3-codex high · 80% left')).toBe(false);
-        expect(paneLooksReady('connecting to model...\n❯ ')).toBe(false);
-    });
     it('paneHasActiveTask detects active task indicators', () => {
         expect(paneHasActiveTask(ACTIVE_PANE_CONTENT)).toBe(true);
         expect(paneHasActiveTask(IDLE_PANE_CONTENT)).toBe(false);
-    });
-    it('paneHasActiveTask detects background-count and assistant bullet activity markers', () => {
-        expect(paneHasActiveTask('2 background terminal running')).toBe(true);
-        expect(paneHasActiveTask('✻ Thinking…')).toBe(true);
-        expect(paneHasActiveTask('· Planning next step...')).toBe(true);
     });
 });
 // ---------------------------------------------------------------------------
@@ -105,7 +107,10 @@ describe('capturePane', () => {
     });
     it('returns empty string on error', async () => {
         vi.useRealTimers();
-        vi.mocked(tmuxExecAsync).mockRejectedValue(new Error('tmux not found'));
+        vi.mocked(execFile).mockImplementation(((_cmd, _args, cb) => {
+            cb(new Error('tmux not found'), '', '');
+            return {};
+        }));
         const result = await capturePane('%1');
         expect(result).toBe('');
     });
@@ -253,16 +258,21 @@ describe('NudgeTracker', () => {
     it('handles multiple panes independently', async () => {
         const tracker = new NudgeTracker({ delayMs: 0, maxCount: 1 });
         // %2 is idle, %3 is active
-        vi.mocked(tmuxExecAsync).mockImplementation(async (args) => {
-            if (args[0] === 'capture-pane') {
+        vi.mocked(execFile).mockImplementation(((_cmd, args, cb) => {
+            if (Array.isArray(args) && args[0] === 'capture-pane') {
                 const paneId = args[2];
                 if (paneId === '%2')
-                    return { stdout: IDLE_PANE_CONTENT, stderr: '' };
-                if (paneId === '%3')
-                    return { stdout: ACTIVE_PANE_CONTENT, stderr: '' };
+                    cb(null, IDLE_PANE_CONTENT, '');
+                else if (paneId === '%3')
+                    cb(null, ACTIVE_PANE_CONTENT, '');
+                else
+                    cb(null, '', '');
             }
-            return { stdout: '', stderr: '' };
-        });
+            else {
+                cb(null, '', '');
+            }
+            return {};
+        }));
         vi.advanceTimersByTime(6_000);
         const nudged = await tracker.checkAndNudge(['%2', '%3'], '%1', 'test-session');
         expect(nudged).toEqual(['%2']); // only %2 was idle

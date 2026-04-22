@@ -8,14 +8,19 @@
  * 중요: UI 구현 완료 시점은 기능 검증이 필요한 시점
  * Zero Script QA 제안 또는 gap-detector 실행 권장
  *
- * @version 1.6.0
+ * @version 1.4.4
  * @module scripts/phase6-ui-stop
  */
 
 const path = require('path');
 
-const { debugLog } = require('../lib/core/debug');
-const { readBkitMemory, writeBkitMemory } = require('../lib/pdca/status');
+let common = null;
+function getCommon() {
+  if (!common) {
+    common = require('../lib/common.js');
+  }
+  return common;
+}
 
 /**
  * Generate phase completion message
@@ -73,15 +78,17 @@ function formatOutput(result) {
  * Main execution
  */
 async function main() {
+  const lib = getCommon();
+
   try {
-    debugLog('Phase6Stop', 'UI Integration phase completed');
+    lib.debugLog('Phase6Stop', 'UI Integration phase completed');
 
     const result = generatePhaseCompletion();
 
     console.log(formatOutput(result));
 
     // Update pipeline status
-    const memory = readBkitMemory();
+    const memory = lib.readBkitMemory();
     if (memory) {
       if (!memory.pipelineStatus) {
         memory.pipelineStatus = {};
@@ -92,11 +99,11 @@ async function main() {
       if (!memory.pipelineStatus.completedPhases) {
         memory.pipelineStatus.completedPhases = [];
       }
-      writeBkitMemory(memory);
+      lib.writeBkitMemory(memory);
     }
 
   } catch (e) {
-    debugLog('Phase6Stop', 'Error', { error: e.message });
+    lib.debugLog('Phase6Stop', 'Error', { error: e.message });
     console.log(JSON.stringify({ status: 'error', error: e.message }));
   }
 }

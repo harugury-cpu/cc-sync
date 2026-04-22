@@ -9,7 +9,6 @@ const PROVIDER_BINARIES = {
   codex: 'codex',
   gemini: 'gemini',
 };
-const SHOULD_USE_WINDOWS_SHELL = process.platform === 'win32';
 
 /**
  * Build CLI args for a given provider.
@@ -17,26 +16,14 @@ const SHOULD_USE_WINDOWS_SHELL = process.platform === 'win32';
  * - codex: `codex exec --dangerously-bypass-approvals-and-sandbox <prompt>`
  * - gemini: `gemini -p <prompt> --yolo`
  */
-function buildProviderArgs(provider, prompt, { pipePromptViaStdin = false } = {}) {
+function buildProviderArgs(provider, prompt) {
   if (provider === 'codex') {
-    return ['exec', '--dangerously-bypass-approvals-and-sandbox', pipePromptViaStdin ? '-' : prompt];
+    return ['exec', '--dangerously-bypass-approvals-and-sandbox', prompt];
   }
   if (provider === 'gemini') {
-    return pipePromptViaStdin ? ['--yolo'] : ['-p', prompt, '--yolo'];
+    return ['-p', prompt, '--yolo'];
   }
   return ['-p', prompt];
-}
-
-function shouldPipePromptViaStdin(provider, prompt) {
-  if (provider !== 'codex' && provider !== 'gemini') {
-    return false;
-  }
-
-  if (typeof prompt === 'string' && (prompt.includes('\n') || prompt.length > 500)) {
-    return true;
-  }
-
-  return SHOULD_USE_WINDOWS_SHELL;
 }
 
 const ASK_ORIGINAL_TASK_ENV = 'OMC_ASK_ORIGINAL_TASK';
@@ -87,44 +74,13 @@ function parseArgs(argv) {
   return { provider, prompt: rest.join(' ').trim() };
 }
 
-// Strip Claude session markers so provider advisors do not detect or inherit the active Claude Code session.
-const CLAUDE_SESSION_STRIPPED_ENV_VARS = new Set([
-  'CLAUDECODE',
-  'CLAUDE_SESSION_ID',
-  'CLAUDECODE_SESSION_ID',
-  'CLAUDE_CODE_ENTRYPOINT',
-]);
-const CODEX_STRIPPED_ENV_VARS = new Set(['RUST_LOG', 'RUST_BACKTRACE', 'RUST_LIB_BACKTRACE']);
-
-function buildProviderEnv(provider, env = process.env) {
-  const strippedEnvVars = provider === 'codex'
-    ? new Set([...CLAUDE_SESSION_STRIPPED_ENV_VARS, ...CODEX_STRIPPED_ENV_VARS])
-    : CLAUDE_SESSION_STRIPPED_ENV_VARS;
-
-  return Object.fromEntries(
-    Object.entries(env).filter(([key]) => !strippedEnvVars.has(key)),
-  );
-}
-
-function ensureBinary(provider, binary) {
+function ensureBinary(binary) {
   const probe = spawnSync(binary, ['--version'], {
     stdio: 'ignore',
     encoding: 'utf8',
-    env: buildProviderEnv(provider),
-    shell: SHOULD_USE_WINDOWS_SHELL,
   });
 
-  const isMissingOnWindowsShell = SHOULD_USE_WINDOWS_SHELL
-    && probe.status !== 0
-    && (() => {
-      const whereResult = spawnSync('where', [binary], {
-        encoding: 'utf8',
-        env: buildProviderEnv(provider),
-      });
-      return whereResult.status !== 0 || !whereResult.stdout?.trim();
-    })();
-
-  if ((probe.error && probe.error.code === 'ENOENT') || isMissingOnWindowsShell) {
+  if (probe.error && probe.error.code === 'ENOENT') {
     const verify = `${binary} --version`;
     console.error(`[ask-${binary}] Missing required local CLI binary: ${binary}`);
     console.error(`[ask-${binary}] Install/configure ${binary} CLI, then verify with: ${verify}`);
@@ -226,16 +182,12 @@ async function main() {
   const { provider, prompt } = parseArgs(process.argv.slice(2));
   const binary = PROVIDER_BINARIES[provider];
 
-  ensureBinary(provider, binary);
+  ensureBinary(binary);
 
-  const pipePromptViaStdin = shouldPipePromptViaStdin(provider, prompt);
-  const providerArgs = buildProviderArgs(provider, prompt, { pipePromptViaStdin });
+  const providerArgs = buildProviderArgs(provider, prompt);
   const run = spawnSync(binary, providerArgs, {
     encoding: 'utf8',
     maxBuffer: 10 * 1024 * 1024,
-    env: buildProviderEnv(provider),
-    shell: SHOULD_USE_WINDOWS_SHELL,
-    ...(pipePromptViaStdin ? { input: prompt } : { stdio: ['ignore', 'pipe', 'pipe'] }),
   });
 
   const stdout = run.stdout || '';

@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import type { GitProvider, PRInfo, IssueInfo } from './types.js';
 
 const API_BASE = 'https://api.bitbucket.org/2.0/repositories';
@@ -15,16 +16,17 @@ function getAuthHeader(): string | null {
   return null;
 }
 
-async function fetchApi(url: string): Promise<Record<string, unknown> | null> {
+function fetchApi(url: string): Record<string, unknown> | null {
   const auth = getAuthHeader();
   if (!auth) return null;
   try {
-    const response = await fetch(url, {
-      headers: { Authorization: auth },
-      signal: AbortSignal.timeout(10000),
+    const args = ['-sS', '-H', `Authorization: ${auth}`, url];
+    const raw = execFileSync('curl', args, {
+      encoding: 'utf-8',
+      timeout: 10000,
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
-    if (!response.ok) return null;
-    return (await response.json()) as Record<string, unknown>;
+    return JSON.parse(raw);
   } catch {
     return null;
   }
@@ -40,10 +42,10 @@ export class BitbucketProvider implements GitProvider {
     return url.includes('bitbucket.org');
   }
 
-  async viewPR(number: number, owner?: string, repo?: string): Promise<PRInfo | null> {
+  viewPR(number: number, owner?: string, repo?: string): PRInfo | null {
     if (!Number.isInteger(number) || number < 1) return null;
     if (!owner || !repo) return null;
-    const data = await fetchApi(`${API_BASE}/${owner}/${repo}/pullrequests/${number}`);
+    const data = fetchApi(`${API_BASE}/${owner}/${repo}/pullrequests/${number}`);
     if (!data) return null;
     const source = data.source as Record<string, unknown> | undefined;
     const dest = data.destination as Record<string, unknown> | undefined;
@@ -62,10 +64,10 @@ export class BitbucketProvider implements GitProvider {
     };
   }
 
-  async viewIssue(number: number, owner?: string, repo?: string): Promise<IssueInfo | null> {
+  viewIssue(number: number, owner?: string, repo?: string): IssueInfo | null {
     if (!Number.isInteger(number) || number < 1) return null;
     if (!owner || !repo) return null;
-    const data = await fetchApi(`${API_BASE}/${owner}/${repo}/issues/${number}`);
+    const data = fetchApi(`${API_BASE}/${owner}/${repo}/issues/${number}`);
     if (!data) return null;
     const content = data.content as Record<string, unknown> | undefined;
     const links = data.links as Record<string, unknown> | undefined;

@@ -34,15 +34,11 @@ function isStateFileStale(filePath) {
  * Returns the most recently modified matching path, or null if none found.
  * This ensures the HUD displays state from any active session (Issue #456).
  */
-function resolveStatePath(directory, filename, sessionId) {
-    const omcRoot = getOmcRoot(directory);
-    if (sessionId) {
-        const sessionPath = join(omcRoot, 'state', 'sessions', sessionId, filename);
-        return existsSync(sessionPath) ? sessionPath : null;
-    }
+function resolveStatePath(directory, filename) {
     let bestPath = null;
     let bestMtime = 0;
     // Check session-scoped paths first (most likely location after Issue #456 fix)
+    const omcRoot = getOmcRoot(directory);
     const sessionsDir = join(omcRoot, 'state', 'sessions');
     if (existsSync(sessionsDir)) {
         try {
@@ -104,8 +100,8 @@ function resolveStatePath(directory, filename, sessionId) {
  * Read Ralph Loop state for HUD display.
  * Returns null if no state file exists or on error.
  */
-export function readRalphStateForHud(directory, sessionId) {
-    const stateFile = resolveStatePath(directory, 'ralph-state.json', sessionId);
+export function readRalphStateForHud(directory) {
+    const stateFile = resolveStatePath(directory, 'ralph-state.json');
     if (!stateFile) {
         return null;
     }
@@ -135,9 +131,9 @@ export function readRalphStateForHud(directory, sessionId) {
  * Read Ultrawork state for HUD display.
  * Checks only local .omc/state location.
  */
-export function readUltraworkStateForHud(directory, sessionId) {
+export function readUltraworkStateForHud(directory) {
     // Check local state only (with new path fallback)
-    const localFile = resolveStatePath(directory, 'ultrawork-state.json', sessionId);
+    const localFile = resolveStatePath(directory, 'ultrawork-state.json');
     if (!localFile || isStateFileStale(localFile)) {
         return null;
     }
@@ -197,8 +193,8 @@ export function readPrdStateForHud(directory) {
  * Read Autopilot state for HUD display.
  * Returns shape matching AutopilotStateForHud from elements/autopilot.ts.
  */
-export function readAutopilotStateForHud(directory, sessionId) {
-    const stateFile = resolveStatePath(directory, 'autopilot-state.json', sessionId);
+export function readAutopilotStateForHud(directory) {
+    const stateFile = resolveStatePath(directory, 'autopilot-state.json');
     if (!stateFile) {
         return null;
     }
@@ -212,13 +208,9 @@ export function readAutopilotStateForHud(directory, sessionId) {
         if (!state.active) {
             return null;
         }
-        const phase = state.phase ?? state.current_phase;
-        if (!phase) {
-            return null;
-        }
         return {
             active: state.active,
-            phase,
+            phase: state.phase,
             iteration: state.iteration,
             maxIterations: state.max_iterations,
             tasksCompleted: state.execution?.tasks_completed,
@@ -236,26 +228,26 @@ export function readAutopilotStateForHud(directory, sessionId) {
 /**
  * Check if any OMC mode is currently active
  */
-export function isAnyModeActive(directory, sessionId) {
-    const ralph = readRalphStateForHud(directory, sessionId);
-    const ultrawork = readUltraworkStateForHud(directory, sessionId);
-    const autopilot = readAutopilotStateForHud(directory, sessionId);
+export function isAnyModeActive(directory) {
+    const ralph = readRalphStateForHud(directory);
+    const ultrawork = readUltraworkStateForHud(directory);
+    const autopilot = readAutopilotStateForHud(directory);
     return (ralph?.active ?? false) || (ultrawork?.active ?? false) || (autopilot?.active ?? false);
 }
 /**
  * Get active skill names for display
  */
-export function getActiveSkills(directory, sessionId) {
+export function getActiveSkills(directory) {
     const skills = [];
-    const autopilot = readAutopilotStateForHud(directory, sessionId);
+    const autopilot = readAutopilotStateForHud(directory);
     if (autopilot?.active) {
         skills.push('autopilot');
     }
-    const ralph = readRalphStateForHud(directory, sessionId);
+    const ralph = readRalphStateForHud(directory);
     if (ralph?.active) {
         skills.push('ralph');
     }
-    const ultrawork = readUltraworkStateForHud(directory, sessionId);
+    const ultrawork = readUltraworkStateForHud(directory);
     if (ultrawork?.active) {
         skills.push('ultrawork');
     }

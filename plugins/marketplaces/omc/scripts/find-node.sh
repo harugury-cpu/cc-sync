@@ -16,22 +16,10 @@
 
 NODE_BIN=""
 
-case "$0" in
-  */*)
-    SCRIPT_DIR="${0%/*}"
-    ;;
-  *)
-    SCRIPT_DIR='.'
-    ;;
-esac
-
-SCRIPT_DIR="$(cd "$SCRIPT_DIR" && pwd)"
-. "$SCRIPT_DIR/lib/config-dir.sh"
-
 # ---------------------------------------------------------------------------
 # 1. Read stored node path from OMC config
 # ---------------------------------------------------------------------------
-CLAUDE_DIR="$(resolve_claude_config_dir)"
+CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 CONFIG_FILE="$CLAUDE_DIR/.omc-config.json"
 if [ -f "$CONFIG_FILE" ]; then
   # POSIX-safe extraction without requiring jq

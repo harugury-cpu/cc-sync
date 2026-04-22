@@ -7,7 +7,7 @@
 
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
-import { getClaudeConfigDir } from "../utils/config-dir.js";
+import { getClaudeConfigDir } from "../utils/paths.js";
 import type { HookNotificationConfig } from "./hook-config-types.js";
 import type {
   NotificationConfig,

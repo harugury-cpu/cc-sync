@@ -15,7 +15,6 @@ import { existsSync } from 'fs';
 import { TeamPaths, absPath } from './state-paths.js';
 import type { TeamEventType } from './contracts.js';
 import type { TeamEvent } from './types.js';
-import { createSwallowedErrorLogger } from '../lib/swallowed-error.js';
 
 /**
  * Append a team event to the JSONL event log.
@@ -94,10 +93,6 @@ export async function emitMonitorDerivedEvents(
 ): Promise<void> {
   if (!previousSnapshot) return;
 
-  const logDerivedEventFailure = createSwallowedErrorLogger(
-    'team.events.emitMonitorDerivedEvents appendTeamEvent failed',
-  );
-
   const completedEventTaskIds = { ...(previousSnapshot.completedEventTaskIds ?? {}) };
 
   // Detect task status transitions
@@ -111,7 +106,7 @@ export async function emitMonitorDerivedEvents(
         worker: 'leader-fixed',
         task_id: task.id,
         reason: `status_transition:${prevStatus}->${task.status}`,
-      }, cwd).catch(logDerivedEventFailure);
+      }, cwd).catch(() => {});
       completedEventTaskIds[task.id] = true;
     } else if (task.status === 'failed') {
       await appendTeamEvent(teamName, {
@@ -119,7 +114,7 @@ export async function emitMonitorDerivedEvents(
         worker: 'leader-fixed',
         task_id: task.id,
         reason: `status_transition:${prevStatus}->${task.status}`,
-      }, cwd).catch(logDerivedEventFailure);
+      }, cwd).catch(() => {});
     }
   }
 
@@ -133,7 +128,7 @@ export async function emitMonitorDerivedEvents(
         type: 'worker_stopped',
         worker: worker.name,
         reason: 'pane_exited',
-      }, cwd).catch(logDerivedEventFailure);
+      }, cwd).catch(() => {});
     }
 
     if (prevState === 'working' && worker.status.state === 'idle') {
@@ -141,7 +136,7 @@ export async function emitMonitorDerivedEvents(
         type: 'worker_idle',
         worker: worker.name,
         reason: `state_transition:${prevState}->${worker.status.state}`,
-      }, cwd).catch(logDerivedEventFailure);
+      }, cwd).catch(() => {});
     }
   }
 }

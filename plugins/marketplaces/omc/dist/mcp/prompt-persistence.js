@@ -8,8 +8,7 @@ import { mkdirSync, writeFileSync, readFileSync, existsSync, renameSync, readdir
 import { join } from 'path';
 import { randomBytes } from 'crypto';
 import { getWorktreeRoot } from '../lib/worktree-paths.js';
-import { createArtifactDescriptorFromPath, } from '../shared/artifact-descriptor.js';
-import { initJobDb, isJobDbInitialized, upsertJob, getJob, getActiveJobs as getActiveJobsFromDb, cleanupOldJobs as cleanupOldJobsInDb } from '../lib/job-state-db.js';
+import { initJobDb, isJobDbInitialized, upsertJob, getJob, getActiveJobs as getActiveJobsFromDb, cleanupOldJobs as cleanupOldJobsInDb } from './job-state-db.js';
 // Lazy-init guard: fires initJobDb at most once per process.
 // initJobDb is async (dynamic import of better-sqlite3). If it hasn't resolved
 // yet, isJobDbInitialized() returns false and callers use JSON fallback.
@@ -19,7 +18,6 @@ let _dbInitAttempted = false;
 // Allows job management handlers to find JSON status files for cross-directory jobs.
 // Keyed by provider:jobId to avoid collisions (8-hex IDs are short).
 const jobWorkingDirs = new Map();
-const PROMPT_PERSISTENCE_PRODUCER = { system: 'omc', component: 'prompt-persistence' };
 function ensureJobDb(workingDirectory) {
     if (_dbInitAttempted || isJobDbInitialized())
         return;
@@ -141,12 +139,7 @@ export function persistPrompt(options) {
         const frontmatter = buildPromptFrontmatter(options);
         const content = `${frontmatter}\n\n${options.fullPrompt}`;
         writeFileSync(filePath, content, { encoding: 'utf-8', mode: 0o600 });
-        return {
-            filePath,
-            id,
-            slug,
-            artifact: describePromptArtifact(filePath),
-        };
+        return { filePath, id, slug };
     }
     catch (err) {
         console.warn(`[prompt-persistence] Failed to persist prompt: ${err.message}`);
@@ -174,24 +167,12 @@ export function getExpectedResponsePath(provider, slug, promptId, workingDirecto
  * @param options - The response details to persist
  * @returns The file path, or undefined on failure
  */
-function describePersistedArtifact(path, kind) {
-    return createArtifactDescriptorFromPath(path, {
-        kind,
-        producer: PROMPT_PERSISTENCE_PRODUCER,
-        retention: 'persistent',
-    });
-}
-export function describePromptArtifact(path) {
-    return describePersistedArtifact(path, 'prompt');
-}
-export function describeResponseArtifact(path) {
-    return describePersistedArtifact(path, 'response');
-}
 export function persistResponse(options) {
     try {
         const promptsDir = getPromptsDir(options.workingDirectory);
         mkdirSync(promptsDir, { recursive: true });
-        const filePath = getExpectedResponsePath(options.provider, options.slug, options.promptId, options.workingDirectory);
+        const filename = `${options.provider}-response-${options.slug}-${options.promptId}.md`;
+        const filePath = join(promptsDir, filename);
         const frontmatter = buildResponseFrontmatter(options);
         const content = `${frontmatter}\n\n${options.response}`;
         writeFileSync(filePath, content, { encoding: 'utf-8', mode: 0o600 });
@@ -227,22 +208,13 @@ export function writeJobStatus(status, workingDirectory) {
     try {
         const promptsDir = getPromptsDir(workingDirectory);
         mkdirSync(promptsDir, { recursive: true });
-        const persistedStatus = {
-            ...status,
-            promptArtifact: existsSync(status.promptFile)
-                ? describePromptArtifact(status.promptFile)
-                : status.promptArtifact,
-            responseArtifact: existsSync(status.responseFile)
-                ? describeResponseArtifact(status.responseFile)
-                : status.responseArtifact,
-        };
         const statusPath = getStatusFilePath(status.provider, status.slug, status.jobId, workingDirectory);
         const tempPath = statusPath + '.tmp';
-        writeFileSync(tempPath, JSON.stringify(persistedStatus, null, 2), { encoding: 'utf-8', mode: 0o600 });
+        writeFileSync(tempPath, JSON.stringify(status, null, 2), { encoding: 'utf-8', mode: 0o600 });
         renameOverwritingSync(tempPath, statusPath);
         // SQLite write-through: also persist to jobs.db if available
         if (isJobDbInitialized()) {
-            upsertJob(persistedStatus);
+            upsertJob(status);
         }
     }
     catch (err) {

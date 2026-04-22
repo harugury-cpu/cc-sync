@@ -133,7 +133,6 @@ describe('Stage Adapters', () => {
       expect(prompt).toContain('Team Mode');
       expect(prompt).toContain('TeamCreate');
       expect(prompt).toContain(EXECUTION_COMPLETION_SIGNAL);
-      expect(prompt).toContain('short execution summary under 100 words');
     });
 
     it('should generate solo prompt for solo mode', () => {
@@ -144,7 +143,6 @@ describe('Stage Adapters', () => {
       });
       expect(prompt).toContain('Solo Mode');
       expect(prompt).toContain(EXECUTION_COMPLETION_SIGNAL);
-      expect(prompt).toContain('short execution summary under 100 words');
     });
   });
 
@@ -168,7 +166,6 @@ describe('Stage Adapters', () => {
       });
       expect(prompt).toContain('50');
       expect(prompt).toContain(RALPH_COMPLETION_SIGNAL);
-      expect(prompt).toContain('concise review summary under 100 words');
     });
   });
 

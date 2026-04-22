@@ -13,7 +13,6 @@ import { execSync } from 'child_process';
 import { existsSync, mkdirSync, realpathSync, readdirSync } from 'fs';
 import { homedir } from 'os';
 import { resolve, normalize, relative, sep, join, isAbsolute, basename, dirname } from 'path';
-import { getClaudeConfigDir } from '../utils/config-dir.js';
 /** Standard .omc subdirectories */
 export const OmcPaths = {
     ROOT: '.omc',
@@ -30,7 +29,6 @@ export const OmcPaths = {
     AUTOPILOT: '.omc/autopilot',
     SKILLS: '.omc/skills',
     SHARED_MEMORY: '.omc/state/shared-memory',
-    DEEPINIT_MANIFEST: '.omc/deepinit-manifest.json',
 };
 /**
  * LRU cache for worktree root lookups to avoid repeated git subprocess calls.
@@ -132,38 +130,8 @@ export function getProjectIdentifier(worktreeRoot) {
         // No git remote (local-only repo or not a git repo) — use path
         source = root;
     }
-    // For linked worktrees (created via `git worktree add`), resolve to the
-    // primary repository root so all worktrees of the same repo produce the
-    // same project identifier. Without this, sibling worktrees like
-    // `repo.feature-x/` and `repo.feature-y/` would create separate state
-    // directories despite sharing the same remote URL hash.
-    let primaryRoot = root;
-    try {
-        const commonDir = execSync('git rev-parse --path-format=absolute --git-common-dir', {
-            cwd: root,
-            encoding: 'utf-8',
-            stdio: ['pipe', 'pipe', 'pipe'],
-            timeout: 5000,
-        }).trim();
-        // Only resolve when --git-common-dir points to a .git directory.
-        // - Linked worktrees: returns <primary>/.git → dirname gives primary root ✓
-        // - Submodules: returns <super>/.git/modules/<name> → skip (wrong parent)
-        // - Bare repos: returns the repo root itself (no .git suffix) → skip
-        //   (dirname would go up to the parent folder, colliding sibling repos)
-        const isGitDir = basename(commonDir) === '.git';
-        const isSubmodule = commonDir.includes(`${sep}.git${sep}modules`);
-        if (isGitDir && !isSubmodule) {
-            const resolved = dirname(commonDir);
-            if (resolved && resolved !== root) {
-                primaryRoot = resolved;
-            }
-        }
-    }
-    catch {
-        // Not a git repo or command failed — fall back to worktree root
-    }
     const hash = createHash('sha256').update(source).digest('hex').slice(0, 16);
-    const dirName = basename(primaryRoot).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const dirName = basename(root).replace(/[^a-zA-Z0-9_-]/g, '_');
     return `${dirName}-${hash}`;
 }
 /**
@@ -241,15 +209,7 @@ export function resolveStatePath(stateName, worktreeRoot) {
 export function ensureOmcDir(relativePath, worktreeRoot) {
     const fullPath = resolveOmcPath(relativePath, worktreeRoot);
     if (!existsSync(fullPath)) {
-        try {
-            mkdirSync(fullPath, { recursive: true });
-        }
-        catch (err) {
-            // On Windows, concurrent hooks can race past the existsSync check and
-            // throw EEXIST. Safe to ignore — see atomic-write.ts:ensureDirSync.
-            if (err.code !== "EEXIST")
-                throw err;
-        }
+        mkdirSync(fullPath, { recursive: true });
     }
     return fullPath;
 }
@@ -316,15 +276,7 @@ export function ensureAllOmcDirs(worktreeRoot) {
     for (const subdir of subdirs) {
         const fullPath = subdir ? join(omcRoot, subdir) : omcRoot;
         if (!existsSync(fullPath)) {
-            try {
-                mkdirSync(fullPath, { recursive: true });
-            }
-            catch (err) {
-                // On Windows, concurrent hooks can race past the existsSync check and
-                // throw EEXIST. Safe to ignore — see atomic-write.ts:ensureDirSync.
-                if (err.code !== "EEXIST")
-                    throw err;
-            }
+            mkdirSync(fullPath, { recursive: true });
         }
     }
 }
@@ -421,17 +373,14 @@ export function isValidTranscriptPath(transcriptPath) {
     // Normalize and check it's within allowed directories
     const normalized = normalize(expandedPath);
     const home = homedir();
-    // Allowed: [$CLAUDE_CONFIG_DIR|~/.claude], ~/.omc/..., /tmp/...
+    // Allowed: ~/.claude/..., ~/.omc/..., /tmp/...
     const allowedPrefixes = [
-        getClaudeConfigDir(),
+        join(home, '.claude'),
         join(home, '.omc'),
         '/tmp',
         '/var/folders', // macOS temp
     ];
-    return allowedPrefixes.some((prefix) => {
-        const rel = relative(prefix, normalized);
-        return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
-    });
+    return allowedPrefixes.some(prefix => normalized.startsWith(prefix));
 }
 /**
  * Resolve a session-scoped state file path.
@@ -490,15 +439,7 @@ export function listSessionIds(worktreeRoot) {
 export function ensureSessionStateDir(sessionId, worktreeRoot) {
     const sessionDir = getSessionStateDir(sessionId, worktreeRoot);
     if (!existsSync(sessionDir)) {
-        try {
-            mkdirSync(sessionDir, { recursive: true });
-        }
-        catch (err) {
-            // On Windows, concurrent hooks can race past the existsSync check and
-            // throw EEXIST. Safe to ignore — see atomic-write.ts:ensureDirSync.
-            if (err.code !== "EEXIST")
-                throw err;
-        }
+        mkdirSync(sessionDir, { recursive: true });
     }
     return sessionDir;
 }
@@ -540,7 +481,7 @@ export function resolveToWorktreeRoot(directory) {
  * But the actual transcript lives at the original project's path:
  *   ~/.claude/projects/-path-to-project/<session>.jsonl
  *
- * Claude Code encodes `/` and `.` as `-`. The `.claude/worktrees/`
+ * Claude Code encodes `/` as `-` (dots are preserved). The `.claude/worktrees/`
  * segment becomes `-claude-worktrees-`, preceded by a `-` from the path
  * separator, yielding the distinctive `--claude-worktrees-` pattern in the
  * encoded directory name.
@@ -582,11 +523,12 @@ export function resolveTranscriptPath(transcriptPath, cwd) {
         const sessionFile = lastSep !== -1 ? transcriptPath.substring(lastSep + 1) : '';
         if (sessionFile) {
             // The projects directory is under the Claude config dir
-            const projectsDir = join(getClaudeConfigDir(), 'projects');
+            const configDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
+            const projectsDir = join(configDir, 'projects');
             if (existsSync(projectsDir)) {
                 // Encode the main project root the same way Claude Code does:
                 // replace path separators with `-`, replace dots with `-`.
-                const encodedMain = mainProjectRoot.replace(/[/\\.]/g, '-');
+                const encodedMain = mainProjectRoot.replace(/[/\\]/g, '-');
                 const resolvedPath = join(projectsDir, encodedMain, sessionFile);
                 if (existsSync(resolvedPath))
                     return resolvedPath;
@@ -605,18 +547,7 @@ export function resolveTranscriptPath(transcriptPath, cwd) {
             stdio: ['pipe', 'pipe', 'pipe'],
         }).trim();
         const absoluteCommonDir = resolve(effectiveCwd, gitCommonDir);
-        // For linked worktrees, git-common-dir is <repo>/.git/worktrees/<name>
-        // so dirname gives <repo>/.git/worktrees — navigate up to the actual repo root
-        let mainRepoRoot = dirname(absoluteCommonDir);
-        if (mainRepoRoot.endsWith(join('.git', 'worktrees'))) {
-            mainRepoRoot = dirname(dirname(mainRepoRoot));
-        }
-        // Resolve symlinks for consistent comparison (e.g. /tmp -> /private/tmp on macOS,
-        // ecryptfs $HOME on Linux, autofs /home, etc.)
-        try {
-            mainRepoRoot = realpathSync(mainRepoRoot);
-        }
-        catch { /* keep as-is */ }
+        const mainRepoRoot = dirname(absoluteCommonDir);
         const worktreeTop = execSync('git rev-parse --show-toplevel', {
             cwd: effectiveCwd,
             encoding: 'utf-8',
@@ -626,9 +557,10 @@ export function resolveTranscriptPath(transcriptPath, cwd) {
             const lastSep = transcriptPath.lastIndexOf('/');
             const sessionFile = lastSep !== -1 ? transcriptPath.substring(lastSep + 1) : '';
             if (sessionFile) {
-                const projectsDir = join(getClaudeConfigDir(), 'projects');
+                const configDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
+                const projectsDir = join(configDir, 'projects');
                 if (existsSync(projectsDir)) {
-                    const encodedMain = mainRepoRoot.replace(/[/\\.]/g, '-');
+                    const encodedMain = mainRepoRoot.replace(/[/\\]/g, '-');
                     const resolvedPath = join(projectsDir, encodedMain, sessionFile);
                     if (existsSync(resolvedPath))
                         return resolvedPath;

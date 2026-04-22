@@ -9,7 +9,6 @@ import { readFileSync, mkdirSync, readdirSync, statSync, unlinkSync } from "fs";
 import { dirname, join, basename } from "path";
 import { BOULDER_DIR, BOULDER_FILE, PLANNER_PLANS_DIR, PLAN_EXTENSION, } from "./constants.js";
 import { atomicWriteSync } from "../../lib/atomic-write.js";
-import { withFileLockSync } from "../../lib/file-lock.js";
 /**
  * Get the full path to the boulder state file
  */
@@ -29,7 +28,7 @@ export function readBoulderState(directory) {
         if (error.code === "ENOENT") {
             return null;
         }
-        throw error;
+        return null;
     }
 }
 /**
@@ -51,20 +50,16 @@ export function writeBoulderState(directory, state) {
  * Append a session ID to the boulder state
  */
 export function appendSessionId(directory, sessionId) {
-    const filePath = getBoulderFilePath(directory);
-    const lockPath = filePath + '.lock';
-    return withFileLockSync(lockPath, () => {
-        const state = readBoulderState(directory);
-        if (!state)
-            return null;
-        if (!state.session_ids.includes(sessionId)) {
-            state.session_ids.push(sessionId);
-            if (writeBoulderState(directory, state)) {
-                return state;
-            }
+    const state = readBoulderState(directory);
+    if (!state)
+        return null;
+    if (!state.session_ids.includes(sessionId)) {
+        state.session_ids.push(sessionId);
+        if (writeBoulderState(directory, state)) {
+            return state;
         }
-        return state;
-    });
+    }
+    return state;
 }
 /**
  * Clear boulder state (delete the file)

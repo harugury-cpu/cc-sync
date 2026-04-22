@@ -8,12 +8,11 @@
  * Branch naming: omc-team/{teamName}/{workerName}
  */
 
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { atomicWriteJson, ensureDirWithMode, validateResolvedPath } from './fs-utils.js';
 import { sanitizeName } from './tmux-session.js';
-import { withFileLockSync } from '../lib/file-lock.js';
 
 export interface WorktreeInfo {
   path: string;
@@ -33,26 +32,6 @@ function getBranchName(teamName: string, workerName: string): string {
   return `omc-team/${sanitizeName(teamName)}/${sanitizeName(workerName)}`;
 }
 
-function isRegisteredWorktreePath(repoRoot: string, wtPath: string): boolean {
-  try {
-    const output = execFileSync('git', ['worktree', 'list', '--porcelain'], {
-      cwd: repoRoot,
-      encoding: 'utf-8',
-      stdio: 'pipe',
-    });
-    const resolvedWtPath = wtPath.trim();
-    for (const line of output.split('\n')) {
-      if (!line.startsWith('worktree ')) continue;
-      if (line.slice('worktree '.length).trim() === resolvedWtPath) {
-        return true;
-      }
-    }
-  } catch {
-    // Best-effort check only.
-  }
-  return false;
-}
-
 /** Get worktree metadata path */
 function getMetadataPath(repoRoot: string, teamName: string): string {
   return join(repoRoot, '.omc', 'state', 'team-bridge', sanitizeName(teamName), 'worktrees.json');
@@ -64,10 +43,7 @@ function readMetadata(repoRoot: string, teamName: string): WorktreeInfo[] {
   if (!existsSync(metaPath)) return [];
   try {
     return JSON.parse(readFileSync(metaPath, 'utf-8'));
-  } catch (err) {
-    // Log corruption instead of silently returning empty (which would lose all entries)
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`[omc] warning: worktrees.json parse error: ${msg}\n`);
+  } catch {
     return [];
   }
 }
@@ -106,15 +82,7 @@ export function createWorkerWorktree(
   if (existsSync(wtPath)) {
     try {
       execFileSync('git', ['worktree', 'remove', '--force', wtPath], { cwd: repoRoot, stdio: 'pipe' });
-    } catch {
-      if (isRegisteredWorktreePath(repoRoot, wtPath)) {
-        throw new Error(
-          `Stale worktree still registered at ${wtPath}. ` +
-          `Run \`git worktree prune\` or remove it manually before retrying.`,
-        );
-      }
-      rmSync(wtPath, { recursive: true, force: true });
-    }
+    } catch { /* ignore */ }
   }
 
   // Delete stale branch if it exists
@@ -139,14 +107,11 @@ export function createWorkerWorktree(
     createdAt: new Date().toISOString(),
   };
 
-  // Update metadata (locked to prevent concurrent read-modify-write races)
-  const metaLockPath = getMetadataPath(repoRoot, teamName) + '.lock';
-  withFileLockSync(metaLockPath, () => {
-    const existing = readMetadata(repoRoot, teamName);
-    const updated = existing.filter(e => e.workerName !== workerName);
-    updated.push(info);
-    writeMetadata(repoRoot, teamName, updated);
-  });
+  // Update metadata
+  const existing = readMetadata(repoRoot, teamName);
+  const updated = existing.filter(e => e.workerName !== workerName);
+  updated.push(info);
+  writeMetadata(repoRoot, teamName, updated);
 
   return info;
 }
@@ -177,13 +142,10 @@ export function removeWorkerWorktree(
     execFileSync('git', ['branch', '-D', branch], { cwd: repoRoot, stdio: 'pipe' });
   } catch { /* branch may not exist */ }
 
-  // Update metadata (locked to prevent concurrent read-modify-write races)
-  const metaLockPath = getMetadataPath(repoRoot, teamName) + '.lock';
-  withFileLockSync(metaLockPath, () => {
-    const existing = readMetadata(repoRoot, teamName);
-    const updated = existing.filter(e => e.workerName !== workerName);
-    writeMetadata(repoRoot, teamName, updated);
-  });
+  // Update metadata
+  const existing = readMetadata(repoRoot, teamName);
+  const updated = existing.filter(e => e.workerName !== workerName);
+  writeMetadata(repoRoot, teamName, updated);
 }
 
 /**

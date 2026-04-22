@@ -20,8 +20,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, readdirSync, renameSync } from 'fs';
 import { join } from 'path';
 import { getOmcRoot } from './worktree-paths.js';
-import { withFileLockSync } from './file-lock.js';
-import { getClaudeConfigDir } from '../utils/config-dir.js';
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
@@ -29,14 +27,13 @@ const CONFIG_FILE_NAME = '.omc-config.json';
 /**
  * Check if shared memory is enabled via config.
  *
- * Reads `agents.sharedMemory.enabled` from
- * `[$CLAUDE_CONFIG_DIR|~/.claude]/.omc-config.json`.
+ * Reads `agents.sharedMemory.enabled` from ~/.claude/.omc-config.json.
  * Defaults to true when the config key is absent (opt-out rather than opt-in
  * once the feature ships, but tools check this gate).
  */
 export function isSharedMemoryEnabled() {
     try {
-        const configPath = join(getClaudeConfigDir(), CONFIG_FILE_NAME);
+        const configPath = join(process.env.HOME || process.env.USERPROFILE || '', '.claude', CONFIG_FILE_NAME);
         if (!existsSync(configPath))
             return true; // default enabled
         const raw = JSON.parse(readFileSync(configPath, 'utf-8'));
@@ -116,49 +113,31 @@ export function writeEntry(namespace, key, value, ttl, worktreeRoot) {
     ensureNamespaceDir(namespace, worktreeRoot);
     const filePath = getEntryPath(namespace, key, worktreeRoot);
     const now = new Date().toISOString();
-    // Lock the read-modify-write to prevent concurrent writers from losing updates
-    const lockPath = filePath + '.lock';
-    const doWrite = () => {
-        let existingCreatedAt = now;
-        if (existsSync(filePath)) {
-            try {
-                const existing = JSON.parse(readFileSync(filePath, 'utf-8'));
-                existingCreatedAt = existing.createdAt || now;
-            }
-            catch {
-                // Corrupted file, treat as new
-            }
-        }
-        const entry = {
-            key,
-            value,
-            namespace,
-            createdAt: existingCreatedAt,
-            updatedAt: now,
-        };
-        if (ttl && ttl > 0) {
-            entry.ttl = ttl;
-            entry.expiresAt = new Date(Date.now() + ttl * 1000).toISOString();
-        }
-        const tmpPath = `${filePath}.tmp.${process.pid}.${Date.now()}`;
-        writeFileSync(tmpPath, JSON.stringify(entry, null, 2), 'utf-8');
-        renameSync(tmpPath, filePath);
-        // Clean up legacy .tmp file (old constant-suffix scheme) if it exists
+    let existingCreatedAt = now;
+    if (existsSync(filePath)) {
         try {
-            const legacyTmp = filePath + '.tmp';
-            if (existsSync(legacyTmp))
-                unlinkSync(legacyTmp);
+            const existing = JSON.parse(readFileSync(filePath, 'utf-8'));
+            existingCreatedAt = existing.createdAt || now;
         }
-        catch { /* best-effort cleanup */ }
-        return entry;
+        catch {
+            // Corrupted file, treat as new
+        }
+    }
+    const entry = {
+        key,
+        value,
+        namespace,
+        createdAt: existingCreatedAt,
+        updatedAt: now,
     };
-    // Try with lock; fall back to unlocked if lock fails (best-effort)
-    try {
-        return withFileLockSync(lockPath, doWrite, { timeoutMs: 500, retryDelayMs: 25 });
+    if (ttl && ttl > 0) {
+        entry.ttl = ttl;
+        entry.expiresAt = new Date(Date.now() + ttl * 1000).toISOString();
     }
-    catch {
-        return doWrite();
-    }
+    const tmpPath = filePath + '.tmp';
+    writeFileSync(tmpPath, JSON.stringify(entry, null, 2), 'utf-8');
+    renameSync(tmpPath, filePath);
+    return entry;
 }
 /**
  * Read a key from shared memory.

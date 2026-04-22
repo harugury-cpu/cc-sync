@@ -7,7 +7,7 @@
 
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
-import { getClaudeConfigDir } from "../utils/config-dir.js";
+import { getClaudeConfigDir } from "../utils/paths.js";
 import type {
   NotificationConfig,
   NotificationEvent,
@@ -25,8 +25,6 @@ import {
 } from "./hook-config.js";
 
 const CONFIG_FILE = join(getClaudeConfigDir(), ".omc-config.json");
-const DEFAULT_TMUX_TAIL_LINES = 15;
-
 
 /**
  * Read raw config from .omc-config.json
@@ -437,26 +435,6 @@ export function getVerbosity(config: NotificationConfig): VerbosityLevel {
 }
 
 /**
- * Get the effective tmux tail line count.
- *
- * Priority: OMC_NOTIFY_TMUX_TAIL_LINES env var > config.tmuxTailLines > 15 default.
- * Invalid values are ignored (fall back to config or default).
- */
-export function getTmuxTailLines(config: NotificationConfig): number {
-  const envValue = Number.parseInt(process.env.OMC_NOTIFY_TMUX_TAIL_LINES ?? "", 10);
-  if (Number.isInteger(envValue) && envValue >= 1) {
-    return envValue;
-  }
-
-  const configValue = config.tmuxTailLines;
-  if (typeof configValue === "number" && Number.isInteger(configValue) && configValue >= 1) {
-    return configValue;
-  }
-
-  return DEFAULT_TMUX_TAIL_LINES;
-}
-
-/**
  * Check if an event is allowed by the given verbosity level.
  *
  * Level matrix:
@@ -768,34 +746,6 @@ export function getReplyListenerPlatformConfig(
 }
 
 /**
- * Parse Slack user IDs from environment variable or config array.
- * Slack user IDs match pattern U or W followed by alphanumeric chars (e.g. U12345678, W0123ABCDE).
- * Returns empty array if neither is valid.
- */
-function parseSlackUserIds(
-  envValue: string | undefined,
-  configValue: unknown,
-): string[] {
-  // Try env var first (comma-separated list)
-  if (envValue) {
-    const ids = envValue
-      .split(",")
-      .map((id) => id.trim())
-      .filter((id) => /^[UW][A-Z0-9]{8,11}$/.test(id));
-    if (ids.length > 0) return ids;
-  }
-
-  // Try config array
-  if (Array.isArray(configValue)) {
-    const ids = configValue
-      .filter((id) => typeof id === "string" && /^[UW][A-Z0-9]{8,11}$/.test(id));
-    if (ids.length > 0) return ids;
-  }
-
-  return [];
-}
-
-/**
  * Parse Discord user IDs from environment variable or config array.
  * Returns empty array if neither is valid.
  */
@@ -820,13 +770,6 @@ function parseDiscordUserIds(
   }
 
   return [];
-}
-
-/** Parse an integer from a string, returning undefined for invalid/empty input. */
-function parseIntSafe(value: string | undefined): number | undefined {
-  if (value == null || value === "") return undefined;
-  const parsed = parseInt(value, 10);
-  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 /**
@@ -887,19 +830,13 @@ export function getReplyConfig(): import("./types.js").ReplyConfig | null {
     );
   }
 
-  const authorizedSlackUserIds = parseSlackUserIds(
-    process.env.OMC_REPLY_SLACK_USER_IDS,
-    replyRaw?.authorizedSlackUserIds,
-  );
-
   return {
     enabled: true,
-    pollIntervalMs: parseIntSafe(process.env.OMC_REPLY_POLL_INTERVAL_MS) ?? replyRaw?.pollIntervalMs ?? 3000,
-    maxMessageLength: replyRaw?.maxMessageLength ?? 500,
-    rateLimitPerMinute: parseIntSafe(process.env.OMC_REPLY_RATE_LIMIT) ?? replyRaw?.rateLimitPerMinute ?? 10,
+    pollIntervalMs: parseInt(process.env.OMC_REPLY_POLL_INTERVAL_MS || "") || replyRaw?.pollIntervalMs || 3000,
+    maxMessageLength: replyRaw?.maxMessageLength || 500,
+    rateLimitPerMinute: parseInt(process.env.OMC_REPLY_RATE_LIMIT || "") || replyRaw?.rateLimitPerMinute || 10,
     includePrefix: process.env.OMC_REPLY_INCLUDE_PREFIX !== "false" && (replyRaw?.includePrefix !== false),
     authorizedDiscordUserIds,
-    authorizedSlackUserIds,
   };
 }
 
@@ -910,6 +847,7 @@ export function getReplyConfig(): import("./types.js").ReplyConfig | null {
 import type {
   CustomIntegration,
   CustomIntegrationsConfig,
+  ExtendedNotificationConfig,
 } from "./types.js";
 import { validateCustomIntegration, checkDuplicateIds } from "./validation.js";
 

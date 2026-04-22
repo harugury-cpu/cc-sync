@@ -4,13 +4,12 @@
 // Cross-platform: Windows, macOS, Linux
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { join, dirname, normalize, resolve } from 'path';
+import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { fileURLToPath, pathToFileURL } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const { getClaudeConfigDir } = await import(pathToFileURL(join(__dirname, 'lib', 'config-dir.mjs')).href);
 
 // Import timeout-protected stdin reader (prevents hangs on Linux/Windows, see issue #240, #524)
 let readStdin;
@@ -66,12 +65,14 @@ async function checkForUpdates(currentVersion) {
   }
 
   // Fetch latest version from npm
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 2000);
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+
     const response = await fetch('https://registry.npmjs.org/oh-my-claude-sisyphus/latest', {
       signal: controller.signal
     });
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error('Network response was not ok');
@@ -95,12 +96,12 @@ async function checkForUpdates(currentVersion) {
   } catch (error) {
     // Silent fail - network unavailable or timeout
     return null;
-  } finally { clearTimeout(timeoutId); }
+  }
 }
 
 function compareVersions(v1, v2) {
-  const parts1 = v1.replace(/^v/, '').split('.').map(p => parseInt(p, 10) || 0);
-  const parts2 = v2.replace(/^v/, '').split('.').map(p => parseInt(p, 10) || 0);
+  const parts1 = v1.replace(/^v/, '').split('.').map(Number);
+  const parts2 = v2.replace(/^v/, '').split('.').map(Number);
 
   for (let i = 0; i < 3; i++) {
     const diff = (parts1[i] || 0) - (parts2[i] || 0);
@@ -144,8 +145,7 @@ function readNotepad(directory) {
  */
 function extractSection(content, header) {
   // Match from header to next section (## followed by space and non-# char)
-  const escaped = header.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const regex = new RegExp(`${escaped}\\n([\\s\\S]*?)(?=\\n## [^#]|$)`);
+  const regex = new RegExp(`${header}\\n([\\s\\S]*?)(?=\\n## [^#]|$)`);
   const match = content.match(regex);
   if (!match) {
     return null;
@@ -184,92 +184,6 @@ ${priorityContext}
 </notepad-priority>`;
 }
 
-const STALE_STATE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 hours
-
-function normalizePath(p) {
-  if (!p || typeof p !== 'string') return '';
-  let normalized = resolve(p);
-  normalized = normalize(normalized).replace(/[\/\\]+$/, '');
-  if (process.platform === 'win32') {
-    normalized = normalized.toLowerCase();
-  }
-  return normalized;
-}
-
-function getStateRecencyMs(state) {
-  if (!state || typeof state !== 'object') return 0;
-  const startedAt = state.started_at ? new Date(state.started_at).getTime() : 0;
-  const lastCheckedAt = state.last_checked_at ? new Date(state.last_checked_at).getTime() : 0;
-  return Math.max(startedAt || 0, lastCheckedAt || 0);
-}
-
-function isFreshActiveState(state) {
-  if (!state?.active) return false;
-  const recencyMs = getStateRecencyMs(state);
-  if (!Number.isFinite(recencyMs) || recencyMs <= 0) return false;
-  return (Date.now() - recencyMs) <= STALE_STATE_THRESHOLD_MS;
-}
-
-function hasConflictingUltraworkRestore(state, sessionId, directory, source) {
-  if (!sessionId || !isFreshActiveState(state)) return false;
-  if (typeof state.session_id !== 'string' || !state.session_id || state.session_id === sessionId) {
-    return false;
-  }
-
-  if (source === 'global') {
-    if (typeof state.project_path !== 'string' || !state.project_path) {
-      return false;
-    }
-    return normalizePath(state.project_path) === normalizePath(directory);
-  }
-
-  return true;
-}
-
-function getUltraworkRestoreCandidate(directory, sessionId) {
-  const localPath = join(directory, '.omc', 'state', 'ultrawork-state.json');
-  const globalPath = join(homedir(), '.omc', 'state', 'ultrawork-state.json');
-
-  const localState = readJsonFile(localPath);
-  if (hasConflictingUltraworkRestore(localState, sessionId, directory, 'local')) {
-    return { restore: null, collision: { source: 'local', state: localState } };
-  }
-  if (localState?.active && (!localState.session_id || localState.session_id === sessionId)) {
-    return { restore: localState, collision: null };
-  }
-
-  const globalState = readJsonFile(globalPath);
-  if (hasConflictingUltraworkRestore(globalState, sessionId, directory, 'global')) {
-    return { restore: null, collision: { source: 'global', state: globalState } };
-  }
-  if (globalState?.active && (!globalState.session_id || globalState.session_id === sessionId)) {
-    return { restore: globalState, collision: null };
-  }
-
-  return { restore: null, collision: null };
-}
-
-function formatUltraworkCollisionWarning(source, state) {
-  const startedAt = state?.started_at || 'an unknown time';
-  const ownerSession = state?.session_id || 'another session';
-  const scope = source === 'global' ? 'matching project path in the shared global fallback state' : 'this repo root';
-  return `<session-restore>
-
-[PARALLEL SESSION WARNING]
-
-Detected an active ultrawork session for ${scope}.
-Owner session: ${ownerSession}
-Started: ${startedAt}
-
-To avoid shared \.omc/state bleed across parallel sessions, OMC suppressed the restore for this session.
-Continue normally in this session, or use a separate worktree / close the other same-root session before resuming the prior ultrawork state.
-
-</session-restore>
-
----
-`;
-}
-
 async function main() {
   try {
     const input = await readStdin();
@@ -286,7 +200,7 @@ async function main() {
     for (let i = 1; i <= 4; i++) {
       const candidate = join(__dirname, ...Array(i).fill('..'), 'package.json');
       const pkg = readJsonFile(candidate);
-      if ((pkg?.name === 'oh-my-claude-sisyphus' || pkg?.name === 'oh-my-claudecode') && pkg?.version) {
+      if (pkg?.name === 'oh-my-claudecode' && pkg?.version) {
         currentVersion = pkg.version;
         break;
       }
@@ -295,7 +209,7 @@ async function main() {
     const updateInfo = currentVersion ? await checkForUpdates(currentVersion) : null;
     if (updateInfo) {
       // Read config to check autoUpgradePrompt preference
-      const configPath = join(getClaudeConfigDir(), '.omc-config.json');
+      const configPath = join(homedir(), '.claude', '.omc-config.json');
       const omcConfig = readJsonFile(configPath) || {};
       const autoUpgradePrompt = omcConfig.autoUpgradePrompt !== false; // default: true
 
@@ -309,7 +223,7 @@ oh-my-claudecode v${updateInfo.latestVersion} is available (current: v${updateIn
 ACTION: Use AskUserQuestion to ask the user if they want to upgrade now. Offer these options:
 - "Upgrade now" (Recommended): Run \`npm install -g oh-my-claude-sisyphus@latest\` via Bash, then run \`omc install --force --skip-claude-check --refresh-hooks\` to reconcile hooks and CLAUDE.md
 - "Skip this time": Continue the session without upgrading
-- "Don't ask again": Tell the user to set "autoUpgradePrompt": false in [$CLAUDE_CONFIG_DIR|~/.claude]/.omc-config.json to disable future prompts
+- "Don't ask again": Tell the user to set "autoUpgradePrompt": false in ~/.claude/.omc-config.json to disable future prompts
 
 Keep the prompt brief. If the user accepts, execute the upgrade commands and report the result.
 
@@ -333,17 +247,11 @@ To update, run: omc update
       }
     }
 
-    // Check for ultrawork state - warn on conflicting same-path session, otherwise restore.
-    const ultraworkCandidate = getUltraworkRestoreCandidate(directory, sessionId);
-    if (ultraworkCandidate.collision) {
-      messages.push(
-        formatUltraworkCollisionWarning(
-          ultraworkCandidate.collision.source,
-          ultraworkCandidate.collision.state,
-        ),
-      );
-    } else if (ultraworkCandidate.restore) {
-      const ultraworkState = ultraworkCandidate.restore;
+    // Check for ultrawork state - only restore if session matches (issue #311)
+    const ultraworkState = readJsonFile(join(directory, '.omc', 'state', 'ultrawork-state.json'))
+      || readJsonFile(join(homedir(), '.omc', 'state', 'ultrawork-state.json'));
+
+    if (ultraworkState?.active && (!ultraworkState.session_id || ultraworkState.session_id === sessionId)) {
       messages.push(`<session-restore>
 
 [ULTRAWORK MODE RESTORED]
@@ -359,10 +267,8 @@ Continue working in ultrawork mode until all tasks are complete.
 `);
     }
 
-    // Check for incomplete todos (project-local only, not global
-    // [$CLAUDE_CONFIG_DIR|~/.claude]/todos/)
-    // NOTE: We intentionally do NOT scan the global
-    // [$CLAUDE_CONFIG_DIR|~/.claude]/todos/ directory.
+    // Check for incomplete todos (project-local only, not global ~/.claude/todos/)
+    // NOTE: We intentionally do NOT scan the global ~/.claude/todos/ directory.
     // That directory accumulates todo files from ALL past sessions across all
     // projects, causing phantom task counts in fresh sessions (see issue #354).
     const localTodoPaths = [

@@ -1,20 +1,14 @@
-import { resolveAutopilotPlanPath, resolveOpenQuestionsPlanPath, } from "../../config/plan-output.js";
-function resolvePromptPlanPath(planPathOrConfig) {
-    return typeof planPathOrConfig === "string"
-        ? planPathOrConfig
-        : resolveAutopilotPlanPath(planPathOrConfig);
-}
-function resolvePromptOpenQuestionsPath(openQuestionsPathOrConfig) {
-    return typeof openQuestionsPathOrConfig === "string"
-        ? openQuestionsPathOrConfig
-        : resolveOpenQuestionsPlanPath(openQuestionsPathOrConfig);
-}
+/**
+ * Autopilot Prompt Generation
+ *
+ * Generates phase-specific prompts that include Task tool invocations
+ * for Claude to execute. This is the core of the agent invocation mechanism.
+ */
 /**
  * Generate the expansion phase prompt (Phase 0)
  * Analyst extracts requirements, Architect creates technical spec
  */
-export function getExpansionPrompt(idea, openQuestionsPathOrConfig) {
-    const openQuestionsPath = resolvePromptOpenQuestionsPath(openQuestionsPathOrConfig);
+export function getExpansionPrompt(idea) {
     return `## AUTOPILOT PHASE 0: IDEA EXPANSION
 
 Your task: Expand this product idea into detailed requirements and technical spec.
@@ -64,7 +58,7 @@ Output as structured markdown."
 
 ### Step 2.5: Persist Open Questions
 
-If the Analyst output includes a \`### Open Questions\` section, extract those items and save them to \`${openQuestionsPath}\` using the standard format:
+If the Analyst output includes a \`### Open Questions\` section, extract those items and save them to \`.omc/plans/open-questions.md\` using the standard format:
 
 \`\`\`
 ## [Topic] - [Date]
@@ -87,8 +81,7 @@ When the spec is saved, signal: EXPANSION_COMPLETE
  * Generate the direct planning prompt (Phase 1)
  * Uses Architect instead of Planner to create plan directly from spec
  */
-export function getDirectPlanningPrompt(specPath, planPathOrConfig) {
-    const planPath = resolvePromptPlanPath(planPathOrConfig);
+export function getDirectPlanningPrompt(specPath) {
     return `## AUTOPILOT PHASE 1: DIRECT PLANNING
 
 The spec is complete from Phase 0. Create implementation plan directly (no interview needed).
@@ -129,7 +122,7 @@ Generate a comprehensive implementation plan with:
    - Identified risks
    - Mitigation strategies
 
-Save to: ${planPath}
+Save to: .omc/plans/autopilot-impl.md
 
 Signal completion with: PLAN_CREATED"
 )
@@ -145,7 +138,7 @@ Task(
   model="opus",
   prompt="REVIEW IMPLEMENTATION PLAN
 
-Plan file: ${planPath}
+Plan file: .omc/plans/autopilot-impl.md
 Original spec: ${specPath}
 
 Verify:
@@ -185,7 +178,6 @@ Ralph and Ultrawork are now active. Execute tasks in parallel where possible.
 - Spawn multiple executor agents for parallel work
 - Track progress in the TODO list
 - Use appropriate agent tiers based on task complexity
-- Every spawned agent must return ONLY a concise execution summary under 100 words covering: what changed, files touched, verification status, and blockers. Do not paste long logs inline; write bulky output to files/artifacts and reference them briefly.
 
 ### Agent Spawning Pattern
 
@@ -256,7 +248,7 @@ Task(
 2. **Fix** - Apply the fix
 \`\`\`
 Task(
-  subagent_type="oh-my-claudecode:debugger",
+  subagent_type="oh-my-claudecode:build-fixer",
   model="sonnet",
   prompt="Fix this error with minimal changes: [ERROR]"
 )
@@ -285,8 +277,6 @@ Spawn parallel validation architects for comprehensive review.
 ### Parallel Validation Spawns
 
 Spawn all three architects in parallel:
-
-Each reviewer must return ONLY a concise review summary under 100 words with verdict, evidence highlights, files checked, and blockers. Do not paste long transcripts or logs into the main session.
 
 \`\`\`
 // Functional Completeness Review
@@ -361,28 +351,28 @@ When all approve: AUTOPILOT_COMPLETE
  */
 function escapeForPrompt(text) {
     return text
-        .replace(/\\/g, "\\\\")
+        .replace(/\\/g, '\\\\')
         .replace(/"/g, '\\"')
-        .replace(/`/g, "\\`")
-        .replace(/\$/g, "\\$");
+        .replace(/`/g, '\\`')
+        .replace(/\$/g, '\\$');
 }
 /**
  * Get the prompt for the current phase
  */
 export function getPhasePrompt(phase, context) {
     switch (phase) {
-        case "expansion":
-            return getExpansionPrompt(context.idea || "", context.openQuestionsPath || resolveOpenQuestionsPlanPath());
-        case "planning":
-            return getDirectPlanningPrompt(context.specPath || ".omc/autopilot/spec.md", context.planPath || resolveAutopilotPlanPath());
-        case "execution":
-            return getExecutionPrompt(context.planPath || resolveAutopilotPlanPath());
-        case "qa":
+        case 'expansion':
+            return getExpansionPrompt(context.idea || '');
+        case 'planning':
+            return getDirectPlanningPrompt(context.specPath || '.omc/autopilot/spec.md');
+        case 'execution':
+            return getExecutionPrompt(context.planPath || '.omc/plans/autopilot-impl.md');
+        case 'qa':
             return getQAPrompt();
-        case "validation":
-            return getValidationPrompt(context.specPath || ".omc/autopilot/spec.md");
+        case 'validation':
+            return getValidationPrompt(context.specPath || '.omc/autopilot/spec.md');
         default:
-            return "";
+            return '';
     }
 }
 //# sourceMappingURL=prompts.js.map

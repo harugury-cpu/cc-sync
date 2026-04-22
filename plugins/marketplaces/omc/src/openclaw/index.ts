@@ -17,24 +17,16 @@ export type {
   OpenClawHttpGatewayConfig,
   OpenClawPayload,
   OpenClawResult,
-  OpenClawSignal,
-  OpenClawSignalKind,
-  OpenClawSignalPhase,
-  OpenClawSignalPriority,
 } from "./types.js";
 
 export { getOpenClawConfig, resolveGateway, resetOpenClawConfigCache } from "./config.js";
 export { wakeGateway, wakeCommandGateway, interpolateInstruction, isCommandGateway, shellEscapeArg } from "./dispatcher.js";
-export { buildOpenClawSignal } from "./signal.js";
 
-import type { OpenClawHookEvent, OpenClawContext, OpenClawPayload, OpenClawResult } from "./types.js";
+import type { OpenClawHookEvent, OpenClawContext, OpenClawResult } from "./types.js";
 import { getOpenClawConfig, resolveGateway } from "./config.js";
 import { wakeGateway, wakeCommandGateway, interpolateInstruction, isCommandGateway } from "./dispatcher.js";
-import { buildOpenClawSignal } from "./signal.js";
-import { shouldCollapseOpenClawBurst } from "./dedupe.js";
-import { basename, join } from "path";
+import { basename } from "path";
 import { getCurrentTmuxSession } from "../notifications/tmux.js";
-import { parseTmuxTail } from "../notifications/formatter.js";
 
 /** Whether debug logging is enabled */
 const DEBUG = process.env.OMC_OPENCLAW_DEBUG === "1";
@@ -90,6 +82,20 @@ export async function wakeOpenClaw(
     // Auto-detect tmux session if not provided in context
     const tmuxSession = context.tmuxSession ?? getCurrentTmuxSession() ?? undefined;
 
+    // Auto-capture tmux pane content for stop/session-end events (best-effort)
+    let tmuxTail = context.tmuxTail;
+    if (!tmuxTail && (event === "stop" || event === "session-end") && process.env.TMUX) {
+      try {
+        const { capturePaneContent } = await import("../features/rate-limit-wait/tmux-detector.js");
+        const paneId = process.env.TMUX_PANE;
+        if (paneId) {
+          tmuxTail = capturePaneContent(paneId, 15) ?? undefined;
+        }
+      } catch {
+        // Non-blocking: tmux capture is best-effort
+      }
+    }
+
     // Read reply channel context from environment variables
     const replyChannel = context.replyChannel ?? process.env.OPENCLAW_REPLY_CHANNEL ?? undefined;
     const replyTarget = context.replyTarget ?? process.env.OPENCLAW_REPLY_TARGET ?? undefined;
@@ -102,38 +108,6 @@ export async function wakeOpenClaw(
       ...(replyTarget && { replyTarget }),
       ...(replyThread && { replyThread }),
     };
-
-    const signal = buildOpenClawSignal(event, enrichedContext);
-
-    if (shouldCollapseOpenClawBurst(event, signal, enrichedContext, tmuxSession)) {
-      if (DEBUG) {
-        console.error(`[openclaw] deduped ${event} (${signal.routeKey}) for tmux session ${tmuxSession}`);
-      }
-      return { gateway: gatewayName, success: true, skipped: "deduped" };
-    }
-
-    // Auto-capture tmux pane content for stop/session-end events (best-effort).
-    // Uses delta-only capture to avoid re-alerting on stale pane history from
-    // already-resolved blockers (e.g. old "2 failed" / "exit 127" / "TS5055" lines).
-    let tmuxTail = context.tmuxTail;
-    if (!tmuxTail && (event === "stop" || event === "session-end") && process.env.TMUX) {
-      try {
-        const { getNewPaneTail } = await import("../features/rate-limit-wait/pane-fresh-capture.js");
-        const paneId = process.env.TMUX_PANE;
-        const projectPath = context.projectPath;
-        if (paneId && projectPath) {
-          const stateDir = join(projectPath, ".omc", "state");
-          const fresh = getNewPaneTail(paneId, stateDir, 15);
-          tmuxTail = fresh || undefined;
-        }
-      } catch {
-        // Non-blocking: tmux capture is best-effort
-      }
-    }
-    if (tmuxTail) {
-      const parsedTmuxTail = parseTmuxTail(tmuxTail, 15);
-      tmuxTail = parsedTmuxTail || undefined;
-    }
 
     // Build template variables from whitelisted context fields
     const variables: Record<string, string | undefined> = {
@@ -152,45 +126,33 @@ export async function wakeOpenClaw(
       replyChannel,
       replyTarget,
       replyThread,
-      signalKind: signal.kind,
-      signalName: signal.name,
-      signalPhase: signal.phase,
-      signalRouteKey: signal.routeKey,
-      signalPriority: signal.priority,
-      signalSummary: signal.summary,
-      prUrl: signal.prUrl,
-      testRunner: signal.testRunner,
-      command: signal.command,
     };
 
     // Add interpolated instruction to variables for command gateway {{instruction}} placeholder
     const interpolatedInstruction = interpolateInstruction(instruction, variables);
-
-    const payload: OpenClawPayload = {
-      event,
-      instruction: interpolatedInstruction,
-      timestamp: now,
-      sessionId: context.sessionId,
-      projectPath: context.projectPath,
-      projectName: context.projectPath ? basename(context.projectPath) : undefined,
-      tmuxSession,
-      tmuxTail,
-      ...(replyChannel && { channel: replyChannel }),
-      ...(replyTarget && { to: replyTarget }),
-      ...(replyThread && { threadId: replyThread }),
-      signal,
-      context: buildWhitelistedContext(enrichedContext),
-    };
     variables.instruction = interpolatedInstruction;
-    variables.payloadJson = JSON.stringify(payload);
 
     let result: OpenClawResult;
 
     if (isCommandGateway(gateway)) {
       // Command gateway: execute shell command with shell-escaped variables
-      result = await wakeCommandGateway(gatewayName, gateway, variables, payload);
+      result = await wakeCommandGateway(gatewayName, gateway, variables);
     } else {
       // HTTP gateway: send JSON payload
+      const payload = {
+        event,
+        instruction: interpolatedInstruction,
+        timestamp: now,
+        sessionId: context.sessionId,
+        projectPath: context.projectPath,
+        projectName: context.projectPath ? basename(context.projectPath) : undefined,
+        tmuxSession,
+        tmuxTail,
+        ...(replyChannel && { channel: replyChannel }),
+        ...(replyTarget && { to: replyTarget }),
+        ...(replyThread && { threadId: replyThread }),
+        context: buildWhitelistedContext(enrichedContext),
+      };
       result = await wakeGateway(gatewayName, gateway, payload);
     }
 

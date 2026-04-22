@@ -1,4 +1,4 @@
-import { isAbsolute, join } from 'path';
+import { join } from 'path';
 
 /**
  * Typed path builders for all team state files.
@@ -124,7 +124,7 @@ export const TeamPaths = {
  * Get absolute path for a team state file.
  */
 export function absPath(cwd: string, relativePath: string): string {
-  return isAbsolute(relativePath) ? relativePath : join(cwd, relativePath);
+  return join(cwd, relativePath);
 }
 
 /**

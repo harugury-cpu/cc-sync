@@ -24,7 +24,7 @@
 import { existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { join } from 'node:path';
-import { getClaudeConfigDir } from './lib/config-dir.mjs';
+import { homedir } from 'node:os';
 
 const args = process.argv.slice(2);
 const teamNameIdx = args.indexOf('--team-name');
@@ -71,23 +71,20 @@ function findOrphanProcesses(filterTeam) {
       const output = execSync('ps aux', { encoding: 'utf-8', timeout: 10000 });
 
       for (const line of output.split('\n')) {
-        // Match OMC agent processes with team context (exclude bare 'node' to avoid over-matching)
-        if ((line.includes('claude') || line.includes('codex') || line.includes('gemini') || line.includes('omc') || line.includes('oh-my-claude'))) {
-          // Restrict team name match to valid slug characters.
-          // Support both native TeamDelete-style args and tmux worker env assignments.
-          const match =
-            line.match(/--team-name[=\s]+([\w][\w-]{0,63})/i)
-            || line.match(/team_name[=:]\s*"?([\w][\w-]{0,63})"?/i)
-            || line.match(/OM[CX]_TEAM_NAME=(['"]?)([\w][\w-]{0,63})\1/i)
-            || line.match(/OM[CX]_TEAM_WORKER=(['"]?)([\w][\w-]{0,63})\/worker-\d+\1/i);
-          const procTeam = match?.[2] || match?.[1];
-          if (procTeam) {
+        // Match claude agent processes with team context
+        if ((line.includes('claude') || line.includes('node')) &&
+            (line.includes('--team-name') || line.includes('team_name'))) {
+
+          // Restrict team name match to valid slug characters
+          const match = line.match(/--team-name[=\s]+([\w][\w-]{0,63})/i) || line.match(/team_name[=:]\s*"?([\w][\w-]{0,63})"?/i);
+          if (match) {
+            const procTeam = match[1];
             if (filterTeam && procTeam !== filterTeam) continue;
 
             const parts = line.trim().split(/\s+/);
             const pid = parseInt(parts[1], 10);
             if (pid && pid !== process.pid && pid !== process.ppid) {
-              orphans.push({ pid, team: procTeam, cmd: '(redacted)' });
+              orphans.push({ pid, team: procTeam, cmd: line.trim().substring(0, 200) });
             }
           }
         }
@@ -124,7 +121,7 @@ function getWindowsProcessListOutput() {
  * Check if a team's config still exists (i.e., team is still active).
  */
 function teamConfigExists(name) {
-  const configDir = getClaudeConfigDir();
+  const configDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
   const configPath = join(configDir, 'teams', name, 'config.json');
   return existsSync(configPath);
 }

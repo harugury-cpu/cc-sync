@@ -90,12 +90,9 @@ async function writeMailboxFile(teamName, workerName, cwd, mailbox) {
  */
 export async function sendTmuxTrigger(paneId, triggerType, payload) {
     const message = payload ? `${triggerType}:${payload}` : triggerType;
-    if (message.length > 200) {
-        console.warn(`[tmux-comm] sendTmuxTrigger: message rejected (${message.length} chars exceeds 200 char limit)`);
-        return false;
-    }
+    const truncated = message.length > 200 ? message.slice(0, 200) : message;
     try {
-        return await sendToWorker('', paneId, message);
+        return await sendToWorker('', paneId, truncated);
     }
     catch {
         return false;

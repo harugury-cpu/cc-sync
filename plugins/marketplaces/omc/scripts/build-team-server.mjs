@@ -10,9 +10,7 @@ import { mkdir } from 'fs/promises';
 const outfile = 'bridge/team-mcp.cjs';
 await mkdir('bridge', { recursive: true });
 
-const watchMode = process.argv.includes('--watch');
-
-const buildConfig = {
+await esbuild.build({
   entryPoints: ['src/mcp/team-server.ts'],
   bundle: true,
   platform: 'node',
@@ -25,13 +23,6 @@ const buildConfig = {
     'child_process', 'assert', 'module', 'net', 'tls',
     'dns', 'readline', 'tty', 'worker_threads',
   ],
-};
+});
 
-if (watchMode) {
-  const ctx = await esbuild.context(buildConfig);
-  await ctx.watch();
-  console.log(`Watching ${outfile}...`);
-} else {
-  await esbuild.build(buildConfig);
-  console.log(`Built ${outfile}`);
-}
+console.log(`Built ${outfile}`);

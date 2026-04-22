@@ -1,20 +1,22 @@
 ---
 name: bkit-rules
-classification: workflow
-classification-reason: Process automation persists regardless of model advancement
-deprecation-risk: none
-effort: low
 description: |
-  Core rules for bkit — PDCA methodology, level detection, agent triggering, quality standards.
-  Triggers: bkit rules, core rules, methodology, 핵심 규칙, PDCA 규칙.
+  Core rules for bkit plugin. PDCA methodology, level detection, agent auto-triggering, and code quality standards.
+  These rules are automatically applied to ensure consistent AI-native development.
+
+  Use proactively when user requests feature development, code changes, or implementation tasks.
+
+  Triggers: bkit, PDCA, develop, implement, feature, bug, code, design, document,
+  개발, 기능, 버그, 코드, 설계, 문서, 開発, 機能, バグ, 开发, 功能, 代码,
+  desarrollar, función, error, código, diseño, documento,
+  développer, fonctionnalité, bogue, code, conception, document,
+  entwickeln, Funktion, Fehler, Code, Design, Dokument,
+  sviluppare, funzionalità, bug, codice, design, documento
+
+  Do NOT use for: documentation-only tasks, research, or exploration without code changes.
 imports:
   - ${PLUGIN_ROOT}/templates/shared/naming-conventions.md
 # hooks: Managed by hooks/hooks.json (pre-write.js, unified-write-post.js) - GitHub #9354 workaround
-user-invocable: false
-allowed-tools:
-  - Read
-  - Glob
-  - Grep
 ---
 
 # bkit Core Rules
@@ -262,35 +264,3 @@ Agent Memory is automatically active for all bkit agents. No user action require
 - On session start: "Agent Memory is active — agents remember context across sessions"
 - When agent is invoked: Agent may reference previous session context
 - No configuration needed — fully automatic
-
-## 9. Plugin Hot Reload (v1.6.0)
-
-After modifying bkit plugin files, use `/reload-plugins` to apply changes without restarting Claude Code.
-- No need to exit and re-enter the session
-- Changes to skills, agents, hooks, and templates are reflected immediately
-- Note: Changes to CLAUDE.md require `/clear` to fully refresh
-
-## Wildcard Permissions (CC 2.1.0+)
-
-CC 2.1.0+ supports `Bash(pattern*)` wildcard permissions.
-
-### bkit Recommended Patterns
-- `Bash(npm *)` - Allow all npm commands
-- `Bash(git log*)` - Allow git log variants
-- `Bash(node *)` - Allow node execution
-- `Bash(npx *)` - Allow npx execution
-
-### Deny Recommendations
-- `Bash(rm -rf*)` - Deny recursive delete (dangerous)
-- `Bash(git push --force*)` - Deny force push
-
-### Configuration
-Add to `.claude/settings.json`:
-```json
-{
-  "permissions": {
-    "allow": ["Bash(npm *)", "Bash(git log*)"],
-    "deny": ["Bash(rm -rf*)"]
-  }
-}
-```

@@ -1,7 +1,7 @@
 /**
  * Task Tracking Module
  * @module lib/task/tracker
- * @version 2.0.0
+ * @version 1.4.7
  */
 
 // Lazy require
@@ -192,9 +192,11 @@ function triggerNextPdcaAction(feature, currentPhase, context = {}) {
  * @returns {string|null}
  */
 function findPdcaStatus() {
+  const { PROJECT_DIR } = getCore();
   const fs = require('fs');
-  const { getPdcaStatusPath } = getPdca();
-  const statusPath = getPdcaStatusPath();
+  const path = require('path');
+
+  const statusPath = path.join(PROJECT_DIR, 'docs/.pdca-status.json');
   return fs.existsSync(statusPath) ? statusPath : null;
 }
 

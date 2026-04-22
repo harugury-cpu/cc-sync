@@ -84,7 +84,7 @@ export async function transitionTaskStatus(taskId, from, to, claimToken, deps) {
         const updated = {
             ...v,
             status: to,
-            completed_at: to === 'completed' ? new Date().toISOString() : v.completed_at,
+            completed_at: new Date().toISOString(),
             claim: undefined,
             version: v.version + 1,
         };

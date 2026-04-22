@@ -28,23 +28,6 @@ describe("_openclaw.wake", () => {
         await new Promise((resolve) => setTimeout(resolve, 10));
         vi.doUnmock("../../openclaw/index.js");
     });
-    it("logs when wakeOpenClaw rejects but does not throw", async () => {
-        vi.stubEnv("OMC_OPENCLAW", "1");
-        vi.resetModules();
-        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
-        vi.doMock("../../openclaw/index.js", () => ({
-            wakeOpenClaw: vi.fn().mockRejectedValue(new Error('gateway down')),
-        }));
-        const { _openclaw: freshOpenClaw } = await import("../bridge.js");
-        expect(() => {
-            freshOpenClaw.wake("session-start", { sessionId: "sid-1" });
-        }).not.toThrow();
-        for (let attempt = 0; attempt < 20 && warnSpy.mock.calls.length === 0; attempt += 1) {
-            await new Promise((resolve) => setTimeout(resolve, 10));
-        }
-        expect(warnSpy).toHaveBeenCalledWith('[omc] hooks.bridge openclaw wake failed for session-start: gateway down');
-        vi.doUnmock("../../openclaw/index.js");
-    });
     it("does not throw when OMC_OPENCLAW === '1' and import fails", async () => {
         vi.stubEnv("OMC_OPENCLAW", "1");
         // Even if the dynamic import fails, _openclaw.wake should not throw
@@ -115,7 +98,7 @@ describe("bridge-level regression tests", () => {
         const msg = result.message || "";
         expect(msg).not.toContain("[PROMPT TRANSLATION]");
     });
-    it("pre-tool-use emits only the dedicated ask-user-question OpenClaw signal", async () => {
+    it("pre-tool-use calls _openclaw.wake for AskUserQuestion", async () => {
         process.env.OMC_OPENCLAW = "1";
         process.env.OMC_NOTIFY = "0"; // suppress real notifications
         const wakeSpy = vi.spyOn(_openclaw, "wake");
@@ -128,24 +111,13 @@ describe("bridge-level regression tests", () => {
             directory: "/tmp/test",
         };
         await processHook("pre-tool-use", input);
-        expect(wakeSpy).toHaveBeenCalledWith("ask-user-question", expect.objectContaining({
+        // Verify _openclaw.wake was called with ask-user-question event
+        const askCall = wakeSpy.mock.calls.find((call) => call[0] === "ask-user-question");
+        expect(askCall).toBeDefined();
+        expect(askCall[1]).toMatchObject({
             sessionId: "test-session",
             question: "What should I do next?",
-        }));
-        expect(wakeSpy.mock.calls.some((call) => call[0] === "pre-tool-use")).toBe(false);
-        wakeSpy.mockRestore();
-    });
-    it("post-tool-use skips generic OpenClaw emission for AskUserQuestion", async () => {
-        process.env.OMC_OPENCLAW = "1";
-        const wakeSpy = vi.spyOn(_openclaw, "wake");
-        await processHook("post-tool-use", {
-            sessionId: "test-session",
-            toolName: "AskUserQuestion",
-            toolInput: { questions: [{ question: "Need approval?" }] },
-            toolOutput: '{"answers":{"0":"yes"}}',
-            directory: "/tmp/test",
         });
-        expect(wakeSpy).not.toHaveBeenCalled();
         wakeSpy.mockRestore();
     });
 });

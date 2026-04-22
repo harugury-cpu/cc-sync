@@ -8,7 +8,6 @@
 import { readFileSync, unlinkSync } from "fs";
 import { writeModeState, readModeState } from "../../lib/mode-state-io.js";
 import { resolveStatePath, resolveSessionStatePath, } from "../../lib/worktree-paths.js";
-import { truncatePromptForEcho } from "../../lib/truncate-prompt.js";
 const _DEFAULT_STATE = {
     active: false,
     started_at: "",
@@ -161,7 +160,7 @@ REMEMBER THE ULTRAWORK RULES:
 
 Continue working on the next pending task. DO NOT STOP until all tasks are marked complete.
 
-Original task: ${truncatePromptForEcho(state.original_prompt)}
+Original task: ${state.original_prompt}
 
 </ultrawork-persistence>
 

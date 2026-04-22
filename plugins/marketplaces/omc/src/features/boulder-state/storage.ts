@@ -16,7 +16,6 @@ import {
   PLAN_EXTENSION,
 } from "./constants.js";
 import { atomicWriteSync } from "../../lib/atomic-write.js";
-import { withFileLockSync } from "../../lib/file-lock.js";
 
 /**
  * Get the full path to the boulder state file
@@ -38,7 +37,7 @@ export function readBoulderState(directory: string): BoulderState | null {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return null;
     }
-    throw error;
+    return null;
   }
 }
 
@@ -69,21 +68,17 @@ export function appendSessionId(
   directory: string,
   sessionId: string,
 ): BoulderState | null {
-  const filePath = getBoulderFilePath(directory);
-  const lockPath = filePath + '.lock';
-  return withFileLockSync(lockPath, () => {
-    const state = readBoulderState(directory);
-    if (!state) return null;
+  const state = readBoulderState(directory);
+  if (!state) return null;
 
-    if (!state.session_ids.includes(sessionId)) {
-      state.session_ids.push(sessionId);
-      if (writeBoulderState(directory, state)) {
-        return state;
-      }
+  if (!state.session_ids.includes(sessionId)) {
+    state.session_ids.push(sessionId);
+    if (writeBoulderState(directory, state)) {
+      return state;
     }
+  }
 
-    return state;
-  });
+  return state;
 }
 
 /**

@@ -1,22 +1,9 @@
 # Skills Overview
 
-> 39 Skills defined in bkit (v2.1.9)
->
-> **v2.1.9**: CC v2.1.116 response — ENH-253/254/259/263 (4 ENH shipping) + Docs=Code 100% sync. Skills unchanged (39, `zero-script-qa` retains sole `context: fork`). CC recommended: v2.1.116+ (74 consecutive compatible, v2.1.115 skipped).
-> **v2.1.8**: Issue #81 hotfix - Docs=Code philosophy restored. Skills unchanged (cc-version-analysis, qa-phase retained). Focus was hook/lib layer (`lib/core/context-budget.js`, `session-ctx-fp.js`).
-> **v2.1.7**: Issue #79 hotfix, 38 skills.
+> 27 Skills defined in bkit (v1.5.5)
 >
 > **v1.4.1**: Added Context Engineering perspective - Domain Knowledge Layer
 > **v1.5.0**: Claude Code Exclusive
-> **v1.5.7**: /simplify, /batch CC command awareness in skills, CC_COMMAND_PATTERNS integration
-> **v1.5.8**: Studio Support - state file path references updated in PDCA skills
-> **v1.5.9**: Executive Summary module, AskUserQuestion Preview UX, ENH-74~81, 199 exports
-> **v1.6.0**: Skills 2.0 - Skill Classification (9W/18C/1H), pm-discovery skill, Skill Evals (28 defs)
-> **v1.6.1**: CTO Orchestration Redesign, P0 Bug Fixes (4), 3-Tier Agent Security, Skill Evals 28/28 full implementation, 1073 TC, 208 exports
-> **v1.6.2**: 31 skills (9 Workflow / 20 Capability / 2 Hybrid), 210 exports, CC v2.1.78
-> **v2.0.3**: 36 skills (17 Workflow / 18 Capability / 1 Hybrid), ~580+ exports, CC v2.1.81+
-> **v2.0.6**: 37 skills (18 Workflow / 18 Capability / 1 Hybrid), ~620+ exports — +deploy skill
-> **v1.6.2+**: cc-version-analysis skill (32 skills, 10 Workflow / 20 Capability / 2 Hybrid)
 
 ## What are Skills?
 
@@ -68,84 +55,7 @@ Skills form bkit's **Domain Knowledge Layer**, designed according to [[../../phi
 | **Code Examples** | Ready-to-apply references | Consistent implementation |
 | **Few-shot Examples** | Conversation/output patterns | Predictable responses |
 
-## Skill Classification (v1.6.0)
-
-All 38 skills are classified into three categories based on CC 2.1.0 Skills 2.0 (per `evals/config.json` SSOT):
-
-### Workflow Skills (18) — Permanent Core Value
-
-Process automation skills that remain valuable regardless of model advancement:
-
-| Skill | Purpose |
-|-------|---------|
-| pdca | Unified PDCA cycle management (8 actions) |
-| plan-plus | Brainstorming-enhanced PDCA planning |
-| pm-discovery | Product discovery and market research |
-| development-pipeline | 9-stage pipeline overview |
-| bkit-rules | PDCA rules + auto-triggering + code quality standards |
-| bkit-templates | Template references + document standards |
-| phase-2-convention | Coding conventions |
-| phase-8-review | Code review + gap analysis |
-| code-review | Code review and quality analysis |
-| zero-script-qa | Log-based QA |
-
-### Capability Skills (18) — Model-Dependent Guidance
-
-Domain knowledge that may become redundant as models improve:
-
-| Skill | Deprecation Risk |
-|-------|:---:|
-| starter | low |
-| dynamic | low |
-| enterprise | low |
-| phase-1-schema | medium |
-| phase-3-mockup | high |
-| phase-4-api | medium |
-| phase-5-design-system | medium |
-| phase-6-ui-integration | medium |
-| phase-7-seo-security | medium |
-| phase-9-deployment | medium |
-| claude-code-learning | high |
-| mobile-app | low |
-| desktop-app | low |
-| bkend-quickstart | medium |
-| bkend-data | medium |
-| bkend-auth | medium |
-| bkend-cookbook | medium |
-| bkend-storage | medium |
-
-### Hybrid Skills (1)
-
-Skills combining workflow and capability characteristics:
-
-| Skill | Workflow Aspect | Capability Aspect |
-|-------|----------------|-------------------|
-| plan-plus | PDCA planning process | Brainstorming methodology guidance |
-
----
-
-## Skill Evals (28 definitions) (v1.6.0)
-
-Each skill has a paired eval definition for data-driven quality measurement:
-- Evals measure skill output quality against ground truth
-- 3 consecutive parity passes trigger deprecation candidate status
-- Supports A/B testing of skill variants via Skill Creator
-
-## Skill Creator (v1.6.0)
-
-Integrated workflow for creating new skills following bkit conventions:
-- Generates SKILL.md with proper frontmatter structure
-- Creates paired eval definition automatically
-- Supports A/B testing to compare skill variants
-
----
-
-## Skill List (36)
-
-### New Skills (v1.6.0)
-| Skill | Purpose | Hooks | Classification |
-|-------|---------|-------|:---:|
-| [[../../../skills/pm-discovery/SKILL|pm-discovery]] | Product discovery and market research | - | Workflow |
+## Skill List (27)
 
 ### New Skills (v1.5.5)
 | Skill | Purpose | Hooks |
@@ -316,8 +226,7 @@ bkit-claude-code/
     ├── phase-9-deployment/SKILL.md
     ├── zero-script-qa/SKILL.md
     ├── mobile-app/SKILL.md
-    ├── desktop-app/SKILL.md
-    └── pm-discovery/SKILL.md
+    └── desktop-app/SKILL.md
 ```
 
 ## Related Documents

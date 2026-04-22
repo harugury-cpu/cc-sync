@@ -4,7 +4,7 @@
  * Parse stdin JSON from Claude Code statusline interface.
  * Based on claude-hud reference implementation.
  */
-import type { RateLimits, StatuslineStdin } from './types.js';
+import type { StatuslineStdin } from './types.js';
 /**
  * Persist the last successful stdin read to disk.
  * Used by --watch mode to recover data when stdin is a TTY.
@@ -21,23 +21,12 @@ export declare function readStdinCache(): StatuslineStdin | null;
  */
 export declare function readStdin(): Promise<StatuslineStdin | null>;
 /**
- * Preserve the last native context percentage across transient snapshots where Claude Code
- * omits `used_percentage`, but only when the fallback calculation is close enough to suggest
- * the same underlying value rather than a real context jump.
- */
-export declare function stabilizeContextPercent(stdin: StatuslineStdin, previousStdin: StatuslineStdin | null | undefined): StatuslineStdin;
-/**
  * Get context window usage percentage.
- * Prefers native percentage from Claude Code statusline stdin, falls back to manual calculation.
+ * Prefers native percentage from Claude Code v2.1.6+, falls back to manual calculation.
  */
 export declare function getContextPercent(stdin: StatuslineStdin): number;
 /**
- * Convert Claude Code stdin rate_limits into the existing HUD RateLimits shape.
- */
-export declare function getRateLimitsFromStdin(stdin: StatuslineStdin): RateLimits | null;
-/**
  * Get model display name from stdin.
- * Prefer the official display name field, then fall back to the raw model id.
  */
 export declare function getModelName(stdin: StatuslineStdin): string;
 //# sourceMappingURL=stdin.d.ts.map

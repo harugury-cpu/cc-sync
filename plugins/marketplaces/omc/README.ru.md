@@ -7,13 +7,12 @@
 [![GitHub stars](https://img.shields.io/github/stars/Yeachan-Heo/oh-my-claudecode?style=flat&color=yellow)](https://github.com/Yeachan-Heo/oh-my-claudecode/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Sponsor](https://img.shields.io/badge/Sponsor-❤️-red?style=flat&logo=github)](https://github.com/sponsors/Yeachan-Heo)
-[![Discord](https://img.shields.io/discord/1452487457085063218?color=5865F2&logo=discord&logoColor=white&label=Discord)](https://discord.gg/PUwSMR9XNk)
 
 **Мультиагентная оркестрация для Claude Code. Нулевой порог вхождения.**
 
 _Не изучайте Claude Code. Просто используйте OMC._
 
-[Начать](#быстрый-старт) • [Документация](https://yeachan-heo.github.io/oh-my-claudecode-website) • [Руководство по миграции](docs/MIGRATION.md) • [Discord](https://discord.gg/PUwSMR9XNk)
+[Начать](#быстрый-старт) • [Документация](https://yeachan-heo.github.io/oh-my-claudecode-website) • [Руководство по миграции](docs/MIGRATION.md)
 
 ---
 
@@ -31,10 +30,6 @@ _Не изучайте Claude Code. Просто используйте OMC._
 ```bash
 /oh-my-claudecode:omc-setup
 ```
-
-Если вы запускаете OMC через `omc --plugin-dir <path>` или `claude --plugin-dir <path>`, добавьте `--plugin-dir-mode` к `omc setup` (или экспортируйте `OMC_PLUGIN_ROOT` заранее) чтобы избежать дублирования умений/агентов, которые плагин уже предоставляет во время выполнения. Полную матрицу решений и все доступные флаги см. в [разделе Plugin directory flags в REFERENCE.md](./docs/REFERENCE.md#plugin-directory-flags).
-
-<!-- TODO(i18n): verify translation -->
 
 **Шаг 3: Создайте что-нибудь**
 
@@ -133,42 +128,8 @@ Team работает как поэтапный pipeline:
 
 - **Магические ключевые слова** — `ralph`, `ulw`, `eco`, `plan` для явного управления
 - **HUD statusline** — Метрики оркестрации в реальном времени в строке состояния
-  - Если вы запускаете Claude Code напрямую с `claude --plugin-dir <path>` (минуя shim `omc`), экспортируйте `OMC_PLUGIN_ROOT=<path>` в своей оболочке, чтобы пакет HUD разрешался в то же место, что и загрузчик плагина. Подробнее см. [раздел Plugin directory flags в REFERENCE.md](./docs/REFERENCE.md#plugin-directory-flags).
-
-  <!-- TODO(i18n): verify translation -->
 - **Обучение навыкам** — Извлечение переиспользуемых паттернов из сессий
 - **Аналитика и отслеживание затрат** — Понимание использования токенов по всем сессиям
-
-### Внесение вклада
-
-Хотите внести вклад в OMC? См. [CONTRIBUTING.md](./CONTRIBUTING.md) для полного руководства разработчика, включая как форкировать, настроить локальный checkout, связать его как активный плагин, запустить тесты и отправить PR.
-
-<!-- TODO(i18n): verify translation -->
-
-### Пользовательские навыки
-
-Выучите один раз — используйте всегда. OMC извлекает ценные знания отладки в портативные файлы навыков, которые автоматически внедряются при необходимости.
-
-| | Область проекта | Область пользователя |
-|---|---|---|
-| **Путь** | `.omc/skills/` | `~/.omc/skills/` |
-| **Доступно** | Команде (под контролем версий) | Всем вашим проектам |
-| **Приоритет** | Выше (переопределяет пользовательскую область) | Ниже (резервный) |
-
-```yaml
-# .omc/skills/fix-proxy-crash.md
----
-name: Fix Proxy Crash
-description: aiohttp proxy crashes on ClientDisconnectedError
-triggers: ["proxy", "aiohttp", "disconnected"]
-source: extracted
----
-Оберните обработчик в server.py:42 в try/except ClientDisconnectedError...
-```
-
-**Управление навыками:** `/skill list | add | remove | edit | search`
-**Автообучение:** `/learner` извлекает переиспользуемые паттерны со строгими критериями качества
-**Автовнедрение:** Подходящие навыки автоматически загружаются в контекст — ручной вызов не требуется
 
 [Полный список возможностей →](docs/REFERENCE.md)
 
@@ -229,66 +190,6 @@ omc config-stop-callback discord --clear-tags
 - Telegram: `alice` нормализуется в `@alice`
 - Discord: поддерживает `@here`, `@everyone`, числовые ID пользователей и `role:<id>`
 - Коллбэки типа `file` игнорируют параметры тегов
-
-### Интеграция с OpenClaw
-
-Пересылайте события сессий Claude Code на шлюз [OpenClaw](https://openclaw.ai/), чтобы обеспечить автоматические ответы и рабочие процессы через вашего агента OpenClaw.
-
-**Быстрая настройка (рекомендуется):**
-
-```bash
-/oh-my-claudecode:configure-notifications
-# → При запросе введите "openclaw" → выберите "OpenClaw Gateway"
-```
-
-**Ручная настройка:** создайте `~/.claude/omc_config.openclaw.json`:
-
-```json
-{
-  "enabled": true,
-  "gateways": {
-    "my-gateway": {
-      "url": "https://your-gateway.example.com/wake",
-      "headers": { "Authorization": "Bearer YOUR_TOKEN" },
-      "method": "POST",
-      "timeout": 10000
-    }
-  },
-  "hooks": {
-    "session-start": { "gateway": "my-gateway", "instruction": "Session started for {{projectName}}", "enabled": true },
-    "stop":          { "gateway": "my-gateway", "instruction": "Session stopping for {{projectName}}", "enabled": true }
-  }
-}
-```
-
-**Переменные окружения:**
-
-| Переменная | Описание |
-|-----------|----------|
-| `OMC_OPENCLAW=1` | Включить OpenClaw |
-| `OMC_OPENCLAW_DEBUG=1` | Включить отладочное логирование |
-| `OMC_OPENCLAW_CONFIG=/path/to/config.json` | Переопределить путь к файлу конфигурации |
-
-**Поддерживаемые события хуков (6 активных в bridge.ts):**
-
-| Событие | Триггер | Основные переменные шаблона |
-|---------|---------|----------------------------|
-| `session-start` | Начало сессии | `{{sessionId}}`, `{{projectName}}`, `{{projectPath}}` |
-| `stop` | Завершение ответа Claude | `{{sessionId}}`, `{{projectName}}` |
-| `keyword-detector` | При каждой отправке промпта | `{{prompt}}`, `{{sessionId}}` |
-| `ask-user-question` | Claude запрашивает ввод пользователя | `{{question}}`, `{{sessionId}}` |
-| `pre-tool-use` | Перед вызовом инструмента (высокая частота) | `{{toolName}}`, `{{sessionId}}` |
-| `post-tool-use` | После вызова инструмента (высокая частота) | `{{toolName}}`, `{{sessionId}}` |
-
-**Переменные окружения канала ответа:**
-
-| Переменная | Описание |
-|-----------|----------|
-| `OPENCLAW_REPLY_CHANNEL` | Канал ответа (напр. `discord`) |
-| `OPENCLAW_REPLY_TARGET` | ID канала |
-| `OPENCLAW_REPLY_THREAD` | ID потока |
-
-См. `scripts/openclaw-gateway-demo.mjs` — эталонный шлюз, который пересылает полезные данные OpenClaw в Discord через ClawdBot.
 
 ---
 

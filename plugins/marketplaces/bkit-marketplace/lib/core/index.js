@@ -1,9 +1,9 @@
 /**
  * @bkit/core - Core Module Entry Point
  * @module lib/core
- * @version 2.0.0
+ * @version 1.5.4
  *
- * Claude Code plugin core module (v2.0.0)
+ * Claude Code 전용 플러그인으로 단순화 (v1.5.0)
  */
 
 const platform = require('./platform');
@@ -12,13 +12,9 @@ const io = require('./io');
 const debug = require('./debug');
 const config = require('./config');
 const file = require('./file');
-const paths = require('./paths');
-const constants = require('./constants');
-const errors = require('./errors');
-const stateStore = require('./state-store');
 
 module.exports = {
-  // Platform (9 exports)
+  // Platform (9 exports - isGeminiCli removed in v1.5.0)
   detectPlatform: platform.detectPlatform,
   BKIT_PLATFORM: platform.BKIT_PLATFORM,
   isClaudeCode: platform.isClaudeCode,
@@ -29,7 +25,7 @@ module.exports = {
   getProjectPath: platform.getProjectPath,
   getTemplatePath: platform.getTemplatePath,
 
-  // Cache (10 exports)
+  // Cache (7 exports)
   get: cache.get,
   set: cache.set,
   invalidate: cache.invalidate,
@@ -37,9 +33,6 @@ module.exports = {
   globalCache: cache.globalCache,
   _cache: cache._cache,
   DEFAULT_TTL: cache.DEFAULT_TTL,
-  TOOLSEARCH_TTL: cache.TOOLSEARCH_TTL,
-  getToolSearchCache: cache.getToolSearchCache,
-  setToolSearchCache: cache.setToolSearchCache,
 
   // I/O (9 exports)
   MAX_CONTEXT_LENGTH: io.MAX_CONTEXT_LENGTH,
@@ -73,29 +66,4 @@ module.exports = {
   isUiFile: file.isUiFile,
   isEnvFile: file.isEnvFile,
   extractFeature: file.extractFeature,
-
-  // Paths (10 exports - v1.6.2 + PLUGIN_DATA backup/restore ENH-119)
-  STATE_PATHS: paths.STATE_PATHS,
-  LEGACY_PATHS: paths.LEGACY_PATHS,
-  CONFIG_PATHS: paths.CONFIG_PATHS,
-  ensureBkitDirs: paths.ensureBkitDirs,
-  getDocPaths: paths.getDocPaths,
-  resolveDocPaths: paths.resolveDocPaths,
-  findDoc: paths.findDoc,
-  getArchivePath: paths.getArchivePath,
-  backupToPluginData: paths.backupToPluginData,
-  restoreFromPluginData: paths.restoreFromPluginData,
-
-  // Constants (v2.0.0 - centralized magic numbers)
-  constants,
-
-  // Errors (v2.0.0 - standardized error handling)
-  BkitError: errors.BkitError,
-  ERROR_CODES: errors.ERROR_CODES,
-  SEVERITY: errors.SEVERITY,
-  safeCatch: errors.safeCatch,
-
-  // StateStore (v2.0.0 - atomic file I/O with locking)
-  stateStore,
-
 };

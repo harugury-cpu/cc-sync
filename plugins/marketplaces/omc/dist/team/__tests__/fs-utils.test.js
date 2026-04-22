@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { statSync, mkdirSync, rmSync, existsSync, realpathSync } from 'fs';
+import { statSync, mkdirSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { atomicWriteJson, writeFileWithMode, ensureDirWithMode, validateResolvedPath } from '../fs-utils.js';
@@ -56,26 +56,14 @@ describe('ensureDirWithMode', () => {
     });
 });
 describe('validateResolvedPath', () => {
-    const VALIDATE_DIR = join(tmpdir(), '__validate_test__');
-    afterEach(() => {
-        if (existsSync(VALIDATE_DIR)) {
-            rmSync(VALIDATE_DIR, { recursive: true, force: true });
-        }
-    });
     it('rejects paths that escape base via ../', () => {
-        mkdirSync(VALIDATE_DIR, { recursive: true });
-        const base = realpathSync(VALIDATE_DIR);
-        expect(() => validateResolvedPath(join(base, '..', 'escape'), base)).toThrow('Path traversal');
+        expect(() => validateResolvedPath('/home/user/../escape', '/home/user')).toThrow('Path traversal');
     });
     it('accepts paths within base directory', () => {
-        mkdirSync(VALIDATE_DIR, { recursive: true });
-        const base = realpathSync(VALIDATE_DIR);
-        expect(() => validateResolvedPath(join(base, 'project', 'file.ts'), base)).not.toThrow();
+        expect(() => validateResolvedPath('/home/user/project/file.ts', '/home/user')).not.toThrow();
     });
     it('accepts exact base path', () => {
-        mkdirSync(VALIDATE_DIR, { recursive: true });
-        const base = realpathSync(VALIDATE_DIR);
-        expect(() => validateResolvedPath(base, base)).not.toThrow();
+        expect(() => validateResolvedPath('/home/user', '/home/user')).not.toThrow();
     });
 });
 //# sourceMappingURL=fs-utils.test.js.map

@@ -2,7 +2,6 @@
 name: sciomc
 description: Orchestrate parallel scientist agents for comprehensive analysis with AUTO mode
 argument-hint: <research goal>
-level: 4
 ---
 
 # Research Skill

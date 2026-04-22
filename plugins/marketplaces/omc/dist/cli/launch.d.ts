@@ -2,7 +2,6 @@
  * Native tmux shell launch for omc
  * Launches Claude Code with tmux session management
  */
-export declare function prepareOmcLaunchConfigDir(baseConfigDir?: string): string;
 /**
  * Extract the OMC-specific --notify flag from launch args.
  * --notify false  → disable notifications (OMC_NOTIFY=0)
@@ -26,7 +25,7 @@ export declare function extractNotifyFlag(args: string[]): {
  * This flag is stripped before passing args to Claude CLI.
  */
 export declare function extractOpenClawFlag(args: string[]): {
-    openclawEnabled: boolean | undefined;
+    openclawEnabled: boolean;
     remainingArgs: string[];
 };
 /**
@@ -108,31 +107,13 @@ export declare function normalizeClaudeLaunchArgs(args: string[]): string[];
  */
 export declare function preLaunch(_cwd: string, _sessionId: string): Promise<void>;
 /**
- * Check if args contain --print or -p flag.
- * When in print mode, Claude outputs to stdout and must not be wrapped in tmux
- * (which would capture stdout and prevent piping to the parent process).
- */
-export declare function isPrintMode(args: string[]): boolean;
-/**
  * runClaude: Launch Claude CLI (blocks until exit)
  * Handles 3 scenarios:
  * 1. inside-tmux: Launch claude in current pane
  * 2. outside-tmux: Create new tmux session with claude
  * 3. direct: tmux not available, run claude directly
- *
- * When --print/-p is present, always runs direct to preserve stdout piping.
  */
 export declare function runClaude(cwd: string, args: string[], sessionId: string): void;
-/**
- * Env vars that must be forwarded into tmux sessions.
- * tmux new-session inherits the *server's* environment, not the calling
- * process's, so vars set on process.env (e.g. CLAUDE_CONFIG_DIR at launch)
- * are silently lost.  We inject them as `export` statements into the shell
- * command that runs inside the tmux pane, *after* .zshrc/.bashrc sourcing
- * so our values take precedence.
- */
-export declare const TMUX_ENV_FORWARD: string[];
-export declare function buildEnvExportPrefix(vars: string[]): string;
 /**
  * postLaunch: Cleanup after Claude exits
  * Currently a placeholder - can be extended for:
@@ -145,12 +126,5 @@ export declare function postLaunch(_cwd: string, _sessionId: string): Promise<vo
  * Main launch command entry point
  * Orchestrates the 3-phase launch: preLaunch -> run -> postLaunch
  */
-/**
- * Parse `--plugin-dir <path>` / `--plugin-dir=<path>` from launch args (non-consuming).
- *
- * Returns the resolved absolute path if found, or null. The flag is NOT removed
- * from `args` — it must still forward to Claude Code's plugin loader untouched.
- */
-export declare function parsePluginDirArg(args: string[]): string | null;
 export declare function launchCommand(args: string[]): Promise<void>;
 //# sourceMappingURL=launch.d.ts.map

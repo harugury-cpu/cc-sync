@@ -11,11 +11,14 @@
  */
 
 const path = require('path');
-const fs = require('fs');
-const { readStdinSync, parseHookInput, outputAllow } = require('../lib/core/io');
-const { debugLog } = require('../lib/core/debug');
-const { getActiveSkill, getActiveAgent } = require('../lib/task/context');
-const { validateDocument, formatValidationWarning } = require('../lib/pdca/template-validator.js');
+const {
+  readStdinSync,
+  parseHookInput,
+  debugLog,
+  getActiveSkill,
+  getActiveAgent,
+  outputAllow
+} = require('../lib/common.js');
 
 // ============================================================
 // Handler: pdca-post-write (always runs - core bkit-rules)
@@ -155,62 +158,6 @@ if (activeSkill === 'phase-6-ui-integration') {
 if (activeAgent === 'qa-monitor') {
   handleQaMonitorPost(input, filePath);
 }
-
-// v1.6.0 ENH-103: PDCA template validation
-if (filePath) {
-  try {
-    const content = fs.readFileSync(filePath, 'utf8');
-    const result = validateDocument(filePath, content);
-
-    if (!result.valid && result.missing.length > 0) {
-      const warning = formatValidationWarning(result);
-      debugLog('UnifiedWritePost', 'Template validation failed', {
-        filePath, type: result.type, missing: result.missing
-      });
-      outputAllow(warning, 'PostToolUse');
-      debugLog('UnifiedWritePost', 'Hook completed with template warning');
-      process.exit(0);
-    }
-  } catch (e) {
-    debugLog('UnifiedWritePost', 'Template validation error', { error: e.message });
-  }
-}
-
-// v2.0.0: Audit logging for file write
-try {
-  const toolInput = input.tool_input || {};
-  const audit = require('../lib/audit/audit-logger');
-  audit.writeAuditLog({
-    actor: 'system', actorId: 'unified-write-post',
-    action: toolInput.file_path ? 'file_modified' : 'file_created',
-    category: 'file',
-    target: toolInput.file_path || '', targetType: 'file',
-    result: 'success', destructiveOperation: false
-  });
-} catch (_) {}
-
-// v2.0.0: Loop detection for repeated file edits
-try {
-  const toolInput = input.tool_input || {};
-  const lb = require('../lib/control/loop-breaker');
-  lb.recordAction('file_edit', toolInput.file_path || 'unknown');
-  const loopCheck = lb.checkLoop();
-  if (loopCheck.detected) {
-    debugLog('UnifiedWritePost', 'Loop detected in file edits', {
-      target: toolInput.file_path, details: loopCheck
-    });
-  }
-} catch (_) {}
-
-// v2.0.0: Metrics update if PDCA feature is active
-try {
-  const { getPdcaStatusFull } = require('../lib/pdca/status');
-  const pdcaStatus = getPdcaStatusFull();
-  if (pdcaStatus && pdcaStatus.currentFeature) {
-    const mc = require('../lib/quality/metrics-collector');
-    mc.collectMetric('file_change_count', pdcaStatus.currentFeature, 1, 'unified-write-post');
-  }
-} catch (_) {}
 
 // Output allow (PostToolUse doesn't block)
 outputAllow('', 'PostToolUse');

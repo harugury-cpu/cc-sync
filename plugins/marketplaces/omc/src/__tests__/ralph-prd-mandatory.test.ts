@@ -1,26 +1,23 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import {
   detectNoPrdFlag,
   stripNoPrdFlag,
-  detectCriticModeFlag,
-  stripCriticModeFlag,
   createRalphLoopHook,
   readRalphState,
   findPrdPath,
   initPrd,
   readPrd,
   writePrd,
+  createSimplePrd,
   type PRD,
   type UserStory,
 } from '../hooks/ralph/index.js';
 import {
   getArchitectVerificationPrompt,
   startVerification,
-  detectArchitectApproval,
-  detectArchitectRejection,
   type VerificationState,
 } from '../hooks/ralph/verifier.js';
 
@@ -41,19 +38,39 @@ describe('Ralph PRD-Mandatory', () => {
   });
 
   // ==========================================================================
-  // Prompt Flag Sanitization
+  // Flag Detection & Stripping
   // ==========================================================================
 
   describe('detectNoPrdFlag', () => {
-    it('still detects legacy --no-prd syntax for sanitization', () => {
+    it('should detect --no-prd in prompt', () => {
       expect(detectNoPrdFlag('ralph --no-prd fix this')).toBe(true);
-      expect(detectNoPrdFlag('--no-prd fix this bug')).toBe(true);
-      expect(detectNoPrdFlag('fix this bug --NO-PRD')).toBe(true);
     });
 
-    it('returns false when the legacy flag is absent', () => {
+    it('should detect --no-prd at start of prompt', () => {
+      expect(detectNoPrdFlag('--no-prd fix this bug')).toBe(true);
+    });
+
+    it('should detect --no-prd at end of prompt', () => {
+      expect(detectNoPrdFlag('fix this bug --no-prd')).toBe(true);
+    });
+
+    it('should detect --NO-PRD (case insensitive)', () => {
+      expect(detectNoPrdFlag('ralph --NO-PRD fix this')).toBe(true);
+    });
+
+    it('should detect --No-Prd (mixed case)', () => {
+      expect(detectNoPrdFlag('ralph --No-Prd fix this')).toBe(true);
+    });
+
+    it('should return false when flag is absent', () => {
       expect(detectNoPrdFlag('ralph fix this bug')).toBe(false);
+    });
+
+    it('should return false for empty string', () => {
       expect(detectNoPrdFlag('')).toBe(false);
+    });
+
+    it('should return false for --prd (without no)', () => {
       expect(detectNoPrdFlag('ralph --prd build a todo app')).toBe(false);
     });
   });
@@ -85,30 +102,6 @@ describe('Ralph PRD-Mandatory', () => {
 
     it('should handle empty string', () => {
       expect(stripNoPrdFlag('')).toBe('');
-    });
-  });
-
-  describe('detectCriticModeFlag', () => {
-    it('detects --critic=critic', () => {
-      expect(detectCriticModeFlag('ralph --critic=critic fix this')).toBe('critic');
-    });
-
-    it('detects --critic codex', () => {
-      expect(detectCriticModeFlag('ralph --critic codex fix this')).toBe('codex');
-    });
-
-    it('returns null for invalid critic mode', () => {
-      expect(detectCriticModeFlag('ralph --critic=gemini fix this')).toBeNull();
-    });
-  });
-
-  describe('stripCriticModeFlag', () => {
-    it('removes --critic=critic', () => {
-      expect(stripCriticModeFlag('ralph --critic=critic fix this')).toBe('ralph fix this');
-    });
-
-    it('removes --critic codex', () => {
-      expect(stripCriticModeFlag('ralph --critic codex fix this')).toBe('ralph fix this');
     });
   });
 
@@ -189,7 +182,6 @@ describe('Ralph PRD-Mandatory', () => {
             acceptanceCriteria: ['It works'],
             priority: 1,
             passes: false,
-            architectVerified: false,
           },
         ],
       };
@@ -218,7 +210,6 @@ describe('Ralph PRD-Mandatory', () => {
             acceptanceCriteria: [],
             priority: 1,
             passes: true,
-            architectVerified: true,
           },
           {
             id: 'US-002',
@@ -227,7 +218,6 @@ describe('Ralph PRD-Mandatory', () => {
             acceptanceCriteria: [],
             priority: 2,
             passes: false,
-            architectVerified: false,
           },
         ],
       };
@@ -240,39 +230,13 @@ describe('Ralph PRD-Mandatory', () => {
       expect(state!.current_story_id).toBe('US-002');
     });
 
-    it('should create and enable prd_mode when no prd.json exists', () => {
+    it('should NOT enable prd_mode when no prd.json exists', () => {
       const hook = createRalphLoopHook(testDir);
       hook.startLoop(undefined, 'test prompt');
 
       const state = readRalphState(testDir);
       expect(state).not.toBeNull();
-      expect(state!.prd_mode).toBe(true);
-      expect(findPrdPath(testDir)).not.toBeNull();
-    });
-
-    it('should ignore legacy --no-prd and still require PRD startup', () => {
-      const hook = createRalphLoopHook(testDir);
-      const started = hook.startLoop(undefined, 'test prompt --no-prd');
-
-      expect(started).toBe(true);
-
-      const state = readRalphState(testDir);
-      expect(state).not.toBeNull();
-      expect(state!.prd_mode).toBe(true);
-      expect(state!.prompt).toBe('test prompt');
-      expect(findPrdPath(testDir)).not.toBeNull();
-    });
-
-    it('should refuse to start when an existing prd.json is invalid', () => {
-      const invalidPrdPath = join(testDir, 'prd.json');
-      mkdirSync(join(testDir, '.git'), { recursive: true });
-      writeFileSync(invalidPrdPath, '{ invalid json');
-
-      const hook = createRalphLoopHook(testDir);
-      const started = hook.startLoop(undefined, 'test prompt');
-
-      expect(started).toBe(false);
-      expect(readRalphState(testDir)).toBeNull();
+      expect(state!.prd_mode).toBeUndefined();
     });
   });
 
@@ -320,7 +284,6 @@ describe('Ralph PRD-Mandatory', () => {
       expect(prompt).toContain('Are ALL requirements from the original task met?');
       expect(prompt).toContain('Is the implementation complete, not partial?');
       expect(prompt).not.toContain('Verify EACH acceptance criterion');
-      expect(prompt).toContain('concise review summary under 100 words');
     });
 
     it('should fall back to generic prompt when story is undefined', () => {
@@ -343,60 +306,6 @@ describe('Ralph PRD-Mandatory', () => {
       };
       const prompt = getArchitectVerificationPrompt(state);
       expect(prompt).toContain('Missing error handling in auth module');
-    });
-
-    it('should support critic verification prompts', () => {
-      const prompt = getArchitectVerificationPrompt({
-        ...baseVerificationState,
-        critic_mode: 'critic',
-        request_id: 'req-critic',
-      });
-
-      expect(prompt).toContain('[CRITIC VERIFICATION REQUIRED');
-      expect(prompt).toContain('Task(subagent_type="critic"');
-      expect(prompt).toContain('<ralph-approved critic="critic" request-id="req-critic">VERIFIED_COMPLETE</ralph-approved>');
-    });
-
-    it('should support codex verification prompts', () => {
-      const prompt = getArchitectVerificationPrompt({
-        ...baseVerificationState,
-        critic_mode: 'codex',
-        request_id: 'req-codex',
-      });
-
-      expect(prompt).toContain('[CODEX CRITIC VERIFICATION REQUIRED');
-      expect(prompt).toContain('omc ask codex --agent-prompt critic');
-      expect(prompt).toContain('<ralph-approved critic="codex" request-id="req-codex">VERIFIED_COMPLETE</ralph-approved>');
-    });
-
-    it('detects generic Ralph approval markers', () => {
-      expect(detectArchitectApproval('<ralph-approved critic="codex">VERIFIED_COMPLETE</ralph-approved>')).toBe(true);
-    });
-
-    it('requires matching correlated approval attributes when expected', () => {
-      const staleApproval = '<ralph-approved critic="codex" request-id="old-request" story-id="US-001">VERIFIED_COMPLETE</ralph-approved>';
-      const freshApproval = '<ralph-approved critic="codex" request-id="new-request" story-id="US-001">VERIFIED_COMPLETE</ralph-approved>';
-
-      expect(detectArchitectApproval(`${staleApproval}\n${freshApproval}`, { request_id: 'new-request', story_id: 'US-001' })).toBe(true);
-      expect(detectArchitectApproval(staleApproval, { request_id: 'new-request', story_id: 'US-001' })).toBe(false);
-    });
-
-    it('ignores approval tags embedded inside the verification prompt itself', () => {
-      const state = {
-        ...baseVerificationState,
-        critic_mode: 'codex' as const,
-        request_id: 'req-injected',
-        story_id: 'US-001',
-      };
-      const prompt = getArchitectVerificationPrompt(state);
-
-      expect(detectArchitectApproval(prompt, { request_id: 'req-injected', story_id: 'US-001' })).toBe(false);
-    });
-
-    it('detects codex-style rejection language', () => {
-      const result = detectArchitectRejection('Codex reviewer found issues: Missing tests.');
-      expect(result.rejected).toBe(true);
-      expect(result.feedback).toContain('Missing tests');
     });
   });
 
@@ -424,7 +333,6 @@ describe('Ralph PRD-Mandatory', () => {
             ],
             priority: 1,
             passes: false,
-            architectVerified: false,
           },
           {
             id: 'US-002',
@@ -433,7 +341,6 @@ describe('Ralph PRD-Mandatory', () => {
             acceptanceCriteria: ['Prometheus endpoint exposes cache metrics'],
             priority: 2,
             passes: false,
-            architectVerified: false,
           },
         ],
       };
@@ -462,14 +369,6 @@ describe('Ralph PRD-Mandatory', () => {
       expect(prompt).toContain('Implement caching');
       expect(prompt).toContain('US-001');
       expect(prompt).toContain('Verify EACH acceptance criterion');
-    });
-
-    it('stores selected critic mode in Ralph state', () => {
-      const hook = createRalphLoopHook(testDir);
-      hook.startLoop(undefined, 'Implement caching', { criticMode: 'codex' });
-
-      const state = readRalphState(testDir);
-      expect(state?.critic_mode).toBe('codex');
     });
 
     it('scaffold PRD creates valid structure that getPrdStatus can read', () => {

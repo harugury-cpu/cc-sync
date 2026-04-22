@@ -12,7 +12,6 @@ import {
   resolveStatePath,
   resolveSessionStatePath,
 } from "../../lib/worktree-paths.js";
-import { truncatePromptForEcho } from "../../lib/truncate-prompt.js";
 
 export interface UltraworkState {
   /** Whether ultrawork mode is currently active */
@@ -236,7 +235,7 @@ REMEMBER THE ULTRAWORK RULES:
 
 Continue working on the next pending task. DO NOT STOP until all tasks are marked complete.
 
-Original task: ${truncatePromptForEcho(state.original_prompt)}
+Original task: ${state.original_prompt}
 
 </ultrawork-persistence>
 

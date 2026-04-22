@@ -15,8 +15,6 @@ import { memoryTools } from "../tools/memory-tools.js";
 import { traceTools } from "../tools/trace-tools.js";
 import { sharedMemoryTools } from "../tools/shared-memory-tools.js";
 import { getInteropTools } from "../interop/mcp-bridge.js";
-import { deepinitManifestTool } from "../tools/deepinit-manifest.js";
-import { wikiTools } from "../tools/wiki-tools.js";
 import { TOOL_CATEGORIES } from "../constants/index.js";
 // Tag each tool array with its category before aggregation
 function tagCategory(tools, category) {
@@ -41,9 +39,6 @@ export const DISABLE_TOOLS_GROUP_MAP = {
     'codex': TOOL_CATEGORIES.CODEX,
     'gemini': TOOL_CATEGORIES.GEMINI,
     'shared-memory': TOOL_CATEGORIES.SHARED_MEMORY,
-    'deepinit': TOOL_CATEGORIES.DEEPINIT,
-    'deepinit-manifest': TOOL_CATEGORIES.DEEPINIT,
-    'wiki': TOOL_CATEGORIES.WIKI,
 };
 /**
  * Parse OMC_DISABLE_TOOLS env var value into a Set of disabled ToolCategory values.
@@ -89,8 +84,6 @@ const allTools = [
     ...tagCategory(memoryTools, TOOL_CATEGORIES.MEMORY),
     ...tagCategory(traceTools, TOOL_CATEGORIES.TRACE),
     ...tagCategory(sharedMemoryTools, TOOL_CATEGORIES.SHARED_MEMORY),
-    { ...deepinitManifestTool, category: TOOL_CATEGORIES.DEEPINIT },
-    ...tagCategory(wikiTools, TOOL_CATEGORIES.WIKI),
     ...interopTools,
 ];
 // Read OMC_DISABLE_TOOLS once at startup and filter tools accordingly
@@ -125,7 +118,7 @@ const toolCategoryMap = new Map(allTools.map(t => [`mcp__t__${t.name}`, t.catego
  * Uses category metadata instead of string heuristics.
  */
 export function getOmcToolNames(options) {
-    const { includeLsp = true, includeAst = true, includePython = true, includeSkills = true, includeState = true, includeNotepad = true, includeMemory = true, includeTrace = true, includeInterop = true, includeSharedMemory = true, includeDeepinit = true, includeWiki = true, } = options || {};
+    const { includeLsp = true, includeAst = true, includePython = true, includeSkills = true, includeState = true, includeNotepad = true, includeMemory = true, includeTrace = true, includeInterop = true, includeSharedMemory = true, } = options || {};
     const excludedCategories = new Set();
     if (!includeLsp)
         excludedCategories.add(TOOL_CATEGORIES.LSP);
@@ -147,10 +140,6 @@ export function getOmcToolNames(options) {
         excludedCategories.add(TOOL_CATEGORIES.INTEROP);
     if (!includeSharedMemory)
         excludedCategories.add(TOOL_CATEGORIES.SHARED_MEMORY);
-    if (!includeDeepinit)
-        excludedCategories.add(TOOL_CATEGORIES.DEEPINIT);
-    if (!includeWiki)
-        excludedCategories.add(TOOL_CATEGORIES.WIKI);
     if (excludedCategories.size === 0)
         return [...omcToolNames];
     return omcToolNames.filter(name => {
@@ -162,7 +151,7 @@ export function getOmcToolNames(options) {
  * Test-only helper for deterministic category-filter verification independent of env startup state.
  */
 export function _getAllToolNamesForTests(options) {
-    const { includeLsp = true, includeAst = true, includePython = true, includeSkills = true, includeState = true, includeNotepad = true, includeMemory = true, includeTrace = true, includeInterop = true, includeSharedMemory = true, includeDeepinit = true, includeWiki = true, } = options || {};
+    const { includeLsp = true, includeAst = true, includePython = true, includeSkills = true, includeState = true, includeNotepad = true, includeMemory = true, includeTrace = true, includeInterop = true, includeSharedMemory = true, } = options || {};
     const excludedCategories = new Set();
     if (!includeLsp)
         excludedCategories.add(TOOL_CATEGORIES.LSP);
@@ -184,10 +173,6 @@ export function _getAllToolNamesForTests(options) {
         excludedCategories.add(TOOL_CATEGORIES.INTEROP);
     if (!includeSharedMemory)
         excludedCategories.add(TOOL_CATEGORIES.SHARED_MEMORY);
-    if (!includeDeepinit)
-        excludedCategories.add(TOOL_CATEGORIES.DEEPINIT);
-    if (!includeWiki)
-        excludedCategories.add(TOOL_CATEGORIES.WIKI);
     return allTools
         .filter(t => !t.category || !excludedCategories.has(t.category))
         .map(t => `mcp__t__${t.name}`);

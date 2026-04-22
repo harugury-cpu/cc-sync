@@ -21,7 +21,6 @@ import { killSession } from "./tmux-session.js";
 import { logAuditEvent } from "./audit-log.js";
 import { getEffectivePermissions, findPermissionViolations, } from "./permissions.js";
 import { getBuiltinExternalDefaultModel } from "../config/models.js";
-import { sanitizePromptContent as sanitizeSharedPromptContent } from "../agents/prompt-helpers.js";
 import { getTeamStatus } from "./team-status.js";
 import { measureCharCounts, recordTaskUsage } from "./usage-tracker.js";
 /** Simple logger */
@@ -48,6 +47,45 @@ function audit(config, eventType, taskId, details) {
 /** Sleep helper */
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+/**
+ * Allowlist of environment variables safe to pass to child processes.
+ * This prevents leaking sensitive variables like ANTHROPIC_API_KEY, GITHUB_TOKEN, etc.
+ */
+const ENV_ALLOWLIST = [
+    // Core system paths
+    'PATH', 'HOME', 'USERPROFILE',
+    // User identification
+    'USER', 'USERNAME', 'LOGNAME',
+    // Locale settings
+    'LANG', 'LC_ALL', 'LC_CTYPE',
+    // Terminal/tmux
+    'TERM', 'TMUX', 'TMUX_PANE',
+    // Temp directories
+    'TMPDIR', 'TMP', 'TEMP',
+    // XDG directories (Linux)
+    'XDG_RUNTIME_DIR', 'XDG_DATA_HOME', 'XDG_CONFIG_HOME',
+    // Shell
+    'SHELL',
+    // Node.js
+    'NODE_ENV',
+    // Proxy settings
+    'HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy', 'NO_PROXY', 'no_proxy',
+    // Windows system
+    'SystemRoot', 'SYSTEMROOT', 'windir', 'COMSPEC',
+];
+/**
+ * Create a minimal environment for child processes.
+ * Only includes allowlisted variables to prevent credential leakage.
+ */
+function createMinimalEnv() {
+    const env = {};
+    for (const key of ENV_ALLOWLIST) {
+        if (process.env[key] !== undefined) {
+            env[key] = process.env[key];
+        }
+    }
+    return env;
 }
 /**
  * Capture a snapshot of tracked/modified/untracked files in the working directory.
@@ -160,7 +198,20 @@ const MAX_INBOX_CONTEXT_SIZE = 20000;
  * @internal
  */
 export function sanitizePromptContent(content, maxLength) {
-    return sanitizeSharedPromptContent(content, maxLength);
+    let sanitized = content.length > maxLength ? content.slice(0, maxLength) : content;
+    // If truncation split a surrogate pair, remove the dangling high surrogate
+    if (sanitized.length > 0) {
+        const lastCode = sanitized.charCodeAt(sanitized.length - 1);
+        if (lastCode >= 0xd800 && lastCode <= 0xdbff) {
+            sanitized = sanitized.slice(0, -1);
+        }
+    }
+    // Escape XML-like tags that match our prompt delimiters (including tags with attributes)
+    sanitized = sanitized.replace(/<(\/?)(TASK_SUBJECT)[^>]*>/gi, "[$1$2]");
+    sanitized = sanitized.replace(/<(\/?)(TASK_DESCRIPTION)[^>]*>/gi, "[$1$2]");
+    sanitized = sanitized.replace(/<(\/?)(INBOX_MESSAGE)[^>]*>/gi, "[$1$2]");
+    sanitized = sanitized.replace(/<(\/?)(INSTRUCTIONS)[^>]*>/gi, "[$1$2]");
+    return sanitized;
 }
 /** Format the prompt template with sanitized content */
 function formatPromptTemplate(sanitizedSubject, sanitizedDescription, workingDirectory, inboxContext) {
@@ -436,14 +487,12 @@ async function handleShutdown(config, signal, activeChild) {
             activeChild.kill("SIGKILL");
         }
     }
-    // 2. Write shutdown ack to outbox (skip if already written by drain path)
-    if (!signal._ackAlreadyWritten) {
-        appendOutbox(teamName, workerName, {
-            type: "shutdown_ack",
-            requestId: signal.requestId,
-            timestamp: new Date().toISOString(),
-        });
-    }
+    // 2. Write shutdown ack to outbox
+    appendOutbox(teamName, workerName, {
+        type: "shutdown_ack",
+        requestId: signal.requestId,
+        timestamp: new Date().toISOString(),
+    });
     // 3. Unregister from config.json / shadow registry
     try {
         unregisterMcpWorker(teamName, workerName, workingDirectory);
@@ -510,7 +559,7 @@ export async function runBridge(config) {
                     reason: drain.reason,
                     type: "drain",
                 });
-                // Write drain ack to outbox (only once — handleShutdown below skips its own ack)
+                // Write drain ack to outbox
                 appendOutbox(teamName, workerName, {
                     type: "shutdown_ack",
                     requestId: drain.requestId,
@@ -518,8 +567,8 @@ export async function runBridge(config) {
                 });
                 // Clean up drain signal
                 deleteDrainSignal(teamName, workerName);
-                // Run full shutdown cleanup (unregister, heartbeat, etc.) but skip duplicate ack
-                await handleShutdown(config, { requestId: drain.requestId, reason: `drain: ${drain.reason}`, _ackAlreadyWritten: true }, null);
+                // Use the same handleShutdown for cleanup
+                await handleShutdown(config, { requestId: drain.requestId, reason: `drain: ${drain.reason}` }, null);
                 break;
             }
             // --- 2. Check self-quarantine ---

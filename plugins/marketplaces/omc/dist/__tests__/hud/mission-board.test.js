@@ -102,7 +102,6 @@ describe('mission board renderer', () => {
             promptTime: null,
             apiKeySource: null,
             profileName: null,
-            sessionSummary: null,
         };
         const config = {
             ...DEFAULT_HUD_CONFIG,

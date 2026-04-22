@@ -1,7 +1,7 @@
 /**
  * File Type Detection
  * @module lib/core/file
- * @version 2.0.0
+ * @version 1.4.7
  */
 
 const path = require('path');

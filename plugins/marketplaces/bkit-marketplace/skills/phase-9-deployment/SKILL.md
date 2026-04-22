@@ -1,15 +1,21 @@
 ---
 name: phase-9-deployment
-classification: capability
-classification-reason: Pattern guidance may overlap with model's built-in knowledge as it improves
-deprecation-risk: medium
-effort: medium
-user-invocable: false
 description: |
-  Deploy to production — CI/CD pipelines, environment config, deployment strategies.
-  Triggers: deployment, CI/CD, production, Vercel, 배포, 프로덕션.
+  Skill for deploying to production environment.
+  Covers CI/CD, environment configuration, and deployment strategies.
+
+  Use proactively when user is ready to deploy or asks about production environment setup.
+
+  Triggers: deployment, CI/CD, production, Vercel, Kubernetes, Docker, 배포, デプロイ, 部署,
+  despliegue, implementación, producción,
+  déploiement, mise en production,
+  Bereitstellung, Produktion,
+  distribuzione, messa in produzione
+
+  Do NOT use for: local development, design phase, or feature implementation.
 imports:
   - ${PLUGIN_ROOT}/templates/pipeline/phase-9-deployment.template.md
+# hooks: Managed by hooks/hooks.json (unified-bash-pre.js, unified-stop.js) - GitHub #9354 workaround
 agent: bkit:infra-architect
 allowed-tools:
   - Read

@@ -9,13 +9,12 @@
 import { mkdirSync, statSync } from "fs";
 import { join } from "path";
 import { writeModeState, readModeState, clearModeStateFile, } from "../../lib/mode-state-io.js";
-import { resolveStatePath, resolveSessionStatePath, getOmcRoot, } from "../../lib/worktree-paths.js";
+import { resolveStatePath, resolveSessionStatePath, } from "../../lib/worktree-paths.js";
 import { DEFAULT_CONFIG } from "./types.js";
-import { loadConfig } from "../../config/loader.js";
-import { resolvePlanOutputAbsolutePath } from "../../config/plan-output.js";
-import { readRalphState, writeRalphState, clearRalphState, clearLinkedUltraworkState, } from "../ralph/index.js";
+import { readRalphState, clearRalphState, clearLinkedUltraworkState, } from "../ralph/index.js";
 import { startUltraQA, clearUltraQAState, readUltraQAState, } from "../ultraqa/index.js";
 import { canStartMode } from "../mode-registry/index.js";
+import { getOmcRoot } from "../../lib/worktree-paths.js";
 const SPEC_DIR = "autopilot";
 // ============================================================================
 // STATE MANAGEMENT
@@ -238,7 +237,7 @@ export function getSpecPath(directory) {
  * Get the plan file path
  */
 export function getPlanPath(directory) {
-    return resolvePlanOutputAbsolutePath(directory, "autopilot-impl", loadConfig());
+    return join(getOmcRoot(directory), "plans", "autopilot-impl.md");
 }
 /**
  * Transition from Ralph (Phase 2: Execution) to UltraQA (Phase 3: QA)
@@ -270,35 +269,31 @@ export function transitionRalphToUltraQA(directory, sessionId) {
             error: "Failed to update execution state",
         };
     }
-    // Step 2: Deactivate Ralph (set active=false) so UltraQA's mutual exclusion
-    // check passes, but keep state file on disk for rollback if UltraQA fails.
-    if (ralphState) {
-        writeRalphState(directory, { ...ralphState, active: false }, sessionId);
-    }
+    // Step 2: Cleanly terminate Ralph (and linked Ultrawork)
     if (ralphState?.linked_ultrawork) {
         clearLinkedUltraworkState(directory, sessionId);
+    }
+    const ralphCleared = clearRalphState(directory, sessionId);
+    if (!ralphCleared) {
+        return {
+            success: false,
+            error: "Failed to clear Ralph state",
+        };
     }
     // Step 3: Transition to QA phase
     const newState = transitionPhase(directory, "qa", sessionId);
     if (!newState) {
-        // Rollback: re-activate Ralph
-        if (ralphState) {
-            writeRalphState(directory, ralphState, sessionId);
-        }
         return {
             success: false,
             error: "Failed to transition to QA phase",
         };
     }
-    // Step 4: Start UltraQA (Ralph is deactivated, mutual exclusion passes)
+    // Step 4: Start UltraQA
     const qaResult = startUltraQA(directory, "tests", sessionId, {
         maxCycles: 5,
     });
     if (!qaResult.success) {
-        // Rollback: restore Ralph state and execution phase
-        if (ralphState) {
-            writeRalphState(directory, ralphState, sessionId);
-        }
+        // Rollback on failure - restore execution phase
         transitionPhase(directory, "execution", sessionId);
         updateExecution(directory, { ralph_completed_at: undefined }, sessionId);
         return {
@@ -306,8 +301,6 @@ export function transitionRalphToUltraQA(directory, sessionId) {
             error: qaResult.error || "Failed to start UltraQA",
         };
     }
-    // Step 5: UltraQA started — clear Ralph state fully (best-effort)
-    clearRalphState(directory, sessionId);
     return {
         success: true,
         state: newState,

@@ -1,27 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
-
-const execFileSyncMock = vi.hoisted(() => vi.fn());
-
-vi.mock("child_process", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("child_process")>();
-  return {
-    ...actual,
-    execFileSync: execFileSyncMock,
-  };
-});
-
-const mockGetCurrentTmuxSession = vi.fn<() => string | null>(() => null);
-vi.mock("../../notifications/tmux.js", () => ({
-  getCurrentTmuxSession: () => mockGetCurrentTmuxSession(),
-}));
-
-const mockGetNewPaneTail = vi.fn<(paneId: string, stateDir: string, maxLines?: number) => string>(() => "");
-vi.mock("../../features/rate-limit-wait/pane-fresh-capture.js", () => ({
-  getNewPaneTail: (paneId: string, stateDir: string, maxLines?: number) => mockGetNewPaneTail(paneId, stateDir, maxLines),
-}));
 
 // Mock config and dispatcher modules
 vi.mock("../config.js", () => ({
@@ -45,7 +22,6 @@ import { wakeOpenClaw } from "../index.js";
 import { getOpenClawConfig, resolveGateway } from "../config.js";
 import { wakeGateway, wakeCommandGateway } from "../dispatcher.js";
 import type { OpenClawConfig } from "../types.js";
-import { parseTmuxTail } from "../../notifications/formatter.js";
 
 const mockConfig: OpenClawConfig = {
   enabled: true,
@@ -79,8 +55,6 @@ describe("wakeOpenClaw", () => {
       success: true,
       statusCode: 200,
     });
-    mockGetCurrentTmuxSession.mockReturnValue(null);
-    mockGetNewPaneTail.mockReturnValue("");
   });
 
   afterEach(() => {
@@ -120,46 +94,6 @@ describe("wakeOpenClaw", () => {
     const payload = call[2];
     expect(payload.event).toBe("session-start");
     expect(payload.instruction).toContain("myproject"); // interpolated
-  });
-
-  it("captures fresh pane delta for stop events and passes it directly to payload", async () => {
-    const freshContent = [
-      '❯ rg -n "error|fail|conflict" src tests',
-      "TypeScript check passed: 0 errors, 0 warnings",
-      "RuntimeError: boom",
-      "BLOCKED: runtime failure",
-    ].join("\n");
-    mockGetNewPaneTail.mockReturnValue(freshContent);
-    vi.stubEnv("TMUX", "/tmp/tmux-1000/default,123,0");
-    vi.stubEnv("TMUX_PANE", "%7");
-
-    await wakeOpenClaw("stop", {
-      sessionId: "sid-stop",
-      projectPath: "/home/user/myproject",
-    });
-
-    expect(mockGetNewPaneTail).toHaveBeenCalledWith(
-      "%7",
-      join("/home/user/myproject", ".omc", "state"),
-      15,
-    );
-    const payload = vi.mocked(wakeGateway).mock.calls[0]?.[2];
-    expect(payload.tmuxTail).toBe(parseTmuxTail(freshContent, 15));
-    expect(payload.tmuxTail).toBe("RuntimeError: boom\nBLOCKED: runtime failure");
-  });
-
-  it("omits tmuxTail from stop payload when pane has no new lines", async () => {
-    mockGetNewPaneTail.mockReturnValue("");
-    vi.stubEnv("TMUX", "/tmp/tmux-1000/default,123,0");
-    vi.stubEnv("TMUX_PANE", "%7");
-
-    await wakeOpenClaw("stop", {
-      sessionId: "sid-stop",
-      projectPath: "/home/user/myproject",
-    });
-
-    const payload = vi.mocked(wakeGateway).mock.calls[0]?.[2];
-    expect(payload.tmuxTail).toBeUndefined();
   });
 
   it("uses a single timestamp in both template variables and payload", async () => {
@@ -347,54 +281,6 @@ describe("wakeOpenClaw", () => {
     // The instruction variable should be the interpolated result
     expect(variables.instruction).toContain("myproject");
   });
-
-  it("adds a normalized test signal to the HTTP payload", async () => {
-    vi.mocked(resolveGateway).mockReturnValue({
-      gatewayName: "my-gateway",
-      gateway: { url: "https://example.com/wake", method: "POST" as const },
-      instruction: "test",
-    });
-
-    await wakeOpenClaw("post-tool-use", {
-      sessionId: "sid-1",
-      projectPath: "/home/user/myproject",
-      toolName: "Bash",
-      toolInput: { command: "pnpm test" },
-      toolOutput: "FAIL src/openclaw/signal.test.ts\nTest failed",
-    });
-
-    const payload = vi.mocked(wakeGateway).mock.calls[0][2];
-    expect(payload.signal).toMatchObject({
-      kind: "test",
-      phase: "failed",
-      routeKey: "test.failed",
-      priority: "high",
-      testRunner: "package-test",
-    });
-  });
-
-  it("passes payloadJson and signalRouteKey to command gateways for PR creation", async () => {
-    const commandGateway = { type: "command" as const, command: "notify {{signalRouteKey}} {{payloadJson}}" };
-    vi.mocked(resolveGateway).mockReturnValue({
-      gatewayName: "cmd-gw",
-      gateway: commandGateway,
-      instruction: "Create PR",
-    });
-    vi.mocked(wakeCommandGateway).mockResolvedValue({ gateway: "cmd-gw", success: true });
-
-    await wakeOpenClaw("post-tool-use", {
-      sessionId: "sid-1",
-      projectPath: "/home/user/myproject",
-      toolName: "Bash",
-      toolInput: { command: "gh pr create --base dev --fill" },
-      toolOutput: "https://github.com/example/repo/pull/1500",
-    });
-
-    const variables = vi.mocked(wakeCommandGateway).mock.calls[0][2];
-    expect(variables.signalRouteKey).toBe("pull-request.created");
-    expect(variables.payloadJson).toContain('"routeKey":"pull-request.created"');
-    expect(variables.payloadJson).toContain('"prUrl":"https://github.com/example/repo/pull/1500"');
-  });
 });
 
 describe("reply channel context", () => {
@@ -406,7 +292,6 @@ describe("reply channel context", () => {
       success: true,
       statusCode: 200,
     });
-    mockGetCurrentTmuxSession.mockReturnValue(null);
   });
 
   afterEach(() => {
@@ -497,113 +382,5 @@ describe("reply channel context", () => {
     const call = vi.mocked(wakeGateway).mock.calls[0];
     const payload = call[2];
     expect(payload.channel).toBe("#from-context");
-  });
-});
-
-
-describe("burst dedupe for attached multi-pane sessions", () => {
-  let projectDir: string;
-
-  beforeEach(() => {
-    projectDir = mkdtempSync(join(tmpdir(), "omc-openclaw-dedupe-"));
-    vi.mocked(getOpenClawConfig).mockReturnValue(mockConfig);
-    vi.mocked(resolveGateway).mockReturnValue(mockResolvedGateway);
-    vi.mocked(wakeGateway).mockResolvedValue({
-      gateway: "my-gateway",
-      success: true,
-      statusCode: 200,
-    });
-    execFileSyncMock.mockReset();
-    execFileSyncMock.mockReturnValue(Buffer.from(""));
-    mockGetCurrentTmuxSession.mockReturnValue(null);
-    mockGetCurrentTmuxSession.mockReturnValue("dev-session");
-  });
-
-  afterEach(() => {
-    rmSync(projectDir, { recursive: true, force: true });
-    vi.clearAllMocks();
-  });
-
-  it("collapses repeated session-start bursts for the same tmux session", async () => {
-    const first = await wakeOpenClaw("session-start", {
-      sessionId: "sid-1",
-      projectPath: projectDir,
-    });
-    const second = await wakeOpenClaw("session-start", {
-      sessionId: "sid-2",
-      projectPath: projectDir,
-    });
-
-    expect(first).toMatchObject({ success: true });
-    expect(second).toMatchObject({ success: true, skipped: "deduped" });
-    expect(wakeGateway).toHaveBeenCalledTimes(1);
-  });
-
-  it("collapses repeated prompt-submitted bursts only when the prompt matches", async () => {
-    await wakeOpenClaw("keyword-detector", {
-      sessionId: "sid-1",
-      projectPath: projectDir,
-      prompt: "Ship it now",
-    });
-    const deduped = await wakeOpenClaw("keyword-detector", {
-      sessionId: "sid-2",
-      projectPath: projectDir,
-      prompt: "  Ship   it now  ",
-    });
-    await wakeOpenClaw("keyword-detector", {
-      sessionId: "sid-3",
-      projectPath: projectDir,
-      prompt: "Ship a different change",
-    });
-
-    expect(deduped).toMatchObject({ success: true, skipped: "deduped" });
-    expect(wakeGateway).toHaveBeenCalledTimes(2);
-  });
-
-  it("collapses repeated stop bursts for the same tmux session", async () => {
-    await wakeOpenClaw("stop", {
-      sessionId: "sid-1",
-      projectPath: projectDir,
-    });
-    const deduped = await wakeOpenClaw("stop", {
-      sessionId: "sid-2",
-      projectPath: projectDir,
-    });
-
-    expect(deduped).toMatchObject({ success: true, skipped: "deduped" });
-    expect(wakeGateway).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not collapse lifecycle events when no tmux session is available", async () => {
-    mockGetCurrentTmuxSession.mockReturnValue(null);
-
-    await wakeOpenClaw("session-start", {
-      sessionId: "sid-1",
-      projectPath: projectDir,
-    });
-    await wakeOpenClaw("session-start", {
-      sessionId: "sid-2",
-      projectPath: projectDir,
-    });
-
-    expect(wakeGateway).toHaveBeenCalledTimes(2);
-  });
-
-  it("does not suppress keyword-detector events when the tmux session no longer exists", async () => {
-    // Dead-session suppression lives in index.ts (isPaneAlive guard on capture),
-    // not in the dedupe layer. keyword-detector events go through normal burst
-    // dedupe regardless of tmux session liveness.
-    execFileSyncMock.mockImplementation(() => {
-      throw new Error("dead session");
-    });
-
-    const result = await wakeOpenClaw("keyword-detector", {
-      sessionId: "sid-dead",
-      projectPath: projectDir,
-      prompt: "stale pane replay",
-    });
-
-    expect(result).toMatchObject({ success: true });
-    expect(wakeGateway).toHaveBeenCalledOnce();
   });
 });

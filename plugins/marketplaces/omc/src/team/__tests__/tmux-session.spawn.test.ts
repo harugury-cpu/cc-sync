@@ -1,16 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+type ExecFileCallback = (error: Error | null, stdout: string, stderr: string) => void;
+
 const mockedCalls = vi.hoisted(() => ({
-  tmuxArgs: [] as string[][],
+  execFileArgs: [] as string[][],
 }));
 
-vi.mock('../../cli/tmux-utils.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../cli/tmux-utils.js')>();
+vi.mock('child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('child_process')>();
   return {
     ...actual,
-    tmuxExecAsync: vi.fn(async (args: string[]) => {
-      mockedCalls.tmuxArgs.push(args);
-      return { stdout: '', stderr: '' };
+    execFile: vi.fn((_cmd: string, args: string[], cb: ExecFileCallback) => {
+      mockedCalls.execFileArgs.push(args);
+      cb(null, '', '');
+      return {} as never;
     }),
   };
 });
@@ -19,7 +22,7 @@ import { spawnWorkerInPane } from '../tmux-session.js';
 
 describe('spawnWorkerInPane', () => {
   beforeEach(() => {
-    mockedCalls.tmuxArgs = [];
+    mockedCalls.execFileArgs = [];
   });
 
   it('uses argv-style launch with literal tmux send-keys', async () => {
@@ -35,7 +38,7 @@ describe('spawnWorkerInPane', () => {
       cwd: '/tmp',
     });
 
-    const literalSend = mockedCalls.tmuxArgs.find(
+    const literalSend = mockedCalls.execFileArgs.find(
       (args) => args[0] === 'send-keys' && args.includes('-l')
     );
     expect(literalSend).toBeDefined();

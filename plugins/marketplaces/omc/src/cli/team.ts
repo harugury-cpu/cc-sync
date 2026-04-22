@@ -1,20 +1,15 @@
-import { randomUUID } from 'crypto';
 import { spawn } from 'child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { readFile, rm } from 'fs/promises';
+import { appendFile, readFile, readdir, rm } from 'fs/promises';
+import { homedir } from 'os';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { executeTeamApiOperation as executeCanonicalTeamApiOperation, resolveTeamApiOperation } from '../team/api-interop.js';
-import { cleanupTeamWorktrees } from '../team/git-worktree.js';
-import { killWorkerPanes, killTeamSession } from '../team/tmux-session.js';
+import { killWorkerPanes } from '../team/tmux-session.js';
 import { validateTeamName } from '../team/team-name.js';
 import { monitorTeam, resumeTeam, shutdownTeam } from '../team/runtime.js';
-import { readTeamConfig } from '../team/monitor.js';
-import { isProcessAlive } from '../platform/index.js';
-import { getGlobalOmcStatePath } from '../utils/paths.js';
 
-const JOB_ID_PATTERN = /^omc-[a-z0-9]{1,16}$/;
-const VALID_CLI_AGENT_TYPES = new Set(['claude', 'codex', 'gemini', 'cursor']);
+const JOB_ID_PATTERN = /^omc-[a-z0-9]{1,12}$/;
+const VALID_CLI_AGENT_TYPES = new Set(['claude', 'codex', 'gemini']);
 const SUBCOMMANDS = new Set(['start', 'status', 'wait', 'cleanup', 'resume', 'shutdown', 'api', 'help', '--help', '-h']);
 
 const SUPPORTED_API_OPERATIONS = new Set([
@@ -22,12 +17,10 @@ const SUPPORTED_API_OPERATIONS = new Set([
   'broadcast',
   'mailbox-list',
   'mailbox-mark-delivered',
-  'mailbox-mark-notified',
   'list-tasks',
   'read-task',
   'read-config',
   'get-summary',
-  'orphan-cleanup',
 ] as const);
 const TEAM_API_USAGE = `
 Usage:
@@ -42,12 +35,10 @@ type SupportedApiOperation =
   | 'broadcast'
   | 'mailbox-list'
   | 'mailbox-mark-delivered'
-  | 'mailbox-mark-notified'
   | 'list-tasks'
   | 'read-task'
   | 'read-config'
-  | 'get-summary'
-  | 'orphan-cleanup';
+  | 'get-summary';
 
 interface TeamApiEnvelope {
   ok: boolean;
@@ -62,13 +53,11 @@ interface TeamApiEnvelope {
 interface TeamLegacyStartArgs {
   workerCount: number;
   agentType: string;
-  role?: string;
   task: string;
   teamName: string;
   ralph: boolean;
   json: boolean;
   cwd: string;
-  newWindow?: boolean;
 }
 
 export interface TeamTaskInput {
@@ -81,7 +70,6 @@ export interface TeamStartInput {
   agentTypes: string[];
   tasks: TeamTaskInput[];
   cwd: string;
-  newWindow?: boolean;
   workerCount?: number;
   pollIntervalMs?: number;
   sentinelGateTimeoutMs?: number;
@@ -130,8 +118,6 @@ interface TeamJobRecord {
 interface TeamPanesFile {
   paneIds: string[];
   leaderPaneId: string;
-  sessionName?: string;
-  ownsWindow?: boolean;
 }
 
 function getTeamWorkerIdentityFromEnv(env: NodeJS.ProcessEnv = process.env): string | null {
@@ -141,43 +127,17 @@ function getTeamWorkerIdentityFromEnv(env: NodeJS.ProcessEnv = process.env): str
   return omx || null;
 }
 
-async function assertTeamSpawnAllowed(cwd: string, env: NodeJS.ProcessEnv = process.env): Promise<void> {
+function assertTeamSpawnAllowed(env: NodeJS.ProcessEnv = process.env): void {
   const workerIdentity = getTeamWorkerIdentityFromEnv(env);
-  const { teamReadManifest } = await import('../team/team-ops.js');
-  const { findActiveTeamsV2 } = await import('../team/runtime-v2.js');
-  const { DEFAULT_TEAM_GOVERNANCE, normalizeTeamGovernance } = await import('../team/governance.js');
-
-  if (workerIdentity) {
-    const [parentTeamName] = workerIdentity.split('/');
-    const parentManifest = parentTeamName ? await teamReadManifest(parentTeamName, cwd) : null;
-    const governance = normalizeTeamGovernance(parentManifest?.governance, parentManifest?.policy);
-    if (!governance.nested_teams_allowed) {
-      throw new Error(
-        `Worker context (${workerIdentity}) cannot start nested teams because nested_teams_allowed is false.`,
-      );
-    }
-    if (!governance.delegation_only) {
-      throw new Error(
-        `Worker context (${workerIdentity}) cannot start nested teams because delegation_only is false.`,
-      );
-    }
-    return;
-  }
-
-  const activeTeams = await findActiveTeamsV2(cwd);
-  for (const activeTeam of activeTeams) {
-    const manifest = await teamReadManifest(activeTeam, cwd);
-    const governance = normalizeTeamGovernance(manifest?.governance, manifest?.policy);
-    if (governance.one_team_per_leader_session ?? DEFAULT_TEAM_GOVERNANCE.one_team_per_leader_session) {
-      throw new Error(
-        `Leader session already owns active team "${activeTeam}" and one_team_per_leader_session is enabled.`,
-      );
-    }
-  }
+  if (!workerIdentity) return;
+  throw new Error(
+    `Worker context (${workerIdentity}) cannot start/spawn new teams. ` +
+    `Use only "omc team api ..." operations from worker sessions.`,
+  );
 }
 
 function resolveJobsDir(env: NodeJS.ProcessEnv = process.env): string {
-  return env.OMC_JOBS_DIR || getGlobalOmcStatePath('team-jobs');
+  return env.OMC_JOBS_DIR || join(homedir(), '.omc', 'team-jobs');
 }
 
 function resolveRuntimeCliPath(env: NodeJS.ProcessEnv = process.env): string {
@@ -239,6 +199,15 @@ function writeJobToDisk(jobId: string, job: TeamJobRecord, jobsDir: string): voi
   writeFileSync(jobPath(jobsDir, jobId), JSON.stringify(job), 'utf-8');
 }
 
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function parseJobResult(raw?: string): unknown {
   if (!raw) return undefined;
   const parsed = parseJsonSafe<unknown>(raw);
@@ -255,8 +224,8 @@ function buildStatus(jobId: string, job: TeamJobRecord): TeamJobStatus {
   };
 }
 
-export function generateJobId(now = Date.now()): string {
-  return `omc-${now.toString(36)}${randomUUID().slice(0, 8)}`;
+function generateJobId(now = Date.now()): string {
+  return `omc-${now.toString(36)}`;
 }
 
 function convergeWithResultArtifact(jobId: string, job: TeamJobRecord, jobsDir: string): TeamJobRecord {
@@ -274,7 +243,7 @@ function convergeWithResultArtifact(jobId: string, job: TeamJobRecord, jobsDir: 
     // no artifact yet
   }
 
-  if (job.status === 'running' && job.pid != null && !isProcessAlive(job.pid)) {
+  if (job.status === 'running' && job.pid != null && !isPidAlive(job.pid)) {
     return {
       ...job,
       status: 'failed',
@@ -328,8 +297,46 @@ function parseJsonInput(inputRaw: string | undefined): Record<string, unknown> {
   return parsed;
 }
 
+function readInputString(input: Record<string, unknown>, ...keys: string[]): string {
+  for (const key of keys) {
+    const value = input[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+  return '';
+}
+
+function mailboxPath(cwd: string, teamName: string, workerName: string): string {
+  return join(teamStateRoot(cwd, teamName), 'mailbox', `${workerName}.jsonl`);
+}
+
+async function readTaskFiles(cwd: string, teamName: string): Promise<Array<Record<string, unknown>>> {
+  const tasksDir = join(teamStateRoot(cwd, teamName), 'tasks');
+  let files: string[] = [];
+  try {
+    files = (await readdir(tasksDir)).filter((f) => f.endsWith('.json'));
+  } catch {
+    return [];
+  }
+
+  const loaded = await Promise.all(
+    files.map(async (file) => {
+      try {
+        const raw = await readFile(join(tasksDir, file), 'utf-8');
+        const parsed = parseJsonSafe<Record<string, unknown>>(raw);
+        return parsed ?? null;
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  return loaded.filter((v): v is Record<string, unknown> => v !== null);
+}
+
 export async function startTeamJob(input: TeamStartInput): Promise<TeamStartResult> {
-  await assertTeamSpawnAllowed(input.cwd);
+  assertTeamSpawnAllowed();
   validateTeamName(input.teamName);
   if (!Array.isArray(input.agentTypes) || input.agentTypes.length === 0) {
     throw new Error('agentTypes must be a non-empty array');
@@ -365,17 +372,13 @@ export async function startTeamJob(input: TeamStartInput): Promise<TeamStartResu
     agentTypes: input.agentTypes,
     tasks: input.tasks,
     cwd: input.cwd,
-    newWindow: input.newWindow,
     pollIntervalMs: input.pollIntervalMs,
     sentinelGateTimeoutMs: input.sentinelGateTimeoutMs,
     sentinelGatePollIntervalMs: input.sentinelGatePollIntervalMs,
   };
 
-  if (child.stdin && typeof child.stdin.on === 'function') {
-    child.stdin.on('error', () => {});
-  }
-  child.stdin?.write(JSON.stringify(payload));
-  child.stdin?.end();
+  child.stdin.write(JSON.stringify(payload));
+  child.stdin.end();
   child.unref();
 
   if (child.pid != null) {
@@ -443,17 +446,7 @@ export async function cleanupTeamJob(jobId: string, graceMs = 10_000): Promise<T
     .then((content) => parseJsonSafe<TeamPanesFile>(content))
     .catch(() => null);
 
-  if (paneArtifact?.sessionName && (paneArtifact.ownsWindow === true || !paneArtifact.sessionName.includes(':'))) {
-    const sessionMode = paneArtifact.ownsWindow === true
-      ? (paneArtifact.sessionName.includes(':') ? 'dedicated-window' : 'detached-session')
-      : 'detached-session';
-    await killTeamSession(
-      paneArtifact.sessionName,
-      paneArtifact.paneIds,
-      paneArtifact.leaderPaneId,
-      { sessionMode },
-    );
-  } else if (paneArtifact?.paneIds?.length) {
+  if (paneArtifact?.paneIds?.length) {
     await killWorkerPanes({
       paneIds: paneArtifact.paneIds,
       leaderPaneId: paneArtifact.leaderPaneId,
@@ -467,11 +460,6 @@ export async function cleanupTeamJob(jobId: string, graceMs = 10_000): Promise<T
     recursive: true,
     force: true,
   }).catch(() => undefined);
-  try {
-    cleanupTeamWorktrees(job.teamName, job.cwd);
-  } catch {
-    // best-effort for dormant team-owned worktree infrastructure
-  }
 
   writeJobToDisk(jobId, {
     ...job,
@@ -480,43 +468,14 @@ export async function cleanupTeamJob(jobId: string, graceMs = 10_000): Promise<T
 
   return {
     jobId,
-    message: paneArtifact?.ownsWindow
-      ? 'Cleaned up team tmux window'
-      : paneArtifact?.paneIds?.length
-        ? `Cleaned up ${paneArtifact.paneIds.length} worker pane(s)`
-        : 'No worker pane ids found for this job',
+    message: paneArtifact?.paneIds?.length
+      ? `Cleaned up ${paneArtifact.paneIds.length} worker pane(s)`
+      : 'No worker pane ids found for this job',
   };
 }
 
 export async function teamStatusByTeamName(teamName: string, cwd = process.cwd()): Promise<Record<string, unknown>> {
   validateTeamName(teamName);
-
-  const runtimeV2 = await import('../team/runtime-v2.js');
-  if (runtimeV2.isRuntimeV2Enabled()) {
-    const snapshot = await runtimeV2.monitorTeamV2(teamName, cwd);
-    if (!snapshot) {
-      return {
-        teamName,
-        running: false,
-        error: 'Team state not found',
-      };
-    }
-
-    const config = await readTeamConfig(teamName, cwd);
-    return {
-      teamName,
-      running: true,
-      sessionName: config?.tmux_session,
-      leaderPaneId: config?.leader_pane_id,
-      workerPaneIds: Array.from(new Set(
-        (config?.workers ?? [])
-          .map((worker) => worker.pane_id)
-          .filter((paneId): paneId is string => typeof paneId === 'string' && paneId.trim().length > 0),
-      )),
-      snapshot,
-    };
-  }
-
   const runtime = await resumeTeam(teamName, cwd);
   if (!runtime) {
     return {
@@ -561,19 +520,6 @@ export async function teamResumeByName(teamName: string, cwd = process.cwd()): P
 export async function teamShutdownByName(teamName: string, options: { cwd?: string; force?: boolean } = {}): Promise<Record<string, unknown>> {
   validateTeamName(teamName);
   const cwd = options.cwd ?? process.cwd();
-
-  const runtimeV2 = await import('../team/runtime-v2.js');
-  if (runtimeV2.isRuntimeV2Enabled()) {
-    const config = await readTeamConfig(teamName, cwd);
-    await runtimeV2.shutdownTeamV2(teamName, cwd, { force: Boolean(options.force) });
-    return {
-      teamName,
-      shutdown: true,
-      forced: Boolean(options.force),
-      sessionFound: Boolean(config),
-    };
-  }
-
   const runtime = await resumeTeam(teamName, cwd);
 
   if (!runtime) {
@@ -597,7 +543,6 @@ export async function teamShutdownByName(teamName: string, options: { cwd?: stri
     options.force ? 0 : 30_000,
     runtime.workerPaneIds,
     runtime.leaderPaneId,
-    runtime.ownsWindow,
   );
 
   return {
@@ -613,8 +558,7 @@ export async function executeTeamApiOperation(
   input: Record<string, unknown>,
   cwd = process.cwd(),
 ): Promise<TeamApiEnvelope> {
-  const canonicalOperation = resolveTeamApiOperation(operation);
-  if (!canonicalOperation || !SUPPORTED_API_OPERATIONS.has(canonicalOperation as SupportedApiOperation)) {
+  if (!SUPPORTED_API_OPERATIONS.has(operation as SupportedApiOperation)) {
     return {
       ok: false,
       operation,
@@ -625,30 +569,229 @@ export async function executeTeamApiOperation(
     };
   }
 
-  const normalizedInput = {
-    ...input,
-    ...(typeof input.teamName === 'string' && input.teamName.trim() !== '' && typeof input.team_name !== 'string'
-      ? { team_name: input.teamName }
-      : {}),
-    ...(typeof input.taskId === 'string' && input.taskId.trim() !== '' && typeof input.task_id !== 'string'
-      ? { task_id: input.taskId }
-      : {}),
-    ...(typeof input.workerName === 'string' && input.workerName.trim() !== '' && typeof input.worker !== 'string'
-      ? { worker: input.workerName }
-      : {}),
-    ...(typeof input.fromWorker === 'string' && input.fromWorker.trim() !== '' && typeof input.from_worker !== 'string'
-      ? { from_worker: input.fromWorker }
-      : {}),
-    ...(typeof input.toWorker === 'string' && input.toWorker.trim() !== '' && typeof input.to_worker !== 'string'
-      ? { to_worker: input.toWorker }
-      : {}),
-    ...(typeof input.messageId === 'string' && input.messageId.trim() !== '' && typeof input.message_id !== 'string'
-      ? { message_id: input.messageId }
-      : {}),
-  };
+  const teamName = readInputString(input, 'teamName', 'team_name');
+  if (!teamName) {
+    return {
+      ok: false,
+      operation,
+      error: {
+        code: 'INVALID_INPUT',
+        message: 'teamName is required in --input payload',
+      },
+    };
+  }
 
-  const result = await executeCanonicalTeamApiOperation(canonicalOperation, normalizedInput, cwd);
-  return result;
+  validateTeamName(teamName);
+
+  if (operation === 'send-message') {
+    const toWorker = readInputString(input, 'toWorker', 'to_worker');
+    const body = readInputString(input, 'body');
+    const fromWorker = readInputString(input, 'fromWorker', 'from_worker') || 'leader';
+
+    if (!toWorker || !body) {
+      return {
+        ok: false,
+        operation,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'send-message requires toWorker and body',
+        },
+      };
+    }
+
+    mkdirSync(dirname(mailboxPath(cwd, teamName, toWorker)), { recursive: true });
+    await appendFile(mailboxPath(cwd, teamName, toWorker), `${JSON.stringify({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      from: fromWorker,
+      to: toWorker,
+      body,
+      createdAt: new Date().toISOString(),
+      notifiedAt: null,
+    })}\n`, 'utf-8');
+
+    return {
+      ok: true,
+      operation,
+      data: { teamName, toWorker },
+    };
+  }
+
+  if (operation === 'broadcast') {
+    const body = readInputString(input, 'body');
+    const fromWorker = readInputString(input, 'fromWorker', 'from_worker') || 'leader';
+    if (!body) {
+      return {
+        ok: false,
+        operation,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'broadcast requires body',
+        },
+      };
+    }
+
+    const mailboxDir = join(teamStateRoot(cwd, teamName), 'mailbox');
+    let workers: string[] = [];
+    try {
+      workers = (await readdir(mailboxDir))
+        .filter((f) => f.endsWith('.jsonl'))
+        .map((f) => f.replace(/\.jsonl$/, ''));
+    } catch {
+      workers = [];
+    }
+
+    if (workers.length === 0) {
+      const configRaw = await readFile(join(teamStateRoot(cwd, teamName), 'config.json'), 'utf-8').catch(() => '');
+      const config = parseJsonSafe<{ workerCount?: number }>(configRaw);
+      const workerCount = Number.isFinite(config?.workerCount) && (config?.workerCount ?? 0) > 0
+        ? Number(config?.workerCount)
+        : 0;
+      workers = Array.from({ length: workerCount }, (_, i) => `worker-${i + 1}`);
+    }
+
+    await Promise.all(workers.map(async (worker) => {
+      mkdirSync(dirname(mailboxPath(cwd, teamName, worker)), { recursive: true });
+      await appendFile(mailboxPath(cwd, teamName, worker), `${JSON.stringify({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        from: fromWorker,
+        to: worker,
+        body,
+        createdAt: new Date().toISOString(),
+        broadcast: true,
+      })}\n`, 'utf-8');
+    }));
+
+    return {
+      ok: true,
+      operation,
+      data: { teamName, recipients: workers },
+    };
+  }
+
+  if (operation === 'mailbox-list') {
+    const mailboxDir = join(teamStateRoot(cwd, teamName), 'mailbox');
+    const workerFilter = readInputString(input, 'workerName', 'worker');
+
+    let files: string[] = [];
+    try {
+      files = (await readdir(mailboxDir)).filter((f) => f.endsWith('.jsonl'));
+    } catch {
+      files = [];
+    }
+
+    const selected = workerFilter
+      ? files.filter((f) => f === `${workerFilter}.jsonl`)
+      : files;
+
+    const mailboxes = await Promise.all(selected.map(async (file) => {
+      const workerName = file.replace(/\.jsonl$/, '');
+      const raw = await readFile(join(mailboxDir, file), 'utf-8').catch(() => '');
+      const lines = raw.split('\n').filter((line) => line.trim().length > 0);
+      return { workerName, count: lines.length };
+    }));
+
+    return {
+      ok: true,
+      operation,
+      data: { teamName, mailboxes },
+    };
+  }
+
+  if (operation === 'mailbox-mark-delivered') {
+    const workerName = readInputString(input, 'workerName', 'worker');
+    const messageId = readInputString(input, 'messageId', 'message_id');
+    if (!workerName || !messageId) {
+      return {
+        ok: false,
+        operation,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'mailbox-mark-delivered requires workerName and messageId',
+        },
+      };
+    }
+
+    mkdirSync(dirname(mailboxPath(cwd, teamName, workerName)), { recursive: true });
+    await appendFile(mailboxPath(cwd, teamName, workerName), `${JSON.stringify({
+      id: messageId,
+      type: 'delivered',
+      deliveredAt: new Date().toISOString(),
+    })}\n`, 'utf-8');
+
+    return {
+      ok: true,
+      operation,
+      data: { teamName, workerName, messageId },
+    };
+  }
+
+  if (operation === 'list-tasks') {
+    const tasks = await readTaskFiles(cwd, teamName);
+    return {
+      ok: true,
+      operation,
+      data: { teamName, tasks },
+    };
+  }
+
+  if (operation === 'read-task') {
+    const taskId = readInputString(input, 'taskId', 'task_id');
+    if (!taskId) {
+      return {
+        ok: false,
+        operation,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'read-task requires taskId',
+        },
+      };
+    }
+
+    const raw = await readFile(join(teamStateRoot(cwd, teamName), 'tasks', `${taskId}.json`), 'utf-8').catch(() => '');
+    const task = raw ? parseJsonSafe<Record<string, unknown>>(raw) : null;
+
+    return {
+      ok: true,
+      operation,
+      data: { teamName, taskId, task },
+    };
+  }
+
+  if (operation === 'read-config') {
+    const raw = await readFile(join(teamStateRoot(cwd, teamName), 'config.json'), 'utf-8').catch(() => '');
+    return {
+      ok: true,
+      operation,
+      data: { teamName, config: raw ? parseJsonSafe<Record<string, unknown>>(raw) : null },
+    };
+  }
+
+  const tasks = await readTaskFiles(cwd, teamName);
+  const taskCounts = tasks.reduce<{ pending: number; inProgress: number; completed: number; failed: number }>(
+    (acc, task) => {
+      const status = String(task.status ?? 'unknown');
+      if (status === 'pending') acc.pending += 1;
+      else if (status === 'in_progress') acc.inProgress += 1;
+      else if (status === 'completed') acc.completed += 1;
+      else if (status === 'failed') acc.failed += 1;
+      return acc;
+    },
+    { pending: 0, inProgress: 0, completed: 0, failed: 0 },
+  );
+
+  const runtime = await resumeTeam(teamName, cwd);
+  const snapshot = runtime ? await monitorTeam(teamName, cwd, runtime.workerPaneIds) : null;
+
+  return {
+    ok: true,
+    operation,
+    data: {
+      teamName,
+      taskCounts,
+      workerCount: runtime?.workerPaneIds.length ?? 0,
+      phase: snapshot?.phase ?? null,
+    },
+  };
 }
 
 export async function teamStartCommand(input: TeamStartInput, options: { json?: boolean } = {}): Promise<TeamStartResult> {
@@ -685,17 +828,17 @@ export async function teamCleanupCommand(
 
 export const TEAM_USAGE = `
 Usage:
-  omc team start --agent <claude|codex|gemini|cursor>[,<agent>...] --task "<task>" [--count N] [--name TEAM] [--cwd DIR] [--new-window] [--json]
+  omc team start --agent <claude|codex|gemini>[,<agent>...] --task "<task>" [--count N] [--name TEAM] [--cwd DIR] [--json]
   omc team status <job_id|team_name> [--json] [--cwd DIR]
   omc team wait <job_id> [--timeout-ms MS] [--json]
   omc team cleanup <job_id> [--grace-ms MS] [--json]
   omc team resume <team_name> [--json] [--cwd DIR]
   omc team shutdown <team_name> [--force] [--json] [--cwd DIR]
   omc team api <operation> [--input '<json>'] [--json] [--cwd DIR]
-  omc team [ralph] <N:agent-type[:role]> "task" [--json] [--cwd DIR] [--new-window]
+  omc team [ralph] <N:agent-type> "task" [--json] [--cwd DIR]
 
 Examples:
-  omc team start --agent codex --count 2 --task "review auth flow" --new-window
+  omc team start --agent codex --count 2 --task "review auth flow"
   omc team status omc-abc123
   omc team status auth-review
   omc team resume auth-review
@@ -716,7 +859,6 @@ function parseStartArgs(args: string[]): StartArgsParsed {
   let cwd = process.cwd();
   let count = 1;
   let json = false;
-  let newWindow = false;
   let subjectPrefix = 'Task';
   let pollIntervalMs: number | undefined;
   let sentinelGateTimeoutMs: number | undefined;
@@ -728,10 +870,6 @@ function parseStartArgs(args: string[]): StartArgsParsed {
 
     if (token === '--json') {
       json = true;
-      continue;
-    }
-    if (token === '--new-window') {
-      newWindow = true;
       continue;
     }
 
@@ -869,7 +1007,6 @@ function parseStartArgs(args: string[]): StartArgsParsed {
       agentTypes,
       tasks,
       cwd,
-      ...(newWindow ? { newWindow: true } : {}),
       ...(pollIntervalMs != null ? { pollIntervalMs } : {}),
       ...(sentinelGateTimeoutMs != null ? { sentinelGateTimeoutMs } : {}),
       ...(sentinelGatePollIntervalMs != null ? { sentinelGatePollIntervalMs } : {}),
@@ -1091,19 +1228,17 @@ function parseLegacyStartAlias(args: string[]): TeamLegacyStartArgs | null {
 
   const spec = args[index];
   if (!spec) return null;
-  const match = spec.match(/^(\d+):([a-zA-Z0-9_-]+)(?::([a-zA-Z0-9_-]+))?$/);
+  const match = spec.match(/^(\d+):([a-zA-Z0-9_-]+)$/);
   if (!match) return null;
 
   const workerCount = toInt(match[1], 'worker-count');
   if (workerCount < 1) throw new Error('worker-count must be >= 1');
 
   const agentType = normalizeAgentType(match[2]);
-  const role = match[3] || undefined;
   index += 1;
 
   let json = false;
   let cwd = process.cwd();
-  let newWindow = false;
   const taskParts: string[] = [];
   for (let i = index; i < args.length; i += 1) {
     const token = args[i];
@@ -1111,10 +1246,6 @@ function parseLegacyStartAlias(args: string[]): TeamLegacyStartArgs | null {
 
     if (token === '--json') {
       json = true;
-      continue;
-    }
-    if (token === '--new-window') {
-      newWindow = true;
       continue;
     }
     if (token === '--cwd') {
@@ -1137,13 +1268,11 @@ function parseLegacyStartAlias(args: string[]): TeamLegacyStartArgs | null {
   return {
     workerCount,
     agentType,
-    role,
     task,
     teamName: autoTeamName(task),
     ralph,
     json,
     cwd,
-    ...(newWindow ? { newWindow: true } : {}),
   };
 }
 
@@ -1232,7 +1361,6 @@ export async function teamCommand(argv: string[]): Promise<void> {
         agentTypes: Array.from({ length: legacy.workerCount }, () => legacy.agentType),
         tasks,
         cwd: legacy.cwd,
-        ...(legacy.newWindow ? { newWindow: true } : {}),
       });
 
       output(result, legacy.json);

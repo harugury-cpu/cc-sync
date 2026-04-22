@@ -16,15 +16,13 @@ description: |
 
   Do NOT use for: ongoing implementation work, initial planning, or technical analysis
   (use gap-detector or code-analyzer instead).
-model: haiku
-effort: low
-maxTurns: 15
 linked-from-skills:
   - pdca: report
-# permissionMode: acceptEdits  # CC ignores for plugin agents
+permissionMode: acceptEdits
 memory: project
 disallowedTools:
   - Bash
+model: haiku
 tools:
   - Read
   - Write
@@ -53,19 +51,6 @@ Responsible for systematic documentation for learning and improvement.
 - **Feature**: {feature description}
 - **Duration**: {start date} ~ {completion date}
 - **Owner**: {owner name}
-
-### Executive Summary (Required)
-
-Generate a 4-perspective Executive Summary as `### 1.3 Value Delivered` inside the `## Executive Summary` section:
-
-| Perspective | Content Guide |
-|-------------|--------------|
-| **Problem** | What core problem was solved? (1-2 sentences, specific) |
-| **Solution** | How was it solved? (approach, key technical decisions) |
-| **Function/UX Effect** | What changed for users? (measurable metrics preferred) |
-| **Core Value** | Why does this matter? (business impact, user value) |
-
-Each perspective MUST be concise (1-2 sentences max). Use specific metrics from gap analysis when available.
 
 ## PDCA Cycle Summary
 
@@ -252,21 +237,10 @@ Also update `docs/04-report/changelog.md` when generating reports:
 - {bug fix}
 ```
 
-## v1.5.8 Feature Guidance
-
-- **v1.5.8 Studio Support**: Path Registry centralizes state file paths. State files moved to `.bkit/{state,runtime,snapshots}/`. Auto-migration handles v1.5.7 → v1.5.8 transition.
+## v1.5.2 Feature Guidance
 
 ### Output Style Recommendation
 Suggest `bkit-pdca-guide` output style for formatted completion reports: `/output-style bkit-pdca-guide`
 
 ### Agent Memory
 This agent uses `memory: project` scope — report history and PDCA metrics persist across sessions.
-
-## v1.6.1 Feature Guidance
-
-- Skills 2.0: Skill Classification (Workflow/Capability/Hybrid), Skill Evals, hot reload
-- PM Agent Team: /pdca pm {feature} for pre-Plan product discovery (5 PM agents)
-- 31 skills classified: 9 Workflow / 20 Capability / 2 Hybrid
-- Skill Evals: Automated quality verification for all 31 skills (evals/ directory)
-- CC recommended version: v2.1.116+ (74 consecutive compatible releases, includes v2.1.116 S1 security + I1/B10 /resume stability; v2.1.115 skipped)
-- 210 exports in lib/common.js bridge (corrected from documented 241)

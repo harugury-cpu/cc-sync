@@ -6,106 +6,19 @@
 import { describe, it, expect } from 'vitest';
 import { execSync } from 'child_process';
 import { join } from 'path';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
-import { tmpdir } from 'os';
 import process from 'process';
 import { detectBashFailure, detectWriteFailure, isNonZeroExitWithOutput, summarizeAgentResult } from '../../scripts/post-tool-verifier.mjs';
 
 const SCRIPT_PATH = join(process.cwd(), 'scripts', 'post-tool-verifier.mjs');
-const TEMPLATE_HOOK_PATH = join(process.cwd(), 'templates', 'hooks', 'post-tool-use.mjs');
-const PYTEST_RED_RUN_OUTPUT = [
-  'Error: Exit code 1',
-  '============================= test session starts ==============================',
-  'platform linux -- Python 3.12.0, pytest-8.4.0',
-  'collected 1 item',
-  '',
-  'tests/test_example.py F                                                   [100%]',
-  '',
-  '=================================== FAILURES ===================================',
-  '___________________________________ test_red ___________________________________',
-  '',
-  '    def test_red():',
-  '>       assert 1 == 2',
-  'E       assert 1 == 2',
-  '',
-  'tests/test_example.py:3: AssertionError',
-  '=========================== short test summary info ============================',
-  'FAILED tests/test_example.py::test_red - assert 1 == 2',
-  '============================== 1 failed in 0.12s ==============================',
-].join('\n');
 
 function runPostToolVerifier(input, env = {}) {
-  return runHookScript(SCRIPT_PATH, input, env);
-}
-
-function runHookScript(scriptPath, input, env = {}) {
-  const stdout = execSync(`node "${scriptPath}"`, {
+  const stdout = execSync(`node "${SCRIPT_PATH}"`, {
     input: JSON.stringify(input),
     encoding: 'utf-8',
     timeout: 5000,
     env: { ...process.env, NODE_ENV: 'test', ...env },
   });
   return JSON.parse(stdout.trim());
-}
-
-function withTempDir(fn) {
-  const tempDir = mkdtempSync(join(tmpdir(), 'post-tool-verifier-'));
-  try {
-    return fn(tempDir);
-  } finally {
-    rmSync(tempDir, { recursive: true, force: true });
-  }
-}
-
-function skillStatePath(tempDir, sessionId) {
-  return join(tempDir, '.omc', 'state', 'sessions', sessionId, 'skill-active-state.json');
-}
-
-function legacySkillStatePath(tempDir) {
-  return join(tempDir, '.omc', 'state', 'skill-active-state.json');
-}
-
-function ralplanStatePath(tempDir, sessionId) {
-  return join(tempDir, '.omc', 'state', 'sessions', sessionId, 'ralplan-state.json');
-}
-
-function writeSkillStateFixtures(tempDir, sessionId, skillName = 'plan') {
-  mkdirSync(join(tempDir, '.omc', 'state', 'sessions', sessionId), { recursive: true });
-  writeFileSync(
-    skillStatePath(tempDir, sessionId),
-    JSON.stringify({
-      active: true,
-      skill_name: skillName,
-      session_id: sessionId,
-      started_at: '2026-04-01T00:00:00.000Z',
-      last_checked_at: '2026-04-01T00:00:00.000Z',
-      reinforcement_count: 0,
-      max_reinforcements: 5,
-      stale_ttl_ms: 900000,
-    }),
-  );
-  mkdirSync(join(tempDir, '.omc', 'state'), { recursive: true });
-  writeFileSync(
-    legacySkillStatePath(tempDir),
-    JSON.stringify({
-      active: true,
-      skill_name: skillName,
-    }),
-  );
-}
-
-function writeRalplanStateFixture(tempDir, sessionId, overrides = {}) {
-  mkdirSync(join(tempDir, '.omc', 'state', 'sessions', sessionId), { recursive: true });
-  writeFileSync(
-    ralplanStatePath(tempDir, sessionId),
-    JSON.stringify({
-      active: true,
-      session_id: sessionId,
-      current_phase: 'ralplan',
-      started_at: '2026-04-01T00:00:00.000Z',
-      ...overrides,
-    }),
-  );
 }
 
 describe('detectBashFailure', () => {
@@ -153,7 +66,7 @@ describe('detectBashFailure', () => {
       expect(detectBashFailure('error: file not found')).toBe(true);
     });
 
-    it('should detect "failed" pattern when it is a failure summary line', () => {
+    it('should detect "failed" pattern', () => {
       expect(detectBashFailure('Build failed')).toBe(true);
     });
 
@@ -161,11 +74,7 @@ describe('detectBashFailure', () => {
       expect(detectBashFailure('zsh: command not found: foo')).toBe(true);
     });
 
-    it('should detect Claude exit code failures', () => {
-      expect(detectBashFailure('Error: Exit code 1')).toBe(true);
-    });
-
-    it('should detect textual exit code failures', () => {
+    it('should detect exit code failures', () => {
       expect(detectBashFailure('exit code: 1')).toBe(true);
     });
 
@@ -173,59 +82,8 @@ describe('detectBashFailure', () => {
       expect(detectBashFailure('fatal: not a git repository')).toBe(true);
     });
 
-    it('should not flag successful pytest output containing failure words', () => {
-      const output = [
-        'tests/test_render.py::TestRender::test_ffmpeg_failure_raises PASSED',
-        'tests/test_render.py::TestRender::test_qa_failure_propagates PASSED',
-        '80 passed in 0.24s',
-      ].join('\n');
-      expect(detectBashFailure(output)).toBe(false);
-    });
-
-    it('should not flag successful grep output containing "Command failed" text', () => {
-      const output = 'scripts/post-tool-verifier.mjs:683:        message = \'Command failed. Please investigate the error and fix before continuing.\'';
-      expect(detectBashFailure(output)).toBe(false);
-    });
-
-    it('should not flag pytest red-phase output as a bash tool failure', () => {
-      expect(detectBashFailure(PYTEST_RED_RUN_OUTPUT)).toBe(false);
-    });
-
-    it('should not flag successful output when the word "error" appears mid-line', () => {
-      const output = [
-        'frame=   15 fps=0.0 q=-0.0 size=       0kB time=00:00:00.50 bitrate=   0.8kbits/s speed=5.6x',
-        'codec-side-data: some harmless error metric label',
-        'video:4kB audio:0kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.000000%',
-      ].join('\n');
-      expect(detectBashFailure(output)).toBe(false);
-    });
-
     it('should return false for clean output', () => {
       expect(detectBashFailure('All tests passed')).toBe(false);
-    });
-
-    it('should ignore quoted error field string literals', () => {
-      expect(detectBashFailure(`return { rateLimits: fallbackData, error: 'network', stale: true };`)).toBe(false);
-    });
-
-    it('should ignore severity metadata lines', () => {
-      expect(detectBashFailure(`"severity": "error"`)).toBe(false);
-    });
-
-    it('should ignore quoted field names inside inert object literals', () => {
-      expect(detectBashFailure(`{ "error": "rate limit", "severity": "warning" }`)).toBe(false);
-    });
-
-    it('should ignore zero-error summaries', () => {
-      expect(detectBashFailure('totalErrors: 0, totalWarnings: 3')).toBe(false);
-    });
-
-    it('should still detect real stack traces and command failures', () => {
-      const output = [
-        'Error: build failed',
-        '    at runBuild (/workspace/scripts/build.mjs:12:7)',
-      ].join('\n');
-      expect(detectBashFailure(output)).toBe(true);
     });
 
     it('should return false for empty output', () => {
@@ -298,23 +156,6 @@ describe('isNonZeroExitWithOutput (issue #960)', () => {
 
     it('no exit code prefix at all', () => {
       expect(isNonZeroExitWithOutput('some normal output')).toBe(false);
-    });
-
-    it('keeps valid stdout classification when remaining lines are only non-actionable error metadata', () => {
-      const output = [
-        'Error: Exit code 8',
-        '"severity": "error"',
-        'totalErrors: 0',
-      ].join('\n');
-      expect(isNonZeroExitWithOutput(output)).toBe(false);
-    });
-
-    it('keeps quoted inert literals from being treated as real failure content', () => {
-      const output = [
-        'Error: Exit code 8',
-        `return { error: 'network', totalErrors: 0 };`,
-      ].join('\n');
-      expect(isNonZeroExitWithOutput(output)).toBe(false);
     });
 
     it('empty string', () => {
@@ -426,11 +267,6 @@ describe('detectWriteFailure', () => {
       expect(detectWriteFailure(testContent)).toBe(false);
     });
 
-    it('should not flag inline error-like assertion strings inside edited tests', () => {
-      expect(detectWriteFailure('expect(output).toContain("error: boom")')).toBe(false);
-      expect(detectWriteFailure('await expect(run()).rejects.toThrow("Error: missing fixture")')).toBe(false);
-    });
-
     it('should still detect real tool-level errors alongside code content', () => {
       expect(detectWriteFailure('error: EACCES writing to /etc/hosts')).toBe(true);
       expect(detectWriteFailure('failed to write file: permission denied')).toBe(true);
@@ -473,256 +309,5 @@ describe('agent output summarization / truncation (issue #1373)', () => {
     expect(out.continue).toBe(true);
     expect(out.hookSpecificOutput?.additionalContext).toContain('TaskOutput summary:');
     expect(out.hookSpecificOutput?.additionalContext).toContain('TaskOutput clipped');
-  });
-});
-
-describe('post-tool hook regression coverage (issue #2615)', () => {
-  it('does not treat inline error-like strings in Edit output as an edit failure', () => {
-    const out = runPostToolVerifier({
-      tool_name: 'Edit',
-      tool_response: 'expect(output).toContain("error: boom")',
-      session_id: 'issue-2615-edit',
-      cwd: process.cwd(),
-    });
-
-    expect(out.hookSpecificOutput?.additionalContext).toContain('Code modified.');
-    expect(out.hookSpecificOutput?.additionalContext).not.toContain('Edit operation failed');
-  });
-
-  it('does not treat pytest red runs as bash tool failures during TDD workflows', () => {
-    const out = runPostToolVerifier({
-      tool_name: 'Bash',
-      tool_response: PYTEST_RED_RUN_OUTPUT,
-      session_id: 'issue-2615-bash',
-      cwd: process.cwd(),
-    });
-
-    expect(out).toEqual({ continue: true, suppressOutput: true });
-  });
-});
-
-describe('OMC_QUIET hook message suppression (issue #1646)', () => {
-  it('suppresses routine success/advice messages at OMC_QUIET=1 while keeping failures', () => {
-    const edit = runPostToolVerifier(
-      {
-        tool_name: 'Edit',
-        tool_response: 'File updated successfully',
-        session_id: 'quiet-1',
-        cwd: process.cwd(),
-      },
-      { OMC_QUIET: '1' },
-    );
-
-    expect(edit).toEqual({ continue: true, suppressOutput: true });
-
-    const grep = runPostToolVerifier(
-      {
-        tool_name: 'Grep',
-        tool_response: '0',
-        session_id: 'quiet-1',
-        cwd: process.cwd(),
-      },
-      { OMC_QUIET: '1' },
-    );
-
-    expect(grep).toEqual({ continue: true, suppressOutput: true });
-
-    const writeFailure = runPostToolVerifier(
-      {
-        tool_name: 'Write',
-        tool_response: 'Write failed: permission denied on /etc/hosts',
-        session_id: 'quiet-1',
-        cwd: process.cwd(),
-      },
-      { OMC_QUIET: '1' },
-    );
-
-    expect(writeFailure.hookSpecificOutput?.additionalContext)
-      .toContain('Write operation failed');
-  });
-
-  it('keeps important warnings at OMC_QUIET=2 but suppresses routine task summaries', () => {
-    const nonZero = runPostToolVerifier(
-      {
-        tool_name: 'Bash',
-        tool_response: 'Error: Exit code 8\nLint pass\nTest pending',
-        session_id: 'quiet-2',
-        cwd: process.cwd(),
-      },
-      { OMC_QUIET: '2' },
-    );
-
-    expect(nonZero.hookSpecificOutput?.additionalContext)
-      .toContain('produced valid output');
-
-    const taskSummary = withTempDir((tempDir) => {
-      mkdirSync(join(tempDir, '.omc', 'state'), { recursive: true });
-      writeFileSync(
-        join(tempDir, '.omc', 'state', 'subagent-tracking.json'),
-        JSON.stringify({
-          agents: [{ status: 'running', agent_type: 'oh-my-claudecode:executor' }],
-          total_completed: 1,
-          total_failed: 0,
-        }),
-      );
-
-      return runPostToolVerifier(
-        {
-          tool_name: 'TaskOutput',
-          tool_response: 'Completed worker step A\nUpdated src/foo.ts\nTests: 12 passed',
-          session_id: 'quiet-2',
-          cwd: tempDir,
-        },
-        { OMC_QUIET: '2' },
-      );
-    });
-
-    expect(taskSummary).toEqual({ continue: true, suppressOutput: true });
-  });
-});
-
-describe('Skill active state cleanup on PostToolUse (issue #2103)', () => {
-  it('clears session and legacy skill-active-state files for Skill completion in post-tool-verifier', () => {
-    withTempDir((tempDir) => {
-      const sessionId = 'skill-clear-script';
-      writeSkillStateFixtures(tempDir, sessionId, 'plan');
-
-      const out = runPostToolVerifier({
-        tool_name: 'Skill',
-        tool_input: { skill: 'oh-my-claudecode:plan' },
-        tool_response: { ok: true },
-        session_id: sessionId,
-        cwd: tempDir,
-      });
-
-      expect(out).toEqual({ continue: true, suppressOutput: true });
-      expect(existsSync(skillStatePath(tempDir, sessionId))).toBe(false);
-      expect(existsSync(legacySkillStatePath(tempDir))).toBe(false);
-    });
-  });
-
-  it('does not clear parent-owned skill-active-state for nested child Skill completion in post-tool-verifier', () => {
-    withTempDir((tempDir) => {
-      const sessionId = 'skill-nested-script';
-      writeSkillStateFixtures(tempDir, sessionId, 'omc-setup');
-
-      const out = runPostToolVerifier({
-        tool_name: 'Skill',
-        tool_input: { skill: 'oh-my-claudecode:mcp-setup' },
-        tool_response: { ok: true },
-        session_id: sessionId,
-        cwd: tempDir,
-      });
-
-      expect(out).toEqual({ continue: true, suppressOutput: true });
-      expect(existsSync(skillStatePath(tempDir, sessionId))).toBe(true);
-      expect(existsSync(legacySkillStatePath(tempDir))).toBe(true);
-    });
-  });
-
-  it('clears session and legacy skill-active-state files for the template post-tool hook path', () => {
-    withTempDir((tempDir) => {
-      const sessionId = 'skill-clear-template';
-      writeSkillStateFixtures(tempDir, sessionId, 'plan');
-
-      const out = runHookScript(TEMPLATE_HOOK_PATH, {
-        tool_name: 'Skill',
-        tool_input: { skill: 'oh-my-claudecode:plan' },
-        tool_response: { ok: true },
-        session_id: sessionId,
-        cwd: tempDir,
-      });
-
-      expect(out).toEqual({ continue: true, suppressOutput: true });
-      expect(existsSync(skillStatePath(tempDir, sessionId))).toBe(false);
-      expect(existsSync(legacySkillStatePath(tempDir))).toBe(false);
-    });
-  });
-
-  it('deactivates ralplan state when the ralplan skill completes in post-tool-verifier', () => {
-    withTempDir((tempDir) => {
-      const sessionId = 'ralplan-complete-script';
-      writeRalplanStateFixture(tempDir, sessionId);
-
-      const out = runPostToolVerifier({
-        tool_name: 'Skill',
-        tool_input: { skill: 'oh-my-claudecode:ralplan' },
-        tool_response: { ok: true },
-        session_id: sessionId,
-        cwd: tempDir,
-      });
-
-      expect(out).toEqual({ continue: true, suppressOutput: true });
-
-      const state = JSON.parse(readFileSync(ralplanStatePath(tempDir, sessionId), 'utf-8'));
-      expect(state.active).toBe(false);
-      expect(state.current_phase).toBe('complete');
-      expect(state.deactivated_reason).toBe('skill_completed');
-      expect(typeof state.completed_at).toBe('string');
-    });
-  });
-
-  it('deactivates ralplan state when the consensus plan alias completes in the template hook path', () => {
-    withTempDir((tempDir) => {
-      const sessionId = 'ralplan-complete-template';
-      writeRalplanStateFixture(tempDir, sessionId);
-
-      const out = runHookScript(TEMPLATE_HOOK_PATH, {
-        tool_name: 'Skill',
-        tool_input: {
-          skill: 'oh-my-claudecode:plan',
-          args: '--consensus issue #2368',
-        },
-        tool_response: { ok: true },
-        session_id: sessionId,
-        cwd: tempDir,
-      });
-
-      expect(out).toEqual({ continue: true, suppressOutput: true });
-
-      const state = JSON.parse(readFileSync(ralplanStatePath(tempDir, sessionId), 'utf-8'));
-      expect(state.active).toBe(false);
-      expect(state.current_phase).toBe('complete');
-      expect(state.deactivated_reason).toBe('skill_completed');
-      expect(typeof state.completed_at).toBe('string');
-    });
-  });
-
-  it('clears skill-active-state when deep-interview Skill completes', () => {
-    withTempDir((tempDir) => {
-      const sessionId = 'deep-interview-complete-01';
-      writeSkillStateFixtures(tempDir, sessionId, 'deep-interview');
-
-      const out = runPostToolVerifier({
-        tool_name: 'Skill',
-        tool_input: { skill: 'oh-my-claudecode:deep-interview' },
-        tool_response: { ok: true },
-        session_id: sessionId,
-        cwd: tempDir,
-      });
-
-      expect(out).toEqual({ continue: true, suppressOutput: true });
-      expect(existsSync(skillStatePath(tempDir, sessionId))).toBe(false);
-      expect(existsSync(legacySkillStatePath(tempDir))).toBe(false);
-    });
-  });
-
-  it('clears skill-active-state when self-improve Skill completes', () => {
-    withTempDir((tempDir) => {
-      const sessionId = 'self-improve-complete-01';
-      writeSkillStateFixtures(tempDir, sessionId, 'self-improve');
-
-      const out = runPostToolVerifier({
-        tool_name: 'Skill',
-        tool_input: { skill: 'oh-my-claudecode:self-improve' },
-        tool_response: { ok: true },
-        session_id: sessionId,
-        cwd: tempDir,
-      });
-
-      expect(out).toEqual({ continue: true, suppressOutput: true });
-      expect(existsSync(skillStatePath(tempDir, sessionId))).toBe(false);
-      expect(existsSync(legacySkillStatePath(tempDir))).toBe(false);
-    });
   });
 });

@@ -9,7 +9,7 @@ Comprehensive guide to monitoring, debugging, and optimizing Claude Code and oh-
 - [Overview](#overview)
 - [Built-in Monitoring](#built-in-monitoring)
   - [Agent Observatory](#agent-observatory)
-  - [Session-End Summaries](#session-end-summaries)
+  - [Token & Cost Analytics](#token--cost-analytics)
   - [Session Replay](#session-replay)
 - [HUD Integration](#hud-integration)
 - [Debugging Techniques](#debugging-techniques)
@@ -29,7 +29,8 @@ oh-my-claudecode provides comprehensive monitoring capabilities for tracking age
 |--------|------|-------------|
 | Agent lifecycle | Agent Observatory | Per-agent |
 | Tool timing | Session Replay | Per-tool call |
-| Session-end summary | Session-end hook | Per-session |
+| Token usage | Analytics System | Per-session/agent |
+| API costs | Analytics System | Per-session/daily/monthly |
 | File ownership | Subagent Tracker | Per-file |
 | Parallel efficiency | Observatory | Real-time |
 
@@ -82,42 +83,66 @@ Agent Observatory (3 active, 85% efficiency)
 | `files:N` | Files being modified |
 | `bottleneck` | Slowest repeated tool operation |
 
-### Session-End Summaries
+### Token & Cost Analytics
 
-The legacy analytics workflow described in older docs (`omc-analytics`, `omc cost`, `omc backfill`, and the `analytics` HUD preset) is no longer part of current `dev`.
+OMC automatically tracks token usage and costs across all sessions.
 
-The supported monitoring surfaces on current builds are:
-
-- **Agent Observatory** in the HUD / API
-- **Session Replay** logs in `.omc/state/agent-replay-*.jsonl`
-- **Session-end summaries** in `.omc/sessions/<sessionId>.json`
-- **Session-end notifications** emitted through configured callbacks
-
-#### Supported Inspection Commands
+#### CLI Commands
 
 ```bash
-omc hud
-tail -20 .omc/state/agent-replay-*.jsonl
-ls .omc/sessions/*.json
+# View everything (default dashboard)
+omc
+
+# View daily/weekly/monthly cost reports
+omc cost daily
+omc cost weekly
+omc cost monthly
+
+# View session history
+omc sessions
+
+# Agent observability is shown in HUD/replay logs
+# (legacy standalone agent-breakdown command was removed)
+
+# Export data
+omc export cost csv ./costs.csv
 ```
 
-#### HUD Display
+#### Real-time HUD Display
 
-Use a supported preset such as `focused` or `full` for agent and context visibility:
+Enable the analytics preset for detailed cost tracking in your status line:
 
 ```json
 {
   "omcHud": {
-    "preset": "focused"
+    "preset": "analytics"
   }
 }
 ```
 
 This shows:
-- Active agents and their status
-- Todos / PRD progress
-- Context and rate-limit state
-- Background tasks
+- Session cost and tokens
+- Cost per hour
+- Cache efficiency (% of tokens from cache)
+- Budget warnings (>$2 warning, >$5 critical)
+
+#### Backfill Historical Data
+
+Analyze historical Claude Code transcripts:
+
+```bash
+# Preview available transcripts
+omc backfill --dry-run
+
+# Backfill all transcripts
+omc backfill
+
+# Backfill specific project
+omc backfill --project "*my-project*"
+
+# Backfill recent only
+omc backfill --from "2026-01-01"
+```
 
 ### Session Replay
 
@@ -330,12 +355,12 @@ Track Claude's performance across standard benchmarks:
 
 ## Best Practices
 
-### 1. Monitor Session Health Proactively
+### 1. Monitor Token Usage Proactively
 
 ```bash
 # Set up budget warnings in HUD
 /oh-my-claudecode:hud
-# Select "focused" or "full"
+# Select "analytics" preset
 ```
 
 ### 2. Use Appropriate Model Tiers
@@ -412,20 +437,20 @@ cleanupReplayFiles(process.cwd()); // Keeps last 10 sessions
 **Symptoms**: Merge conflicts, unexpected file changes
 
 **Solutions**:
-1. Use `team N:executor` mode for automatic file ownership
+1. Use `ultrapilot` mode for automatic file ownership
 2. Check `detectFileConflicts()` before parallel execution
 3. Review file_ownership in agent state
-4. Use `team N:executor` mode with explicit task isolation
+4. Use `swarm` mode with explicit task isolation
 
-### Missing Session-End Summaries
+### Missing Analytics Data
 
-**Symptoms**: No `.omc/sessions/*.json` files after a session finishes
+**Symptoms**: Empty cost reports, no session history
 
 **Solutions**:
-1. End the session normally so the `session-end` hook runs
-2. Verify HUD / hooks are installed: `/oh-my-claudecode:hud setup`
-3. Check the current workspace `.omc/sessions/` directory
-4. Review `.omc/state/agent-replay-*.jsonl` if you need timing/activity evidence instead
+1. Run `omc backfill` to import historical transcripts
+2. Verify HUD is running: `/oh-my-claudecode:hud setup`
+3. Check `.omc/state/` directory exists
+4. Review `token-tracking.jsonl` for raw data
 
 ### Stale Agent State
 
@@ -500,6 +525,6 @@ cleanupReplayFiles(directory: string): number
 
 ## See Also
 
-- [Analytics System](./ANALYTICS-SYSTEM.md) - Historical note on the removed analytics subsystem and current replacements
+- [Analytics System](./ANALYTICS-SYSTEM.md) - Detailed token tracking documentation
 - [Reference](./REFERENCE.md) - Complete feature reference
 - [Architecture](./ARCHITECTURE.md) - System architecture overview

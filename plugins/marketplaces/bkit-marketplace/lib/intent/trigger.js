@@ -1,7 +1,7 @@
 /**
  * Trigger Matching Module
  * @module lib/intent/trigger
- * @version 2.0.0
+ * @version 1.4.7
  */
 
 const { AGENT_TRIGGER_PATTERNS, SKILL_TRIGGER_PATTERNS, matchMultiLangPattern } = require('./language');
@@ -45,7 +45,7 @@ function matchImplicitAgentTrigger(userMessage) {
   // Check each agent's patterns
   for (const [agent, patterns] of Object.entries(AGENT_TRIGGER_PATTERNS)) {
     if (matchMultiLangPattern(userMessage, patterns)) {
-      const result = { agent: `bkit:${agent}`, confidence: Math.min(1, confidenceThreshold + 0.1) };
+      const result = { agent: `bkit:${agent}`, confidence: 0.8 };
       debugLog('intent', 'Matched agent trigger', result);
       return result;
     }
@@ -79,7 +79,7 @@ function matchImplicitSkillTrigger(userMessage) {
       const result = {
         skill: `bkit:${skill}`,
         level: levelMap[skill] || 'Dynamic',
-        confidence: Math.min(1, confidenceThreshold + 0.1)
+        confidence: 0.8
       };
       debugLog('intent', 'Matched skill trigger', result);
       return result;

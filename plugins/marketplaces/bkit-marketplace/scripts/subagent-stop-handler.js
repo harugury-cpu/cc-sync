@@ -2,16 +2,19 @@
 /**
  * subagent-stop-handler.js - SubagentStop Hook Handler (v1.5.3)
  *
- * When a subagent terminates:
+ * Subagent가 종료될 때:
  * 1. updateTeammateStatus(name, "completed"|"failed")
- * 2. Call updateProgress()
- * 3. Check session end when all teammates complete
+ * 2. updateProgress() 호출
+ * 3. 모든 팀원 완료 시 세션 종료 여부 확인
  *
  * Design Reference: docs/02-design/features/team-visibility.design.md Section 5.2
  */
 
-const { readStdinSync, outputAllow } = require('../lib/core/io');
-const { debugLog } = require('../lib/core/debug');
+const {
+  readStdinSync,
+  debugLog,
+  outputAllow,
+} = require('../lib/common.js');
 
 function main() {
   debugLog('SubagentStop', 'Hook started');
@@ -34,25 +37,24 @@ function main() {
     return;
   }
 
-  // v1.5.9: ENH-74 agent_id/agent_type extraction
-  const agentId = hookContext.agent_id || null;
-  const agentType = hookContext.agent_type || 'unknown';
-  const agentName = hookContext.agent_name || agentId || 'unknown';
+  const agentName = hookContext.agent_name
+    || hookContext.agent_id
+    || 'unknown';
 
-  // Determine exit status (transcript_path exists = normal exit)
+  // 종료 상태 결정 (transcript_path 존재 = 정상 종료)
   const isSuccess = hookContext.transcript_path != null
     || hookContext.exit_code === 0
     || hookContext.exit_code === undefined;
   const status = isSuccess ? 'completed' : 'failed';
 
-  // Update status
+  // 상태 업데이트
   try {
     teamModule.updateTeammateStatus(agentName, status, null);
   } catch (e) {
     debugLog('SubagentStop', 'Status update failed (non-fatal)', { error: e.message });
   }
 
-  // Update progress
+  // 진행률 업데이트
   try {
     const state = teamModule.readAgentState();
     if (state && state.feature) {
@@ -67,9 +69,7 @@ function main() {
     systemMessage: `Subagent ${agentName} stopped (${status})`,
     hookSpecificOutput: {
       hookEventName: "SubagentStop",
-      agentId,
       agentName,
-      agentType,
       status,
     }
   };

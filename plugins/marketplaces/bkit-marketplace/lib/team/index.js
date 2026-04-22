@@ -1,7 +1,7 @@
 /**
  * Team Module Entry Point
  * @module lib/team
- * @version 2.0.0
+ * @version 1.5.4
  *
  * CTO-Led Team with orchestration, communication, task-queue, and CTO logic.
  */

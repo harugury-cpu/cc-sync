@@ -9,11 +9,10 @@
 
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { getClaudeConfigDir } from '../utils/config-dir.js';
+import { getClaudeConfigDir } from '../utils/paths.js';
 import type { McpWorkerMember, ConfigProbeResult } from './types.js';
 import { sanitizeName } from './tmux-session.js';
 import { atomicWriteJson, validateResolvedPath } from './fs-utils.js';
-import { withFileLockSync } from '../lib/file-lock.js';
 
 // --- Config paths ---
 
@@ -109,55 +108,45 @@ function registerInConfig(teamName: string, member: McpWorkerMember): void {
   const filePath = configPath(teamName);
   if (!existsSync(filePath)) return; // No config.json to write to
 
-  const lockPath = filePath + '.lock';
   try {
-    withFileLockSync(lockPath, () => {
-      try {
-        const raw = readFileSync(filePath, 'utf-8');
-        const config = JSON.parse(raw) as Record<string, unknown>;
-        const members = Array.isArray(config.members) ? config.members as Record<string, unknown>[] : [];
+    const raw = readFileSync(filePath, 'utf-8');
+    const config = JSON.parse(raw) as Record<string, unknown>;
+    const members = Array.isArray(config.members) ? config.members as Record<string, unknown>[] : [];
 
-        // Remove existing entry for this worker if present
-        const filtered = members.filter(
-          (m) => m.name !== member.name
-        );
-        filtered.push(member as unknown as Record<string, unknown>);
-        config.members = filtered;
+    // Remove existing entry for this worker if present
+    const filtered = members.filter(
+      (m) => m.name !== member.name
+    );
+    filtered.push(member as unknown as Record<string, unknown>);
+    config.members = filtered;
 
-        atomicWriteJson(filePath, config);
-      } catch {
-        // Config write failure is non-fatal — shadow registry is backup
-      }
-    });
+    atomicWriteJson(filePath, config);
   } catch {
-    // Lock acquisition failure is non-fatal — shadow registry is backup
+    // Config write failure is non-fatal — shadow registry is backup
   }
 }
 
 function registerInShadow(workingDirectory: string, teamName: string, member: McpWorkerMember): void {
   const filePath = shadowRegistryPath(workingDirectory);
-  const lockPath = filePath + '.lock';
 
-  withFileLockSync(lockPath, () => {
-    let registry: { teamName: string; workers: McpWorkerMember[] };
+  let registry: { teamName: string; workers: McpWorkerMember[] };
 
-    if (existsSync(filePath)) {
-      try {
-        registry = JSON.parse(readFileSync(filePath, 'utf-8'));
-      } catch {
-        registry = { teamName, workers: [] };
-      }
-    } else {
+  if (existsSync(filePath)) {
+    try {
+      registry = JSON.parse(readFileSync(filePath, 'utf-8'));
+    } catch {
       registry = { teamName, workers: [] };
     }
+  } else {
+    registry = { teamName, workers: [] };
+  }
 
-    // Remove existing entry for this worker
-    registry.workers = (registry.workers || []).filter(w => w.name !== member.name);
-    registry.workers.push(member);
-    registry.teamName = teamName;
+  // Remove existing entry for this worker
+  registry.workers = (registry.workers || []).filter(w => w.name !== member.name);
+  registry.workers.push(member);
+  registry.teamName = teamName;
 
-    atomicWriteJson(filePath, registry);
-  });
+  atomicWriteJson(filePath, registry);
 }
 
 /**
@@ -183,21 +172,15 @@ export function unregisterMcpWorker(
 
   // Remove from shadow registry
   const shadowFile = shadowRegistryPath(workingDirectory);
-  try {
-    withFileLockSync(shadowFile + '.lock', () => {
-      if (existsSync(shadowFile)) {
-        try {
-          const registry = JSON.parse(readFileSync(shadowFile, 'utf-8')) as {
-            teamName: string;
-            workers: McpWorkerMember[];
-          };
-          registry.workers = (registry.workers || []).filter(w => w.name !== workerName);
-          atomicWriteJson(shadowFile, registry);
-        } catch { /* ignore */ }
-      }
-    });
-  } catch {
-    // Lock contention during unregister is non-fatal — best-effort cleanup
+  if (existsSync(shadowFile)) {
+    try {
+      const registry = JSON.parse(readFileSync(shadowFile, 'utf-8')) as {
+        teamName: string;
+        workers: McpWorkerMember[];
+      };
+      registry.workers = (registry.workers || []).filter(w => w.name !== workerName);
+      atomicWriteJson(shadowFile, registry);
+    } catch { /* ignore */ }
   }
 }
 

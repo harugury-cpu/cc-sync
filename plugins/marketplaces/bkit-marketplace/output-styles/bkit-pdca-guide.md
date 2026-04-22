@@ -31,15 +31,6 @@ keep-coding-instructions: true
 
 5. Include the bkit Feature Usage Report at the end of every response.
 
-6. When multiple features are active, show batch processing guidance:
-   - List all active features with their current phase
-   - Suggest `/batch` for parallel phase progression (Enterprise)
-   - Display multi-feature progress table:
-     | Feature | Phase | Match Rate |
-     |---------|-------|------------|
-
-7. After Check ≥ 90%, include /simplify suggestion before Report phase.
-
 ## Formatting
 
 - Use structured tables and checklists

@@ -1,14 +1,13 @@
 /**
  * Rules Finder
  *
- * Finds rule files in project directories and [$CLAUDE_CONFIG_DIR|~/.claude].
+ * Finds rule files in project directories and user home.
  *
  * Ported from oh-my-opencode's rules-injector hook.
  */
 import { existsSync, readdirSync, realpathSync, statSync, } from 'fs';
 import { dirname, join, relative } from 'path';
-import { GITHUB_INSTRUCTIONS_PATTERN, PROJECT_MARKERS, PROJECT_RULE_FILES, PROJECT_RULE_SUBDIRS, RULE_EXTENSIONS, } from './constants.js';
-import { getClaudeConfigDir } from '../../utils/config-dir.js';
+import { GITHUB_INSTRUCTIONS_PATTERN, PROJECT_MARKERS, PROJECT_RULE_FILES, PROJECT_RULE_SUBDIRS, RULE_EXTENSIONS, USER_RULE_DIR, } from './constants.js';
 /**
  * Check if a directory is a GitHub instructions directory.
  */
@@ -125,9 +124,9 @@ export function calculateDistance(rulePath, currentFile, projectRoot) {
 /**
  * Find all rule files for a given context.
  * Searches from currentFile upward to projectRoot for rule directories,
- * then [$CLAUDE_CONFIG_DIR|~/.claude]/rules.
+ * then user-level directory (~/.claude/rules).
  */
-export function findRuleFiles(projectRoot, currentFile) {
+export function findRuleFiles(projectRoot, homeDir, currentFile) {
     const candidates = [];
     const seenRealPaths = new Set();
     // Search from current file's directory up to project root
@@ -188,8 +187,8 @@ export function findRuleFiles(projectRoot, currentFile) {
             }
         }
     }
-    // Search user-level rule directory
-    const userRuleDir = join(getClaudeConfigDir(), 'rules');
+    // Search user-level rule directory (~/.claude/rules)
+    const userRuleDir = join(homeDir, USER_RULE_DIR);
     const userFiles = [];
     findRuleFilesRecursive(userRuleDir, userFiles);
     for (const filePath of userFiles) {

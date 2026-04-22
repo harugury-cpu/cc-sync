@@ -5,9 +5,7 @@ import { mkdir } from 'fs/promises';
 const outfile = 'bridge/runtime-cli.cjs';
 await mkdir('bridge', { recursive: true });
 
-const watchMode = process.argv.includes('--watch');
-
-const buildConfig = {
+await esbuild.build({
   entryPoints: ['src/team/runtime-cli.ts'],
   bundle: true,
   platform: 'node',
@@ -24,13 +22,5 @@ const buildConfig = {
     // jsonc-parser has dynamic requires that don't bundle well; we use a custom parser
     'jsonc-parser',
   ],
-};
-
-if (watchMode) {
-  const ctx = await esbuild.context(buildConfig);
-  await ctx.watch();
-  console.log(`Watching ${outfile}...`);
-} else {
-  await esbuild.build(buildConfig);
-  console.log(`Built ${outfile}`);
-}
+});
+console.log(`Built ${outfile}`);

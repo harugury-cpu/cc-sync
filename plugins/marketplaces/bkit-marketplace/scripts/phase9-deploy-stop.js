@@ -7,14 +7,19 @@
  *
  * Pipeline의 마지막 단계로, 전체 개발 사이클 완료 처리
  *
- * @version 1.6.0
+ * @version 1.4.4
  * @module scripts/phase9-deploy-stop
  */
 
 const path = require('path');
 
-const { debugLog } = require('../lib/core/debug');
-const { readBkitMemory, writeBkitMemory } = require('../lib/pdca/status');
+let common = null;
+function getCommon() {
+  if (!common) {
+    common = require('../lib/common.js');
+  }
+  return common;
+}
 
 /**
  * Generate phase completion message
@@ -70,15 +75,17 @@ function formatOutput(result) {
  * Main execution
  */
 async function main() {
+  const lib = getCommon();
+
   try {
-    debugLog('Phase9Stop', 'Deployment phase completed - Pipeline finished');
+    lib.debugLog('Phase9Stop', 'Deployment phase completed - Pipeline finished');
 
     const result = generatePhaseCompletion();
 
     console.log(formatOutput(result));
 
     // Update pipeline status - mark as complete
-    const memory = readBkitMemory();
+    const memory = lib.readBkitMemory();
     if (memory) {
       if (!memory.pipelineStatus) {
         memory.pipelineStatus = {};
@@ -103,11 +110,11 @@ async function main() {
         memory.pdcaStatus.lastUpdated = new Date().toISOString();
       }
 
-      writeBkitMemory(memory);
+      lib.writeBkitMemory(memory);
     }
 
   } catch (e) {
-    debugLog('Phase9Stop', 'Error', { error: e.message });
+    lib.debugLog('Phase9Stop', 'Error', { error: e.message });
     console.log(JSON.stringify({ status: 'error', error: e.message }));
   }
 }

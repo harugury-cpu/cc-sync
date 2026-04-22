@@ -35,8 +35,6 @@ function isPlainObject(value) {
 export function deepMerge(base, incoming) {
     const result = { ...base };
     for (const key of Object.keys(incoming)) {
-        if (key === '__proto__' || key === 'constructor' || key === 'prototype')
-            continue;
         const baseVal = base[key];
         const incomingVal = incoming[key];
         // Incoming explicitly null/undefined -> take it (intentional clear)

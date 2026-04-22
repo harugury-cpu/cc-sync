@@ -5,7 +5,7 @@
 Check if user has existing 2.x configuration:
 
 ```bash
-ls "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/commands/ralph-loop.md 2>/dev/null || ls "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/commands/ultrawork.md 2>/dev/null
+ls ~/.claude/commands/ralph-loop.md 2>/dev/null || ls ~/.claude/commands/ultrawork.md 2>/dev/null
 ```
 
 If found, this is an upgrade from 2.x. Set `IS_UPGRADE=true`.
@@ -50,11 +50,11 @@ Run /oh-my-claudecode:mcp-setup to add tools like web search, GitHub, etc.
 HUD STATUSLINE:
 The status bar now shows OMC state. Restart Claude Code to see it.
 
-OMC CLI HELPERS (if installed):
-- omc hud         - Render the current HUD statusline
-- omc teleport    - Create an isolated git worktree
-- omc team status - Inspect a running team job
-- Session summaries are written to `.omc/sessions/*.json`
+CLI ANALYTICS (if installed):
+- omc           - Default analytics dashboard
+- omc cost      - View cost reports (daily/weekly/monthly)
+- omc sessions  - Inspect session history
+- omc backfill  - Import transcript analytics
 
 That's it! Just use Claude Code normally.
 ```
@@ -91,11 +91,11 @@ Spawn coordinated agents with shared task lists and real-time messaging:
 HUD STATUSLINE:
 The status bar now shows OMC state. Restart Claude Code to see it.
 
-OMC CLI HELPERS (if installed):
-- omc hud         - Render the current HUD statusline
-- omc teleport    - Create an isolated git worktree
-- omc team status - Inspect a running team job
-- Session summaries are written to `.omc/sessions/*.json`
+CLI ANALYTICS (if installed):
+- omc           - Default analytics dashboard
+- omc cost      - View cost reports (daily/weekly/monthly)
+- omc sessions  - Inspect session history
+- omc backfill  - Import transcript analytics
 
 Your workflow won't break - it just got easier!
 ```
@@ -178,8 +178,8 @@ Get the current OMC version and mark setup complete:
 OMC_VERSION=""
 if [ -f ".claude/CLAUDE.md" ]; then
   OMC_VERSION=$(grep -m1 'OMC:VERSION:' .claude/CLAUDE.md 2>/dev/null | sed -E 's/.*OMC:VERSION:([^ ]+).*/\1/' || true)
-elif [ -f "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/CLAUDE.md" ]; then
-  OMC_VERSION=$(grep -m1 'OMC:VERSION:' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/CLAUDE.md" 2>/dev/null | sed -E 's/.*OMC:VERSION:([^ ]+).*/\1/' || true)
+elif [ -f "$HOME/.claude/CLAUDE.md" ]; then
+  OMC_VERSION=$(grep -m1 'OMC:VERSION:' "$HOME/.claude/CLAUDE.md" 2>/dev/null | sed -E 's/.*OMC:VERSION:([^ ]+).*/\1/' || true)
 fi
 if [ -z "$OMC_VERSION" ]; then
   OMC_VERSION=$(omc --version 2>/dev/null | head -1 || true)

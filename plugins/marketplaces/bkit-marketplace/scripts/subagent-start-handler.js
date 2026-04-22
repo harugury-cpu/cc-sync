@@ -3,16 +3,19 @@
  * subagent-start-handler.js - SubagentStart Hook Handler (v1.5.3)
  *
  * Subagent가 spawn될 때:
- * 1. Call initAgentState() if agent-state.json doesn't exist
- * 2. Register new teammate via addTeammate()
+ * 1. agent-state.json이 없으면 initAgentState() 호출
+ * 2. addTeammate()로 새 팀원 등록
  * 3. status: "spawning"
  *
  * Design Reference: docs/02-design/features/team-visibility.design.md Section 5.1
  */
 
-const { readStdinSync, outputAllow } = require('../lib/core/io');
-const { debugLog } = require('../lib/core/debug');
-const { getPdcaStatusFull } = require('../lib/pdca/status');
+const {
+  readStdinSync,
+  debugLog,
+  outputAllow,
+  getPdcaStatusFull,
+} = require('../lib/common.js');
 
 function main() {
   debugLog('SubagentStart', 'Hook started');
@@ -27,7 +30,7 @@ function main() {
     return;
   }
 
-  // State writer lazy load (from team module)
+  // State writer는 lazy load (team module에서)
   let stateWriter = null;
   try {
     const teamModule = require('../lib/team');
@@ -42,10 +45,11 @@ function main() {
     return;
   }
 
-  // Extract agent info from hook context
-  // v1.5.9: ENH-74 agent_id as first-class field
-  const agentId = hookContext.agent_id || null;
-  const agentName = hookContext.agent_name || agentId || hookContext.tool_input?.name || 'unknown';
+  // Hook context에서 agent 정보 추출
+  const agentName = hookContext.agent_name
+    || hookContext.agent_id
+    || hookContext.tool_input?.name
+    || 'unknown';
   const agentType = hookContext.agent_type
     || hookContext.tool_input?.subagent_type
     || 'agent';
@@ -54,7 +58,7 @@ function main() {
     || '';
   const sessionId = hookContext.session_id || '';
 
-  // Model mapping: extract from subagent_type or model field
+  // 모델 매핑: subagent_type 또는 model 필드에서 추출
   const modelRaw = hookContext.model
     || hookContext.tool_input?.model
     || 'sonnet';
@@ -62,7 +66,7 @@ function main() {
     ? modelRaw
     : 'sonnet';
 
-  // Initialize if agent-state.json doesn't exist
+  // agent-state.json이 없으면 초기화
   const existingState = stateWriter.readAgentState();
   if (!existingState || !existingState.enabled) {
     const pdcaStatus = getPdcaStatusFull();
@@ -77,7 +81,7 @@ function main() {
     });
   }
 
-  // Add teammate
+  // 팀원 추가
   try {
     stateWriter.addTeammate({
       name: agentName,
@@ -97,7 +101,6 @@ function main() {
     systemMessage: `Subagent ${agentName} spawned`,
     hookSpecificOutput: {
       hookEventName: "SubagentStart",
-      agentId,
       agentName,
       agentType,
       teamName,

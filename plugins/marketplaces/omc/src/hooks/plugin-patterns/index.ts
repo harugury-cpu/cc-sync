@@ -277,12 +277,7 @@ export function runTypeCheck(directory: string): { success: boolean; message: st
     return { success: true, message: 'TypeScript not installed' };
   }
 
-  // shell:true on Windows avoids Node 20.12+ EINVAL when spawning npx.cmd (CVE-2024-27980). #2721
-  const tscResult = spawnSync('npx', ['tsc', '--noEmit'], {
-    cwd: directory,
-    stdio: 'pipe',
-    shell: process.platform === 'win32',
-  });
+  const tscResult = spawnSync('npx', ['tsc', '--noEmit'], { cwd: directory, stdio: 'pipe' });
   if (tscResult.status === 0) {
     return { success: true, message: 'Type check passed' };
   }
@@ -303,13 +298,7 @@ export function runTests(directory: string): { success: boolean; message: string
     try {
       const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
       if (pkg.scripts?.test) {
-        execFileSync('npm', ['test'], {
-          cwd: directory,
-          encoding: 'utf-8',
-          stdio: 'pipe',
-          // shell:true on Windows avoids Node 20.12+ EINVAL when spawning npm.cmd (CVE-2024-27980). #2721
-          shell: process.platform === 'win32',
-        });
+        execFileSync('npm', ['test'], { cwd: directory, encoding: 'utf-8', stdio: 'pipe' });
         return { success: true, message: 'Tests passed' };
       }
     } catch (_error) {
@@ -345,13 +334,7 @@ export function runLint(directory: string): { success: boolean; message: string 
       const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
       if (pkg.scripts?.lint) {
         try {
-          execFileSync('npm', ['run', 'lint'], {
-            cwd: directory,
-            encoding: 'utf-8',
-            stdio: 'pipe',
-            // shell:true on Windows avoids Node 20.12+ EINVAL when spawning npm.cmd (CVE-2024-27980). #2721
-            shell: process.platform === 'win32',
-          });
+          execFileSync('npm', ['run', 'lint'], { cwd: directory, encoding: 'utf-8', stdio: 'pipe' });
           return { success: true, message: 'Lint passed' };
         } catch (_error) {
           return { success: false, message: 'Lint errors found' };

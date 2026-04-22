@@ -5,11 +5,10 @@
 
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
-import { getClaudeConfigDir } from '../../utils/config-dir.js';
+import { getClaudeConfigDir } from '../../utils/paths.js';
 import { isOmcHook } from '../../installer/index.js';
 import { colors } from '../utils/formatting.js';
 import { listBuiltinSkillNames } from '../../features/builtin-skills/skills.js';
-import { inspectUnifiedMcpRegistrySync } from '../../installer/mcp-registry.js';
 
 export interface ConflictReport {
   hookConflicts: { event: string; command: string; isOmc: boolean }[];
@@ -17,7 +16,6 @@ export interface ConflictReport {
   legacySkills: { name: string; path: string }[];
   envFlags: { disableOmc: boolean; skipHooks: string[] };
   configIssues: { unknownFields: string[] };
-  mcpRegistrySync: ReturnType<typeof inspectUnifiedMcpRegistrySync>;
   hasConflicts: boolean;
 }
 
@@ -257,12 +255,7 @@ export function checkConfigIssues(): ConflictReport['configIssues'] {
   try {
     const config = JSON.parse(readFileSync(configPath, 'utf-8'));
 
-    // Known top-level fields from the current config surfaces:
-    // - PluginConfig (src/shared/types.ts)
-    // - OMCConfig (src/features/auto-update.ts)
-    // - direct .omc-config.json readers/writers (notifications, auto-invoke,
-    //   delegation enforcement, omc-setup team config)
-    // - preserved legacy compatibility keys that still appear in user configs
+    // Known top-level fields from PluginConfig type
     const knownFields = new Set([
       // PluginConfig fields
       'agents',
@@ -284,16 +277,7 @@ export function checkConfigIssues(): ConflictReport['configIssues'] {
       'setupVersion',
       'stopHookCallbacks',
       'notifications',
-      'notificationProfiles',
-      'hudEnabled',
       'autoUpgradePrompt',
-      'nodeBinary',
-      // Direct config readers / writers outside OMCConfig
-      'customIntegrations',
-      'delegationEnforcementLevel',
-      'enforcementLevel',
-      'autoInvoke',
-      'team',
     ]);
 
     for (const field of Object.keys(config)) {
@@ -317,7 +301,6 @@ export function runConflictCheck(): ConflictReport {
   const legacySkills = checkLegacySkills();
   const envFlags = checkEnvFlags();
   const configIssues = checkConfigIssues();
-  const mcpRegistrySync = inspectUnifiedMcpRegistrySync();
 
   // Determine if there are actual conflicts
   const hasConflicts =
@@ -325,11 +308,7 @@ export function runConflictCheck(): ConflictReport {
     legacySkills.length > 0 || // Legacy skills colliding with plugin
     envFlags.disableOmc || // OMC is disabled
     envFlags.skipHooks.length > 0 || // Hooks are being skipped
-    configIssues.unknownFields.length > 0 || // Unknown config fields
-    mcpRegistrySync.claudeMissing.length > 0 ||
-    mcpRegistrySync.claudeMismatched.length > 0 ||
-    mcpRegistrySync.codexMissing.length > 0 ||
-    mcpRegistrySync.codexMismatched.length > 0;
+    configIssues.unknownFields.length > 0; // Unknown config fields
     // Note: Missing OMC markers is informational (normal for fresh install), not a conflict
 
   return {
@@ -338,7 +317,6 @@ export function runConflictCheck(): ConflictReport {
     legacySkills,
     envFlags,
     configIssues,
-    mcpRegistrySync,
     hasConflicts
   };
 }
@@ -443,39 +421,6 @@ export function formatReport(report: ConflictReport, json: boolean): string {
     }
     lines.push('');
   }
-
-  // Unified MCP registry sync
-  lines.push(colors.bold('🧩 Unified MCP Registry'));
-  lines.push('');
-  if (!report.mcpRegistrySync.registryExists) {
-    lines.push(`  ${colors.gray('No unified MCP registry found')}`);
-    lines.push(`    ${colors.gray(`Expected path: ${report.mcpRegistrySync.registryPath}`)}`);
-  } else if (report.mcpRegistrySync.serverNames.length === 0) {
-    lines.push(`  ${colors.gray('Registry exists but has no MCP servers')}`);
-    lines.push(`    ${colors.gray(`Path: ${report.mcpRegistrySync.registryPath}`)}`);
-  } else {
-    lines.push(`  ${colors.green('✓')} Registry servers: ${report.mcpRegistrySync.serverNames.join(', ')}`);
-    lines.push(`    ${colors.gray(`Registry: ${report.mcpRegistrySync.registryPath}`)}`);
-    lines.push(`    ${colors.gray(`Claude MCP: ${report.mcpRegistrySync.claudeConfigPath}`)}`);
-    lines.push(`    ${colors.gray(`Codex: ${report.mcpRegistrySync.codexConfigPath}`)}`);
-
-    if (report.mcpRegistrySync.claudeMissing.length > 0) {
-      lines.push(`  ${colors.yellow('⚠')} Missing from Claude MCP config: ${report.mcpRegistrySync.claudeMissing.join(', ')}`);
-    } else if (report.mcpRegistrySync.claudeMismatched.length > 0) {
-      lines.push(`  ${colors.yellow('⚠')} Mismatched in Claude MCP config: ${report.mcpRegistrySync.claudeMismatched.join(', ')}`);
-    } else {
-      lines.push(`  ${colors.green('✓')} Claude MCP config is in sync`);
-    }
-
-    if (report.mcpRegistrySync.codexMissing.length > 0) {
-      lines.push(`  ${colors.yellow('⚠')} Missing from Codex config.toml: ${report.mcpRegistrySync.codexMissing.join(', ')}`);
-    } else if (report.mcpRegistrySync.codexMismatched.length > 0) {
-      lines.push(`  ${colors.yellow('⚠')} Mismatched in Codex config.toml: ${report.mcpRegistrySync.codexMismatched.join(', ')}`);
-    } else {
-      lines.push(`  ${colors.green('✓')} Codex config.toml is in sync`);
-    }
-  }
-  lines.push('');
 
   // Summary
   lines.push(colors.gray('━'.repeat(60)));

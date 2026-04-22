@@ -24,7 +24,6 @@ export declare const OmcPaths: {
     readonly AUTOPILOT: ".omc/autopilot";
     readonly SKILLS: ".omc/skills";
     readonly SHARED_MEMORY: ".omc/state/shared-memory";
-    readonly DEEPINIT_MANIFEST: ".omc/deepinit-manifest.json";
 };
 /**
  * Get the git worktree root for the current or specified directory.
@@ -229,7 +228,7 @@ export declare function resolveToWorktreeRoot(directory?: string): string;
  * But the actual transcript lives at the original project's path:
  *   ~/.claude/projects/-path-to-project/<session>.jsonl
  *
- * Claude Code encodes `/` and `.` as `-`. The `.claude/worktrees/`
+ * Claude Code encodes `/` as `-` (dots are preserved). The `.claude/worktrees/`
  * segment becomes `-claude-worktrees-`, preceded by a `-` from the path
  * separator, yielding the distinctive `--claude-worktrees-` pattern in the
  * encoded directory name.

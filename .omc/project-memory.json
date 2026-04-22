@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1776478168929,
+  "lastScanned": 1776730736306,
   "projectRoot": "/Users/harugury/cc-sync",
   "techStack": {
     "languages": [],
@@ -40,7 +40,7 @@
       "path": "agents",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1776478168912,
+      "lastAccessed": 1776730736300,
       "keyFiles": [
         "debugger.md"
       ]
@@ -48,17 +48,19 @@
     "claude-dashboard-patches": {
       "path": "claude-dashboard-patches",
       "purpose": null,
-      "fileCount": 1,
-      "lastAccessed": 1776478168913,
+      "fileCount": 3,
+      "lastAccessed": 1776730736300,
       "keyFiles": [
-        "last-skill.ts"
+        "index.ts",
+        "last-skill.ts",
+        "types.ts"
       ]
     },
     "commands": {
       "path": "commands",
       "purpose": null,
       "fileCount": 4,
-      "lastAccessed": 1776478168913,
+      "lastAccessed": 1776730736301,
       "keyFiles": [
         "search-conversations.md",
         "show-dashboard.md",
@@ -70,7 +72,7 @@
       "path": "data",
       "purpose": "Data files",
       "fileCount": 1,
-      "lastAccessed": 1776478168919,
+      "lastAccessed": 1776730736301,
       "keyFiles": [
         "harsh-critic-triggers.json"
       ]
@@ -79,7 +81,7 @@
       "path": "docs",
       "purpose": "Documentation",
       "fileCount": 1,
-      "lastAccessed": 1776478168920,
+      "lastAccessed": 1776730736302,
       "keyFiles": [
         "cc-sync-overview.html"
       ]
@@ -88,7 +90,7 @@
       "path": "examples",
       "purpose": "Example code",
       "fileCount": 2,
-      "lastAccessed": 1776478168920,
+      "lastAccessed": 1776730736302,
       "keyFiles": [
         "CLAUDE.md.example",
         "settings.json.example"
@@ -98,7 +100,7 @@
       "path": "hooks",
       "purpose": null,
       "fileCount": 10,
-      "lastAccessed": 1776478168920,
+      "lastAccessed": 1776730736302,
       "keyFiles": [
         "README.md",
         "auto-validate.sh",
@@ -111,7 +113,7 @@
       "path": "memory-bank-sync",
       "purpose": null,
       "fileCount": 5,
-      "lastAccessed": 1776478168922,
+      "lastAccessed": 1776730736302,
       "keyFiles": [
         "facts.jsonl",
         "meta.json",
@@ -124,7 +126,7 @@
       "path": "plugins",
       "purpose": null,
       "fileCount": 6,
-      "lastAccessed": 1776478168923,
+      "lastAccessed": 1776730736302,
       "keyFiles": [
         "blocklist.json",
         "blocklist.json.28acd116baa77fce.tmp",
@@ -137,7 +139,7 @@
       "path": "rules",
       "purpose": null,
       "fileCount": 4,
-      "lastAccessed": 1776478168923,
+      "lastAccessed": 1776730736303,
       "keyFiles": [
         "cc-sync.md",
         "context-window.md",
@@ -149,7 +151,7 @@
       "path": "scripts",
       "purpose": "Build/utility scripts",
       "fileCount": 3,
-      "lastAccessed": 1776478168924,
+      "lastAccessed": 1776730736303,
       "keyFiles": [
         "backup.sh",
         "batch-p1p2p3.py",
@@ -160,7 +162,7 @@
       "path": "skills",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1776478168924,
+      "lastAccessed": 1776730736303,
       "keyFiles": [
         "harsh-critic.md"
       ]
@@ -169,14 +171,14 @@
       "path": "teams",
       "purpose": null,
       "fileCount": 0,
-      "lastAccessed": 1776478168926,
+      "lastAccessed": 1776730736303,
       "keyFiles": []
     },
     "plugins/data": {
       "path": "plugins/data",
       "purpose": "Data files",
       "fileCount": 0,
-      "lastAccessed": 1776478168929,
+      "lastAccessed": 1776730736305,
       "keyFiles": []
     }
   },

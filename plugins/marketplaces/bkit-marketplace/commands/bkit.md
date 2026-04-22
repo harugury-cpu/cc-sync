@@ -28,13 +28,10 @@ Display the following help message:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 PDCA (Document-Driven Development)
-  /pdca pm <feature>         PM Agent Team analysis (43 frameworks, v2.0.3)
-  /pdca plan <feature>       Plan with Checkpoints 1-2 (requirements + questions)
-  /pdca design <feature>     Design with Checkpoint 3 (3 architecture options)
-  /pdca do <feature>         Implement with Checkpoint 4 (scope approval)
-  /pdca do <feature> --scope module-N   Multi-session incremental (v2.0.5)
-  /pdca analyze <feature>    Gap analysis with Checkpoint 5 (fix strategy)
-  /pdca qa <feature>         QA phase testing (L1-L5 test levels, v2.1.1)
+  /pdca plan <feature>       Start planning a new feature
+  /pdca design <feature>     Create design document
+  /pdca do <feature>         Implementation guide
+  /pdca analyze <feature>    Gap analysis (design vs implementation)
   /pdca iterate <feature>    Auto-improvement iteration
   /pdca report <feature>     Generate completion report
   /pdca archive <feature>    Archive completed PDCA documents
@@ -57,20 +54,11 @@ Development Pipeline
 
 Quality Management
   /code-review <path>        Code review
-  /qa-phase <feature>        QA phase testing (L1-L5 test levels)
   /zero-script-qa            Start Zero Script QA
 
 Learning
   /claude-code-learning          Learn Claude Code
   /claude-code-learning setup    Analyze current project setup
-
-Code Quality (v1.6.0)
-  /simplify                  Review changed code for reuse, quality, efficiency
-  /batch                     Process multiple features in batch mode
-
-Memory & Clipboard (v1.5.6)
-  /memory                    Manage Claude auto-memory (view/edit entries)
-  /copy                      Copy code blocks to clipboard (interactive picker)
 
 Output Styles (v1.5.3)
   /output-style              Select response style
@@ -87,17 +75,16 @@ Output Styles (v1.5.3)
 
 ## Functions Reference
 
-### User-Invocable Skills (13)
+### User-Invocable Skills (12)
 
 | Function | Description |
 |----------|-------------|
-| `/pdca` | PDCA cycle management (pm, plan, design, do, analyze, iterate, report, archive, cleanup, team, status, next) |
+| `/pdca` | PDCA cycle management (plan, design, do, analyze, iterate, report, archive, cleanup, team, status, next) |
 | `/starter` | Starter project (HTML/CSS/Next.js) |
 | `/dynamic` | Dynamic project (bkend.ai BaaS) |
 | `/enterprise` | Enterprise project (K8s/Terraform) |
 | `/development-pipeline` | 9-phase development pipeline |
 | `/code-review` | Code quality analysis |
-| `/qa-phase` | QA phase testing with L1-L5 test levels |
 | `/zero-script-qa` | Log-based QA |
 | `/claude-code-learning` | Claude Code learning |
 | `/mobile-app` | Mobile app development (React Native/Flutter/Expo) |
@@ -119,9 +106,9 @@ Output Styles (v1.5.3)
 | `/phase-8-review` | Code review and gap analysis |
 | `/phase-9-deployment` | Production deployment (CI/CD, K8s) |
 
-### Agents (21, auto-triggered by keywords)
+### Agents (16, auto-triggered by keywords)
 
-#### Core Agents (11)
+#### Core Agents (16)
 
 | Agent | Trigger Keywords | Model |
 |-------|-----------------|-------|
@@ -146,28 +133,6 @@ Output Styles (v1.5.3)
 | product-manager | requirements, feature spec, priority | sonnet | Requirements analysis, feature prioritization |
 | qa-strategist | test strategy, QA plan, quality metrics | sonnet | Test strategy, quality metrics coordination |
 | security-architect | security, vulnerability, OWASP | opus | Vulnerability analysis, authentication design review |
-
-#### PM Agent Team (5, v2.0.3 — 43 frameworks)
-
-| Agent | Trigger Keywords | Model | Frameworks |
-|-------|-----------------|-------|------------|
-| pm-lead | pm team, product discovery, PM analysis | sonnet | Team orchestration, 4-phase workflow |
-| pm-discovery | market research, user research | sonnet | OST, Brainstorm, Assumption Risk Assessment |
-| pm-strategy | product strategy, positioning | sonnet | JTBD, Lean Canvas, SWOT, PESTLE, Porter's, Growth Loops |
-| pm-research | competitive analysis, trend research | sonnet | Personas, Competitors, TAM/SAM/SOM, Customer Journey, ICP |
-| pm-prd | PRD, product requirements document | sonnet | PRD v2.0 + Execution Deliverables (Pre-mortem, User/Job Stories, Test Scenarios, Stakeholder Map, Battlecards) |
-
-Based on [pm-skills](https://github.com/phuryn/pm-skills) by Pawel Huryn (MIT License).
-
-**How to Use PM Agent Team (v2.0.3):**
-```bash
-# Run PM analysis with 43 frameworks (recommended)
-/pdca pm {feature}
-
-# PM Team produces PRD v2.0 → docs/00-pm/{feature}.prd.md
-# Then Plan with Interactive Checkpoints (PRD auto-referenced)
-/pdca plan {feature}
-```
 
 **How to Use CTO-Led Agent Teams:**
 ```bash
@@ -204,35 +169,6 @@ export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 | Output Styles | `/output-style` | Custom response formatting |
 | TaskCompleted Hook | Automatic | Auto-advance PDCA phases on task completion |
 | TeammateIdle Hook | Automatic | Assign work to idle teammates |
-
-### v2.0.5 Features
-
-| Feature | Activation | Description |
-|---------|-----------|-------------|
-| Context Anchor | Automatic in `/pdca plan` | WHY/WHO/RISK/SUCCESS/SCOPE 5-line summary propagated across Plan→Design→Do→Analysis |
-| Session Guide | Automatic in `/pdca design` | Module Map + Recommended Session Plan for multi-session implementation |
-| Multi-Session Scope | `/pdca do {feature} --scope module-N` | Implement specific modules per session to reduce context loss |
-| Upstream Cross-Reading | Automatic in `/pdca do`, `/pdca analyze` | Do reads Plan Context Anchor; Analyze references Plan Success Criteria |
-
-### v2.0.3 Features
-
-| Feature | Activation | Description |
-|---------|-----------|-------------|
-| PM Frameworks 43 | `/pdca pm {feature}` | pm-skills MIT integration (9→43 frameworks) |
-| Interactive Checkpoints | Automatic in `/pdca` | 5 AskUserQuestion gates across PDCA phases |
-| Confidence Filtering | Automatic in code-analyzer | Only ≥80% confidence issues reported |
-| 3 Architecture Options | `/pdca design {feature}` | Minimal / Clean / Pragmatic comparison |
-| btw Team Integration | `/btw` in CTO Team | teamContext tracking, phase transition summaries |
-| PRD v2.0 Template | `/pdca pm {feature}` | Execution Deliverables (Pre-mortem, Stories, etc.) |
-
-### v1.6.0 Features
-
-| Feature | Activation | Description |
-|---------|-----------|-------------|
-| PM Agent Team | `/pdca pm {feature}` | 5 PM agents for pre-Plan product discovery |
-| Skill Classification | Automatic | 10 Workflow / 16 Capability / 2 Hybrid |
-| Skill Evals | `evals/` directory | 28 eval definitions for skill quality measurement |
-| Skill Hot Reload | `/reload-plugins` | Apply skill changes without session restart |
 
 ### v1.5.3 Features
 

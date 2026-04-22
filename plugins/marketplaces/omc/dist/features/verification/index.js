@@ -125,14 +125,12 @@ async function runSingleCheck(check, options = {}) {
             };
         }
     }
-    // Manual verification checks (no command) — kept as not-passed so gate logic
-    // does not auto-approve. Callers can check metadata.status to distinguish
-    // "genuinely failed" from "pending human review".
+    // Manual verification checks (no command)
     return {
         type: check.evidenceType,
         passed: false,
         timestamp: new Date(),
-        metadata: { requiresManualVerification: true, status: 'pending_manual_review' }
+        metadata: { requiresManualVerification: true }
     };
 }
 /**

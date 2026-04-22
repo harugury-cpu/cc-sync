@@ -1,17 +1,11 @@
 #!/usr/bin/env node
 /**
- * pre-write.js - Unified PreToolUse hook for Write|Edit operations (v2.0.0)
+ * pre-write.js - Unified PreToolUse/BeforeTool hook for Write|Edit operations (v1.4.2)
+ * Supports: Claude Code (PreToolUse), Gemini CLI (BeforeTool)
  *
- * Purpose: PDCA check, task classification, convention hints, permission check,
- *          destructive detection, blast radius, scope limiting, audit logging
- * Hook: PreToolUse (Claude Code)
+ * Purpose: PDCA check, task classification, convention hints, permission check
+ * Hook: PreToolUse (Claude Code) / BeforeTool (Gemini CLI)
  * Philosophy: Automation First - Guide, don't block
- *
- * v2.0.0 Changes:
- * - Added destructive detector integration (control module)
- * - Added blast radius check (control module)
- * - Added scope limiter check (control module)
- * - Added audit logging for all write operations
  *
  * v1.4.2 Changes:
  * - Added permission check integration (FR-05)
@@ -23,13 +17,24 @@
  * Converted from: scripts/pre-write.sh
  */
 
-const { readStdinSync, parseHookInput, outputAllow, outputBlock, outputEmpty } = require('../lib/core/io');
-const { debugLog } = require('../lib/core/debug');
-const { isSourceFile, isCodeFile, isEnvFile, extractFeature } = require('../lib/core/file');
-const { findDesignDoc, findPlanDoc } = require('../lib/pdca/phase');
-const { updatePdcaStatus, getPdcaStatusFull } = require('../lib/pdca/status');
-const { classifyTaskByLines, getPdcaLevel } = require('../lib/task/classification');
-const { generateTaskGuidance } = require('../lib/task/creator');
+const {
+  readStdinSync,
+  parseHookInput,
+  isSourceFile,
+  isCodeFile,
+  isEnvFile,
+  extractFeature,
+  findDesignDoc,
+  findPlanDoc,
+  classifyTaskByLines,
+  getPdcaLevel,
+  outputAllow,
+  outputBlock,
+  outputEmpty,
+  generateTaskGuidance,
+  debugLog,
+  updatePdcaStatus
+} = require('../lib/common.js');
 
 // v1.4.2: Permission Manager (FR-05)
 let permissionManager;
@@ -103,51 +108,16 @@ if (isSourceFile(filePath)) {
     designDoc = findDesignDoc(feature);
     planDoc = findPlanDoc(feature);
 
-    // v2.1.7: Only update PDCA status if feature matches active PDCA feature
-    // Prevents phantom feature registration (Issue #79 P4)
-    const currentStatus = getPdcaStatusFull();
-    const activeFeature = currentStatus?.currentFeature;
+    // Update PDCA status to "do" phase when source file is being written
+    updatePdcaStatus(feature, 'do', {
+      lastFile: filePath
+    });
 
-    if (activeFeature && activeFeature === feature) {
-      updatePdcaStatus(feature, 'do', {
-        lastFile: filePath
-      });
-      debugLog('PreToolUse', 'PDCA status updated', {
-        feature,
-        phase: 'do',
-        hasDesignDoc: !!designDoc
-      });
-    } else {
-      debugLog('PreToolUse', 'Skipped phantom feature registration', {
-        extracted: feature,
-        active: activeFeature || 'none'
-      });
-    }
-  }
-}
-
-// ============================================================
-// 2.5 PDCA Skill Bypass Detection (v2.1.5 - #75)
-// ============================================================
-const PDCA_DOC_PATTERNS = [
-  /docs\/01-plan\/.*\.plan\.md$/,
-  /docs\/02-design\/.*\.design\.md$/,
-  /docs\/03-analysis\/.*\.analysis\.md$/,
-  /docs\/04-report\/.*\.report\.md$/,
-  /docs\/05-qa\/.*\.qa-report\.md$/,
-  /docs\/00-pm\/.*\.prd\.md$/,
-];
-
-const isPdcaDoc = PDCA_DOC_PATTERNS.some(pattern => pattern.test(filePath));
-if (isPdcaDoc) {
-  const isSkillContext = !!process.env.CLAUDE_SKILL_NAME;
-  if (!isSkillContext) {
-    contextParts.push(
-      `[PDCA COMPLIANCE] This file is a PDCA document. ` +
-      `Use /pdca command instead of direct Write/Edit. ` +
-      `Direct writes bypass template injection, state tracking, and quality gates.`
-    );
-    debugLog('PreToolUse', 'PDCA skill bypass detected', { filePath });
+    debugLog('PreToolUse', 'PDCA status updated', {
+      feature,
+      phase: 'do',
+      hasDesignDoc: !!designDoc
+    });
   }
 }
 
@@ -208,64 +178,6 @@ if (feature && (pdcaLevel === 'recommended' || pdcaLevel === 'required')) {
   const taskHint = generateTaskGuidance('do', feature, 'design');
   contextParts.push(taskHint);
 }
-
-// ============================================================
-// 6. Destructive Detector (v2.0.0 - Control Module)
-// ============================================================
-try {
-  const dd = require('../lib/control/destructive-detector');
-  const toolInput = { file_path: filePath, content };
-  const result = dd.detect('Write', toolInput);
-  if (result.detected) {
-    const audit = require('../lib/audit/audit-logger');
-    audit.writeAuditLog({
-      actor: 'hook', actorId: 'pre-write',
-      action: 'destructive_blocked', category: 'control',
-      target: toolInput.file_path || '', targetType: 'file',
-      details: { rules: result.rules },
-      result: 'blocked', destructiveOperation: true,
-      blastRadius: 'medium'
-    });
-    contextParts.push(`Destructive operation detected: ${result.rules.map(r => r.id || r.reason).join(', ')}`);
-  }
-} catch (_) {}
-
-// ============================================================
-// 7. Blast Radius Check (v2.0.0 - Control Module)
-// ============================================================
-try {
-  const br = require('../lib/control/blast-radius');
-  const check = br.checkSingleFile(filePath, content?.length || 0);
-  if (check.warning) {
-    contextParts.push(`Blast radius warning: ${check.warning}`);
-  }
-} catch (_) {}
-
-// ============================================================
-// 8. Scope Limiter Check (v2.0.0 - Control Module)
-// ============================================================
-try {
-  const sl = require('../lib/control/scope-limiter');
-  const ac = require('../lib/control/automation-controller');
-  const level = ac.getCurrentLevel();
-  const scopeCheck = sl.checkPathScope(filePath, level);
-  if (!scopeCheck.allowed) {
-    contextParts.push(`Scope limit: ${scopeCheck.reason || 'Path not allowed at current automation level'}`);
-  }
-} catch (_) {}
-
-// ============================================================
-// 9. Audit Log (v2.0.0 - All Write Operations)
-// ============================================================
-try {
-  const audit = require('../lib/audit/audit-logger');
-  audit.writeAuditLog({
-    actor: 'hook', actorId: 'pre-write',
-    action: 'file_modified', category: 'file',
-    target: filePath || '', targetType: 'file',
-    result: 'success', destructiveOperation: false
-  });
-} catch (_) {}
 
 // ============================================================
 // Output combined context

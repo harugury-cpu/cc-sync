@@ -4,7 +4,6 @@
  * Writes assembled prompts and model responses to .omc/prompts/ before/after
  * sending to Codex/Gemini, providing visibility, debugging, and compliance audit trail.
  */
-import { type ArtifactDescriptor } from '../shared/artifact-descriptor.js';
 /**
  * Convert text to a filesystem-safe slug for filename
  *
@@ -51,7 +50,6 @@ export interface PersistPromptResult {
     filePath: string;
     id: string;
     slug: string;
-    artifact: ArtifactDescriptor;
 }
 /**
  * Job status for background execution tracking
@@ -64,8 +62,6 @@ export interface JobStatus {
     pid?: number;
     promptFile: string;
     responseFile: string;
-    promptArtifact?: ArtifactDescriptor;
-    responseArtifact?: ArtifactDescriptor;
     model: string;
     agentRole: string;
     spawnedAt: string;
@@ -109,8 +105,12 @@ export declare function persistPrompt(options: PersistPromptOptions): PersistPro
  * @returns The expected file path for the response
  */
 export declare function getExpectedResponsePath(provider: 'codex' | 'gemini', slug: string, promptId: string, workingDirectory?: string): string;
-export declare function describePromptArtifact(path: string): ArtifactDescriptor;
-export declare function describeResponseArtifact(path: string): ArtifactDescriptor;
+/**
+ * Persist a model response to disk with YAML frontmatter
+ *
+ * @param options - The response details to persist
+ * @returns The file path, or undefined on failure
+ */
 export declare function persistResponse(options: PersistResponseOptions): string | undefined;
 /**
  * Get the status file path for a background job

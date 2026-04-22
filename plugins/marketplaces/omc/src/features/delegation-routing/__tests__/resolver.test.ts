@@ -195,18 +195,17 @@ describe('resolveDelegation', () => {
     ['critic', 'critic'],
     ['analyst', 'analyst'],
     ['executor', 'executor'],
-    ['deep-executor', 'executor'],
+    ['deep-executor', 'deep-executor'],
     ['code-reviewer', 'code-reviewer'],
     ['security-reviewer', 'security-reviewer'],
-    ['quality-reviewer', 'code-reviewer'],
+    ['quality-reviewer', 'quality-reviewer'],
     ['designer', 'designer'],
     ['writer', 'writer'],
     ['vision', 'document-specialist'],
     ['qa-tester', 'qa-tester'],
     ['debugger', 'debugger'],
     ['scientist', 'scientist'],
-    ['build-fixer', 'debugger'],
-    ['harsh-critic', 'critic'],
+    ['build-fixer', 'build-fixer'],
   ])('should map role %s to default agent %s', (role, expectedAgent) => {
     const result = resolveDelegation({ agentRole: role });
     expect(result.agentOrModel).toBe(expectedAgent);

@@ -1,9 +1,9 @@
 /**
  * Platform Detection Module
  * @module lib/core/platform
- * @version 2.0.0
+ * @version 1.5.1
  *
- * Claude Code 전용 플러그인으로 단순화 (v1.5.0). Tag synced to 2.0.0 per ENH-263 (2026-04-21).
+ * Claude Code 전용 플러그인으로 단순화 (v1.5.0)
  */
 
 const path = require('path');

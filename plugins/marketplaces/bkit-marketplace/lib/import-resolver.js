@@ -3,32 +3,29 @@
  * @import Directive Resolver (FR-02)
  * Resolves and loads external context files from SKILL.md/Agent.md
  *
- * @version 2.0.0
+ * @version 1.4.2
  * @module lib/import-resolver
  */
 
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 
-// NOTE: common.js and context-hierarchy.js were removed in v2.1.1.
-// Functions migrated to lib/core (PLUGIN_ROOT, PROJECT_DIR, debugLog).
-// getUserConfigDir() inlined here.
-let _core = null;
+// Import from other modules (lazy to avoid circular dependency)
+let _common = null;
+let _hierarchy = null;
 
-function getCore() {
-  if (!_core) {
-    try { _core = require('./core'); } catch(_) { _core = null; }
+function getCommon() {
+  if (!_common) {
+    _common = require('./common.js');
   }
-  return _core;
+  return _common;
 }
 
-/**
- * Get user config directory (was in context-hierarchy.js, now inlined)
- * @returns {string}
- */
-function getUserConfigDir() {
-  return path.join(os.homedir(), '.claude', 'bkit');
+function getHierarchy() {
+  if (!_hierarchy) {
+    _hierarchy = require('./context-hierarchy.js');
+  }
+  return _hierarchy;
 }
 
 // Track imports to detect circular dependencies
@@ -44,12 +41,13 @@ const IMPORT_CACHE_TTL = 30000;  // 30 seconds
  * @returns {string} Resolved path
  */
 function resolveVariables(importPath) {
-  const core = getCore();
+  const common = getCommon();
+  const hierarchy = getHierarchy();
 
   return importPath
-    .replace(/\$\{PLUGIN_ROOT\}/g, core ? core.PLUGIN_ROOT : '')
-    .replace(/\$\{PROJECT\}/g, core ? core.PROJECT_DIR : '')
-    .replace(/\$\{USER_CONFIG\}/g, getUserConfigDir());
+    .replace(/\$\{PLUGIN_ROOT\}/g, common.PLUGIN_ROOT)
+    .replace(/\$\{PROJECT\}/g, common.PROJECT_DIR)
+    .replace(/\$\{USER_CONFIG\}/g, hierarchy.getUserConfigDir());
 }
 
 /**
@@ -77,7 +75,7 @@ function resolveImportPath(importPath, fromFile) {
  * @returns {string} File content or empty string
  */
 function loadImportedContent(absolutePath) {
-  const core = getCore();
+  const common = getCommon();
 
   // Check cache
   const cached = _importCache.get(absolutePath);
@@ -87,7 +85,7 @@ function loadImportedContent(absolutePath) {
 
   try {
     if (!fs.existsSync(absolutePath)) {
-      core && core.debugLog && core.debugLog('ImportResolver', 'Import file not found', { path: absolutePath });
+      common.debugLog('ImportResolver', 'Import file not found', { path: absolutePath });
       return '';
     }
 
@@ -101,7 +99,7 @@ function loadImportedContent(absolutePath) {
 
     return content;
   } catch (e) {
-    core && core.debugLog && core.debugLog('ImportResolver', 'Failed to load import', { path: absolutePath, error: e.message });
+    common.debugLog('ImportResolver', 'Failed to load import', { path: absolutePath, error: e.message });
     return '';
   }
 }
@@ -122,7 +120,7 @@ function detectCircularImport(absolutePath) {
  * @returns {{ content: string, errors: string[] }}
  */
 function resolveImports(frontmatter, sourceFile) {
-  const core = getCore();
+  const common = getCommon();
   const imports = frontmatter.imports || [];
   const errors = [];
   const contents = [];
@@ -131,7 +129,7 @@ function resolveImports(frontmatter, sourceFile) {
     return { content: '', errors: [] };
   }
 
-  core && core.debugLog && core.debugLog('ImportResolver', 'Resolving imports', {
+  common.debugLog('ImportResolver', 'Resolving imports', {
     sourceFile,
     importCount: imports.length
   });
@@ -214,7 +212,7 @@ function parseFrontmatter(content) {
  * @returns {{ content: string, errors: string[] }}
  */
 function processMarkdownWithImports(filePath) {
-  const core = getCore();
+  const common = getCommon();
 
   if (!fs.existsSync(filePath)) {
     return { content: '', errors: [`File not found: ${filePath}`] };

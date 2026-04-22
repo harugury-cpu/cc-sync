@@ -4,9 +4,8 @@ const require = createRequire(import.meta.url);
 import { readStdin } from './lib/stdin.mjs';
 
 async function main() {
-  // Read stdin with reduced timeout for SessionEnd — the input payload is small
-  // and doesn't need the default 5s wait. This saves ~4s toward the hook timeout (#1700).
-  const input = await readStdin(1000);
+  // Read stdin (timeout-protected, see issue #240/#459)
+  const input = await readStdin();
 
   try {
     const data = JSON.parse(input);

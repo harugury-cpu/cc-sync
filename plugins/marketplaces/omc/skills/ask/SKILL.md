@@ -1,6 +1,6 @@
 ---
 name: ask
-description: Process-first advisor routing for Claude, Codex, or Gemini via `omc ask`, with artifact capture and no raw CLI assembly
+description: Ask Claude, Codex, or Gemini via local CLI and capture a reusable artifact
 ---
 
 # Ask
@@ -23,13 +23,11 @@ Examples:
 
 ## Routing
 
-**Required execution path — always use this command:**
+Preferred path:
 
 ```bash
 omc ask {{ARGUMENTS}}
 ```
-
-**Do NOT manually construct raw provider CLI commands.** Never run `codex`, `claude`, or `gemini` directly to fulfill this skill. The `omc ask` wrapper handles correct flag selection, artifact persistence, and provider-version compatibility automatically. Manually assembling provider CLI flags will produce incorrect or outdated invocations.
 
 ## Requirements
 

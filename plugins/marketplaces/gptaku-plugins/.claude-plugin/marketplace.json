@@ -68,20 +68,6 @@
       "source": "./plugins/nopal",
       "category": "productivity",
       "tags": ["google-workspace", "orchestration", "gws-cli", "gmail", "calendar", "drive", "meet", "automation"]
-    },
-    {
-      "name": "insane-search",
-      "description": "Platform-specific access strategies for AI agents — auto-bypasses blocked sites (X/Twitter, Reddit, Stack Overflow, Naver) without API keys.",
-      "source": "./plugins/insane-search",
-      "category": "productivity",
-      "tags": ["web-access", "search", "webfetch", "bypass", "jina", "yt-dlp", "twitter", "reddit", "naver"]
-    },
-    {
-      "name": "insane-design",
-      "description": "URL one-shot design system extractor — fetches real CSS, analyzes tokens, generates design.md + interactive HTML report.",
-      "source": "./plugins/insane-design",
-      "category": "development",
-      "tags": ["design-system", "css-analysis", "design-tokens", "design.md", "report"]
     }
   ]
 }

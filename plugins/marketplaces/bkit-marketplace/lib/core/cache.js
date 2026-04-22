@@ -1,7 +1,7 @@
 /**
  * In-Memory Cache with TTL
  * @module lib/core/cache
- * @version 2.0.0
+ * @version 1.4.7
  */
 
 /**
@@ -74,32 +74,6 @@ function clear() {
  */
 const globalCache = { get, set, invalidate, clear };
 
-/**
- * v1.6.0 ENH-91: ToolSearch result caching with fallback
- * CC v2.1.70 fixed ToolSearch empty response, but this adds defense-in-depth.
- */
-const TOOLSEARCH_TTL = 60000; // 60s
-
-/**
- * Get cached ToolSearch result
- * @param {string} query - Search query
- * @returns {*|null} Cached result or null
- */
-function getToolSearchCache(query) {
-  return get(`toolsearch:${query}`, TOOLSEARCH_TTL);
-}
-
-/**
- * Cache ToolSearch result (only non-empty results)
- * @param {string} query - Search query
- * @param {*} result - Search result
- */
-function setToolSearchCache(query, result) {
-  if (result && (Array.isArray(result) ? result.length > 0 : true)) {
-    set(`toolsearch:${query}`, result);
-  }
-}
-
 module.exports = {
   get,
   set,
@@ -107,10 +81,6 @@ module.exports = {
   clear,
   globalCache,
   DEFAULT_TTL,
-  // v1.6.0 ENH-91: ToolSearch cache
-  TOOLSEARCH_TTL,
-  getToolSearchCache,
-  setToolSearchCache,
-  // Legacy compat
+  // 레거시 호환
   _cache: globalCache,
 };

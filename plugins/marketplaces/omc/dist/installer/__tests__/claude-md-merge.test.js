@@ -26,33 +26,29 @@ describe('mergeClaudeMd', () => {
         });
     });
     describe('Update existing content with markers', () => {
-        it('removes all marker blocks and preserves only user content outside them', () => {
+        it('replaces only content between markers', () => {
             const existingContent = `Some header content\n\n${START_MARKER}\n# Old OMC Content\nOld stuff here.\n${END_MARKER}\n\nUser's custom content\nMore custom stuff`;
             const result = mergeClaudeMd(existingContent, omcContent);
-            expect(result).toContain(omcContent);
-            expect(result).toContain(USER_CUSTOMIZATIONS);
             expect(result).toContain('Some header content');
+            expect(result).toContain(omcContent);
             expect(result).toContain('User\'s custom content');
             expect(result).not.toContain('Old OMC Content');
             expect(result).not.toContain('Old stuff here');
-            expect((result.match(/<!-- OMC:START -->/g) || []).length).toBe(1);
-            expect((result.match(/<!-- OMC:END -->/g) || []).length).toBe(1);
         });
-        it('normalizes preserved content under the user customizations section', () => {
+        it('preserves content before and after markers', () => {
             const beforeContent = 'This is before the marker\n\n';
             const afterContent = '\n\nThis is after the marker';
             const existingContent = `${beforeContent}${START_MARKER}\nOld content\n${END_MARKER}${afterContent}`;
             const result = mergeClaudeMd(existingContent, omcContent);
-            expect(result.startsWith(`${START_MARKER}\n${omcContent}\n${END_MARKER}`)).toBe(true);
-            expect(result).toContain(USER_CUSTOMIZATIONS);
-            expect(result).toContain('This is before the marker');
-            expect(result).toContain('This is after the marker');
+            expect(result.startsWith(beforeContent)).toBe(true);
+            expect(result.endsWith(afterContent)).toBe(true);
             expect(result).toContain(omcContent);
         });
-        it('keeps remaining user content after stripping marker blocks', () => {
+        it('maintains exact structure with proper newlines', () => {
             const existingContent = `Header\n${START_MARKER}\nOld\n${END_MARKER}\nFooter`;
             const result = mergeClaudeMd(existingContent, omcContent);
-            expect(result).toBe(`${START_MARKER}\n${omcContent}\n${END_MARKER}\n\n${USER_CUSTOMIZATIONS}\nHeader\nFooter`);
+            const expected = `Header\n${START_MARKER}\n${omcContent}\n${END_MARKER}\nFooter`;
+            expect(result).toBe(expected);
         });
     });
     describe('No markers in existing content', () => {
@@ -110,29 +106,6 @@ describe('mergeClaudeMd', () => {
             expect(result).toContain(omcContent);
             expect(result).toContain(USER_CUSTOMIZATIONS_RECOVERED);
         });
-        it('does not grow unboundedly when called repeatedly with corrupted markers', () => {
-            // Regression: corrupted markers caused existingContent (including corrupted markers)
-            // to be appended as-is. Next call re-detected corruption, appended again → unbounded growth.
-            const corruptedContent = `${START_MARKER}\nUser stuff\nMore user stuff`;
-            const firstResult = mergeClaudeMd(corruptedContent, omcContent);
-            // Call again with the output of the first call
-            const secondResult = mergeClaudeMd(firstResult, omcContent);
-            // The file should NOT grow unboundedly — second call should produce
-            // similar or equal length output as the first call
-            expect(secondResult.length).toBeLessThanOrEqual(firstResult.length * 1.1);
-            // The corrupted markers should be stripped from recovered content
-            // so re-processing doesn't re-detect corruption and re-append
-            const thirdResult = mergeClaudeMd(secondResult, omcContent);
-            expect(thirdResult.length).toBeLessThanOrEqual(secondResult.length * 1.1);
-        });
-        it('strips unmatched OMC markers from recovered content', () => {
-            const corruptedContent = `${START_MARKER}\nUser custom config`;
-            const result = mergeClaudeMd(corruptedContent, omcContent);
-            // The recovered section should not contain bare OMC markers
-            // Count occurrences of START_MARKER: should only appear once (in the OMC block)
-            const startMarkerCount = (result.match(new RegExp(START_MARKER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
-            expect(startMarkerCount).toBe(1);
-        });
     });
     describe('Edge cases', () => {
         it('handles empty omcContent', () => {
@@ -148,7 +121,7 @@ describe('mergeClaudeMd', () => {
             expect(result).toContain(START_MARKER);
             expect(result).toContain(END_MARKER);
             expect(result).toContain(omcContent);
-            expect(result).not.toContain(USER_CUSTOMIZATIONS);
+            expect(result).toContain(existingContent);
         });
         it('handles multi-line omcContent', () => {
             const multiLineOmc = 'Line 1\nLine 2\nLine 3\n\nLine 5';
@@ -194,8 +167,6 @@ ${USER_CUSTOMIZATIONS}
             expect(result).not.toContain('Old instructions here');
             expect(result).toContain('# My Project-Specific Instructions');
             expect(result).toContain('Follow company coding standards');
-            expect((result.match(/<!-- OMC:START -->/g) || []).length).toBe(1);
-            expect((result.match(/<!-- OMC:END -->/g) || []).length).toBe(1);
         });
         it('handles migration from old version without markers', () => {
             const oldContent = `# Legacy CLAUDE.md
@@ -272,44 +243,6 @@ my notes`;
             expect(result).toContain('<!-- OMC:VERSION:4.6.7 -->');
             expect(result).not.toContain('<!-- OMC:VERSION:4.0.0 -->');
             expect((result.match(/<!-- OMC:VERSION:/g) || []).length).toBe(1);
-        });
-    });
-    describe('issue #1467 regression', () => {
-        it('removes duplicate legacy OMC blocks from preserved user content', () => {
-            const existingContent = `${START_MARKER}
-Old OMC content v1
-${END_MARKER}
-
-${USER_CUSTOMIZATIONS}
-My note before duplicate block
-
-${START_MARKER}
-Older duplicate block
-${END_MARKER}
-
-My note after duplicate block`;
-            const result = mergeClaudeMd(existingContent, omcContent);
-            expect((result.match(/<!-- OMC:START -->/g) || []).length).toBe(1);
-            expect((result.match(/<!-- OMC:END -->/g) || []).length).toBe(1);
-            expect(result).toContain(USER_CUSTOMIZATIONS);
-            expect(result).toContain('My note before duplicate block');
-            expect(result).toContain('My note after duplicate block');
-            expect(result).not.toContain('Old OMC content v1');
-            expect(result).not.toContain('Older duplicate block');
-        });
-        it('removes autogenerated user customization headers while preserving real user text', () => {
-            const existingContent = `${START_MARKER}
-Old OMC content
-${END_MARKER}
-
-<!-- User customizations (migrated from previous CLAUDE.md) -->
-First user note
-
-<!-- User customizations -->
-Second user note`;
-            const result = mergeClaudeMd(existingContent, omcContent);
-            expect((result.match(/<!-- User customizations/g) || []).length).toBe(1);
-            expect(result).toContain(`${USER_CUSTOMIZATIONS}\nFirst user note\n\nSecond user note`);
         });
     });
 });

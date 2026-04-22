@@ -3,7 +3,7 @@
  * Provides unified process management across Windows, macOS, and Linux.
  */
 
-import { execFileSync, execFile } from 'child_process';
+import { execSync, execFile } from 'child_process';
 import { promisify } from 'util';
 import * as fsPromises from 'fs/promises';
 
@@ -34,7 +34,7 @@ async function killProcessTreeWindows(pid: number, force: boolean): Promise<bool
     if (force) {
       args.unshift('/F');
     }
-    execFileSync('taskkill.exe', args, {
+    execSync(`taskkill ${args.join(' ')}`, {
       stdio: 'ignore',
       timeout: 5000,
       windowsHide: true
@@ -64,7 +64,6 @@ function killProcessTreeUnix(pid: number, signal: NodeJS.Signals): boolean {
 /**
  * Check if a process is alive.
  * Works cross-platform by attempting signal 0.
- * EPERM means the process exists but we lack permission to signal it.
  */
 export function isProcessAlive(pid: number): boolean {
   if (!Number.isInteger(pid) || pid <= 0) return false;
@@ -72,10 +71,7 @@ export function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
-  } catch (e: unknown) {
-    if (e && typeof e === 'object' && 'code' in e && (e as NodeJS.ErrnoException).code === 'EPERM') {
-      return true;
-    }
+  } catch {
     return false;
   }
 }

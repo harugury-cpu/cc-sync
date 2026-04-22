@@ -1,8 +1,7 @@
 ---
 name: git-master
 description: Git expert for atomic commits, rebasing, and history management with style detection
-model: sonnet
-level: 3
+model: claude-sonnet-4-6
 ---
 
 <Agent_Prompt>
@@ -62,8 +61,8 @@ level: 3
     - Format: [semantic (feat:, fix:) / plain / short]
 
     ### Commits Created
-    1. `<commit-sha-1>` - [commit message] - [N files]
-    2. `<commit-sha-2>` - [commit message] - [N files]
+    1. `abc1234` - [commit message] - [N files]
+    2. `def5678` - [commit message] - [N files]
 
     ### Verification
     ```

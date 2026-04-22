@@ -1,21 +1,123 @@
 #!/usr/bin/env node
 /**
- * bkit Vibecoding Kit - SessionStart Hook (v2.1.9)
+ * bkit Vibecoding Kit - SessionStart Hook (v1.5.5)
+ * Claude Code 전용 플러그인
  *
- * Thin orchestrator that delegates to startup modules:
- *   1. migration   - Legacy path migration (docs/ -> .bkit/)
- *   2. restore     - PLUGIN_DATA backup restoration
- *   3. contextInit - Context Hierarchy, Memory Store, Import Resolver, Fork cleanup, ensureBkitDirs
- *   4. onboarding  - Onboarding message generation, env vars, trigger table
- *   5. sessionCtx  - additionalContext string building for hook output
- *   6. dashboard   - PDCA progress bar rendering (prepended to additionalContext)
- *   7. workflowMap - v2.0.0 Workflow map rendering (PDCA phase visualization)
- *   8. controlPanel- v2.0.0 Control panel rendering (automation level display)
- *   9. staleDetect - v2.0.0 Stale feature detection (lifecycle.js)
+ * v1.5.5 Changes:
+ * - Plan Plus skill: brainstorming-enhanced PDCA planning (community PR #34)
+ * - Skills 26 -> 27, Templates 27 -> 28
+ * - README duplicate Skills rows fix (community PR #33)
+ *
+ * v1.5.4 Changes:
+ * - bkend MCP accuracy fix: 19 -> 28+ tools, accurate tool names
+ * - session-start.js: bkend MCP check Dynamic -> Dynamic+Enterprise
+ * - Version sync to v1.5.4 across all config files
+ *
+ * v1.5.3 Changes:
+ * - Output Styles plugin.json integration + output-style-setup command
+ * - bkend docs live reference (WebFetch)
+ * - Version sync to v1.5.3 across all config files
+ *
+ * v1.5.2 Changes:
+ * - Agent Teams detection and Team Mode integration
+ * - Claude Code v2.1.33 compatibility enhancements
+ *
+ * v1.5.0 Changes:
+ * - Gemini CLI 지원 제거 (Claude Code 전용으로 단순화)
+ *
+ * v1.4.7 Changes:
+ * - Task Management + PDCA Integration (Task Chain Auto-Creation)
+ * - Core Modularization: lib/common.js split into lib/core/, lib/pdca/, lib/intent/, lib/task/
+ * - 22 new module files, 132 function exports
+ * - Check↔Act Iteration with automatic improvement cycles
+ * - Full-Auto Mode support (manual/semi-auto/full-auto)
+ *
+ * v1.4.7 Changes:
+ * - Added /pdca archive action for PDCA cycle completion
+ * - 8-language trigger completion (ES, FR, DE, IT added)
+ * - Korean to English translation (internationalization)
+ * - /bkit:functions command for skills discoverability
+ *
+ * v1.4.4 Changes:
+ * - Updated bkit feature report to use Skills instead of deprecated Commands
+ * - All commands migrated to Skills (see commands/DEPRECATED.md)
+ *
+ * v1.4.3 Changes:
+ * - Applied xmlSafeOutput to dynamic content for Gemini CLI v0.26+ (ISSUE-001)
+ *
+ * v1.4.2 Changes:
+ * - Added session context initialization (FR-01)
+ * - Multi-Level Context Hierarchy support
+ * - UserPromptSubmit plugin bug detection (GitHub #20659)
+ * - Skill fork configuration scanning
+ * - Import preloading for performance
+ *
+ * v1.4.1 Changes:
+ * - Added bkit feature usage report rule (Response Report Rule)
+ * - All responses must include feature usage summary
+ *
+ * v1.4.0 Changes:
+ * - Added PDCA status initialization
+ * - Using debugLog from common.js
+ *
+ * Converted from: hooks/session-start.sh
+ * Platform: Windows, macOS, Linux
  */
 
-const { BKIT_PLATFORM } = require('../lib/core/platform');
-const { debugLog } = require('../lib/core/debug');
+const fs = require('fs');
+const path = require('path');
+const {
+  BKIT_PLATFORM,
+  detectLevel,
+  debugLog,
+  initPdcaStatusIfNotExists,
+  getPdcaStatusFull,
+  // v1.4.0 Automation Functions
+  emitUserPrompt,
+  detectNewFeatureIntent,
+  matchImplicitAgentTrigger,
+  matchImplicitSkillTrigger,
+  getBkitConfig,
+  // v1.4.0 P2: Ambiguity Detection Integration
+  calculateAmbiguityScore,
+  generateClarifyingQuestions,
+} = require('../lib/common.js');
+
+// v1.4.2: Context Hierarchy (FR-01)
+let contextHierarchy;
+try {
+  contextHierarchy = require('../lib/context-hierarchy.js');
+} catch (e) {
+  // Fallback if module not available
+  contextHierarchy = null;
+}
+
+// v1.4.2: Memory Store (FR-08)
+let memoryStore;
+try {
+  memoryStore = require('../lib/memory-store.js');
+} catch (e) {
+  // Fallback if module not available
+  memoryStore = null;
+}
+
+// v1.4.2: Import Resolver (FR-02)
+let importResolver;
+try {
+  importResolver = require('../lib/import-resolver.js');
+} catch (e) {
+  // Fallback if module not available
+  importResolver = null;
+}
+
+// v1.4.2: Context Fork (FR-03)
+let contextFork;
+try {
+  contextFork = require('../lib/context-fork.js');
+} catch (e) {
+  // Fallback if module not available
+  contextFork = null;
+}
 
 // Log session start
 debugLog('SessionStart', 'Hook executed', {
@@ -23,236 +125,564 @@ debugLog('SessionStart', 'Hook executed', {
   platform: BKIT_PLATFORM
 });
 
-// --- ENH-148: Defensive cleanup for env vars that should reset on /clear ---
-// CC /clear resets conversation but env vars persist across sessions.
-// Clean up bkit-specific runtime env vars to prevent stale state (#37729).
-const BKIT_RUNTIME_ENV_VARS = [
-  'BKIT_PDCA_PHASE',
-  'BKIT_PRIMARY_FEATURE',
-  'BKIT_AUTOMATION_LEVEL',
-  'BKIT_SESSION_ID',
-  'BKIT_AGENT_ACTIVE',
-  'BKIT_CHECKPOINT_PENDING',
-];
+// Initialize PDCA status file if not exists
+initPdcaStatusIfNotExists();
 
-for (const envVar of BKIT_RUNTIME_ENV_VARS) {
-  if (process.env[envVar]) {
-    debugLog('SessionStart', 'Cleaning stale env var', { envVar, value: process.env[envVar] });
-    delete process.env[envVar];
-  }
-}
+// v1.4.2: Initialize session context (FR-01)
+if (contextHierarchy) {
+  try {
+    // Clear any stale session context from previous session
+    contextHierarchy.clearSessionContext();
 
-// --- 1. Migration: Legacy path migration ---
-const migration = require('./startup/migration');
-try {
-  migration.run();
-} catch (e) {
-  debugLog('SessionStart', 'Migration module failed', { error: e.message });
-}
-
-// --- 2. Restore: PLUGIN_DATA backup restoration ---
-const restore = require('./startup/restore');
-try {
-  restore.run();
-} catch (e) {
-  debugLog('SessionStart', 'Restore module failed', { error: e.message });
-}
-
-// --- 3. Context Init: Hierarchy, Memory, Imports, Forks ---
-const contextInit = require('./startup/context-init');
-try {
-  contextInit.run();
-} catch (e) {
-  debugLog('SessionStart', 'Context init module failed', { error: e.message });
-}
-
-// --- 4. Onboarding: Messages, env vars, trigger table ---
-const onboarding = require('./startup/onboarding');
-let onboardingContext = { onboardingData: { type: 'new_user', hasExistingWork: false }, triggerTable: '' };
-try {
-  onboardingContext = onboarding.run();
-} catch (e) {
-  debugLog('SessionStart', 'Onboarding module failed', { error: e.message });
-}
-
-// --- 5. Session Context: Build additionalContext string ---
-const sessionContext = require('./startup/session-context');
-let additionalContext = '';
-try {
-  additionalContext = sessionContext.build(null, onboardingContext);
-} catch (e) {
-  debugLog('SessionStart', 'Session context module failed', { error: e.message });
-}
-
-// --- v2.1.1 UI-02: Build dashboard sections in correct display order ---
-// Order: Session Context → Progress Bar → Workflow Map → Impact View → Agent Panel → Control Panel
-const dashboardSections = [];
-
-// ENH-226 (Issue #77 Phase A): dashboard opt-out gate
-// 사용자가 ui.dashboard.enabled=false 시 5종 박스(progress/workflow/impact/agent/control) 렌더링 전부 스킵.
-let _uiDashboardEnabled = true;
-let _uiDashboardSections = ['progress', 'workflow', 'impact', 'agent', 'control'];
-try {
-  const { getUIConfig } = require('../lib/core/config');
-  const _ui = getUIConfig();
-  if (_ui && _ui.dashboard) {
-    _uiDashboardEnabled = _ui.dashboard.enabled !== false;
-    if (Array.isArray(_ui.dashboard.sections)) _uiDashboardSections = _ui.dashboard.sections;
-  }
-} catch (_e) {
-  // 기본값(true) 유지
-}
-
-// Session Context is already in additionalContext (base content)
-// It will be placed first in the final output
-
-let pdcaStatus = null;
-let agentState = null;
-
-// Load shared state once
-try {
-  const { getPdcaStatusFull } = require('../lib/pdca/status');
-  pdcaStatus = getPdcaStatusFull();
-} catch (_) {}
-
-try {
-  const fs = require('fs');
-  const agentStatePath = require('path').resolve(process.cwd(), '.bkit/runtime/agent-state.json');
-  if (fs.existsSync(agentStatePath)) {
-    agentState = JSON.parse(fs.readFileSync(agentStatePath, 'utf-8'));
-  }
-} catch (_) { /* non-critical */ }
-
-if (pdcaStatus && pdcaStatus.primaryFeature && _uiDashboardEnabled) {
-  // ENH-226: per-section opt-in control via _uiDashboardSections array
-  // 6. Progress Bar
-  if (_uiDashboardSections.includes('progress')) try {
-    const { renderPdcaProgressBar } = require('../lib/ui/progress-bar');
-    const dashboardBar = renderPdcaProgressBar(pdcaStatus, { compact: false });
-    if (dashboardBar) dashboardSections.push(dashboardBar);
-  } catch (e) {
-    debugLog('SessionStart', 'PDCA dashboard rendering failed', { error: e.message });
-  }
-
-  // 7. Workflow Map
-  if (_uiDashboardSections.includes('workflow')) try {
-    const { renderWorkflowMap } = require('../lib/ui/workflow-map');
-    const workflowMap = renderWorkflowMap(pdcaStatus, agentState, {
-      feature: pdcaStatus.primaryFeature,
-      showIteration: false,
-      showBranch: false
-    });
-    if (workflowMap) dashboardSections.push(workflowMap);
-  } catch (e) {
-    debugLog('SessionStart', 'v2.0.0 workflow map rendering failed', { error: e.message });
-  }
-
-  // 7.1 v2.1.1 UI-01: Impact View
-  if (_uiDashboardSections.includes('impact')) try {
-    const { renderImpactView } = require('../lib/ui/impact-view');
-    const impactView = renderImpactView(pdcaStatus, null, {});
-    if (impactView) dashboardSections.push(impactView);
-  } catch (e) {
-    debugLog('SessionStart', 'v2.1.1 impact view rendering failed', { error: e.message });
-  }
-
-  // 7.2 v2.1.1 UI-01: Agent Panel (skip when inactive to save ~300 tokens)
-  if (_uiDashboardSections.includes('agent') && agentState && agentState.enabled) {
-    try {
-      const { renderAgentPanel } = require('../lib/ui/agent-panel');
-      const agentPanel = renderAgentPanel(agentState, {});
-      if (agentPanel) dashboardSections.push(agentPanel);
-    } catch (e) {
-      debugLog('SessionStart', 'v2.1.1 agent panel rendering failed', { error: e.message });
+    // Set initial session values
+    const pdcaStatus = getPdcaStatusFull();
+    contextHierarchy.setSessionContext('sessionStartedAt', new Date().toISOString());
+    contextHierarchy.setSessionContext('platform', BKIT_PLATFORM);
+    contextHierarchy.setSessionContext('level', detectLevel());
+    if (pdcaStatus && pdcaStatus.primaryFeature) {
+      contextHierarchy.setSessionContext('primaryFeature', pdcaStatus.primaryFeature);
     }
-  }
 
-  // 8. Control Panel (last in dashboard)
-  if (_uiDashboardSections.includes('control')) try {
-    const { renderControlPanel } = require('../lib/ui/control-panel');
-    let controlState = null;
-    try {
-      const fs = require('fs');
-      const controlStatePath = require('path').resolve(process.cwd(), '.bkit/runtime/control-state.json');
-      if (fs.existsSync(controlStatePath)) {
-        controlState = JSON.parse(fs.readFileSync(controlStatePath, 'utf-8'));
+    debugLog('SessionStart', 'Session context initialized', {
+      platform: BKIT_PLATFORM,
+      level: detectLevel()
+    });
+  } catch (e) {
+    debugLog('SessionStart', 'Failed to initialize session context', { error: e.message });
+  }
+}
+
+// v1.4.2: Memory Store Integration (FR-08)
+if (memoryStore) {
+  try {
+    // Track session count
+    const sessionCount = memoryStore.getMemory('sessionCount', 0);
+    memoryStore.setMemory('sessionCount', sessionCount + 1);
+
+    // Store session info
+    const previousSession = memoryStore.getMemory('lastSession', null);
+    memoryStore.setMemory('lastSession', {
+      startedAt: new Date().toISOString(),
+      platform: BKIT_PLATFORM,
+      level: detectLevel()
+    });
+
+    debugLog('SessionStart', 'Memory store initialized', {
+      sessionCount: sessionCount + 1,
+      hasPreviousSession: !!previousSession
+    });
+  } catch (e) {
+    debugLog('SessionStart', 'Failed to initialize memory store', { error: e.message });
+  }
+}
+
+// v1.4.2: Import Resolver Integration (FR-02) - Load startup context
+if (importResolver) {
+  try {
+    const config = getBkitConfig();
+    const startupImports = config.startupImports || [];
+
+    if (startupImports.length > 0) {
+      const { content, errors } = importResolver.resolveImports(
+        { imports: startupImports },
+        path.join(process.cwd(), 'bkit.config.json')
+      );
+
+      if (errors.length > 0) {
+        debugLog('SessionStart', 'Startup import errors', { errors });
       }
-    } catch (_) { /* non-critical */ }
 
-    const controlPanel = renderControlPanel(controlState, null, {
-      showShortcuts: false,
-      showApprovals: true
-    });
-    if (controlPanel) dashboardSections.push(controlPanel);
-  } catch (e) {
-    debugLog('SessionStart', 'v2.0.0 control panel rendering failed', { error: e.message });
-  }
-}
-
-// v2.1.1 UI-02: Combine in correct order (dashboard above session context)
-if (dashboardSections.length > 0) {
-  additionalContext = dashboardSections.join('\n\n') + '\n\n' + additionalContext;
-}
-
-// --- 9. v2.0.0 Stale Feature Detection: Warn about idle features ---
-try {
-  const { detectStaleFeatures } = require('../lib/pdca/lifecycle');
-  const staleFeatures = detectStaleFeatures();
-  if (staleFeatures.length > 0) {
-    let staleWarning = '\n## Stale Feature Warning\n\n';
-    staleWarning += 'The following features have been idle and may need attention:\n\n';
-    for (const stale of staleFeatures) {
-      staleWarning += `- **${stale.feature}**: idle ${stale.daysIdle} days (phase: ${stale.phase}, last activity: ${stale.lastActivity})\n`;
+      if (content) {
+        debugLog('SessionStart', 'Startup imports loaded', {
+          importCount: startupImports.length,
+          contentLength: content.length
+        });
+      }
     }
-    staleWarning += '\nConsider resuming, archiving, or cleaning up stale features with `/pdca status`.\n';
-    additionalContext += staleWarning;
+  } catch (e) {
+    debugLog('SessionStart', 'Failed to load startup imports', { error: e.message });
   }
-} catch (e) {
-  debugLog('SessionStart', 'v2.0.0 stale feature detection failed', { error: e.message });
 }
 
-// --- Output Response ---
-// ENH-227 (Issue #77 Phase A): single-source generator with opt-out + phase-change-only + stale TTL
-const { generateSessionTitle } = require('../lib/pdca/session-title');
-const primaryFeature = onboardingContext.onboardingData.primaryFeature || pdcaStatus?.primaryFeature || null;
-const currentPhase = onboardingContext.onboardingData.phase || pdcaStatus?.currentPhase || null;
-const sessionIdForFp = process.env.CLAUDE_SESSION_ID || 'default';
-const sessionTitle = generateSessionTitle({
-  feature: primaryFeature,
-  phase: currentPhase,
-  sessionId: sessionIdForFp === 'default' ? null : sessionIdForFp,
-});
+// v1.4.2: Context Fork Cleanup (FR-03) - Clear stale forks from previous session
+if (contextFork) {
+  try {
+    const activeForks = contextFork.getActiveForks();
+    if (activeForks.length > 0) {
+      contextFork.clearAllForks();
+      debugLog('SessionStart', 'Cleared stale forks', { count: activeForks.length });
+    }
+  } catch (e) {
+    debugLog('SessionStart', 'Failed to clear stale forks', { error: e.message });
+  }
+}
 
-// ENH-239 (Issue #81 Phase B): SHA-256 fingerprint dedup lock
-// PreCompact/PostCompact 재발화로 인한 동일 payload 중복 주입 차단.
-// TTL 1시간, multi-session 격리, fail-open 설계.
-try {
-  const { computeFingerprint, shouldDedup, record } = require('../lib/core/session-ctx-fp');
-  const fp = computeFingerprint(additionalContext);
-  if (shouldDedup(sessionIdForFp, fp)) {
-    debugLog('SessionStart', 'ENH-239 dedup hit', { sessionId: sessionIdForFp, fp });
-    additionalContext = '';
+// v1.4.2 FIX-03: UserPromptSubmit Plugin Bug Detection (GitHub #20659)
+function checkUserPromptSubmitBug() {
+  // Check if UserPromptSubmit is registered in plugin hooks but may not work
+  const hooksJsonPath = path.join(__dirname, 'hooks.json');
+  try {
+    if (fs.existsSync(hooksJsonPath)) {
+      const hooksConfig = JSON.parse(fs.readFileSync(hooksJsonPath, 'utf8'));
+      if (hooksConfig.hooks?.UserPromptSubmit) {
+        // Plugin has UserPromptSubmit - warn about potential bug
+        return `⚠️ Known Issue: UserPromptSubmit hook in plugins may not trigger (GitHub #20659). Workaround: Add to ~/.claude/settings.json. See docs/TROUBLESHOOTING.md`;
+      }
+    }
+  } catch (e) {
+    debugLog('SessionStart', 'UserPromptSubmit bug check failed', { error: e.message });
+  }
+  return null;
+}
+
+// v1.4.2 FIX-04: Scan Skills for context:fork Configuration
+function scanSkillsForForkConfig() {
+  const skillsDir = path.join(__dirname, '../skills');
+  const forkEnabledSkills = [];
+
+  try {
+    if (fs.existsSync(skillsDir)) {
+      const skills = fs.readdirSync(skillsDir);
+      for (const skill of skills) {
+        const skillMdPath = path.join(skillsDir, skill, 'SKILL.md');
+        if (fs.existsSync(skillMdPath)) {
+          const content = fs.readFileSync(skillMdPath, 'utf8');
+          // Check for context: fork in frontmatter
+          const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+          if (frontmatterMatch) {
+            const frontmatter = frontmatterMatch[1];
+            if (frontmatter.includes('context: fork') || frontmatter.includes('context:fork')) {
+              const mergeResult = !frontmatter.includes('mergeResult: false');
+              forkEnabledSkills.push({ name: skill, mergeResult });
+            }
+          }
+        }
+      }
+    }
+
+    if (forkEnabledSkills.length > 0 && contextHierarchy) {
+      contextHierarchy.setSessionContext('forkEnabledSkills', forkEnabledSkills);
+      debugLog('SessionStart', 'Fork-enabled skills detected', { skills: forkEnabledSkills });
+    }
+  } catch (e) {
+    debugLog('SessionStart', 'Skill fork scan failed', { error: e.message });
+  }
+
+  return forkEnabledSkills;
+}
+
+// v1.4.2 FIX-05: Preload Common Imports for Performance
+function preloadCommonImports() {
+  if (!importResolver) return;
+
+  const commonImports = [
+    '${PLUGIN_ROOT}/templates/shared/api-patterns.md',
+    '${PLUGIN_ROOT}/templates/shared/error-handling.md'
+  ];
+
+  let loadedCount = 0;
+  for (const importPath of commonImports) {
+    try {
+      const resolved = importPath.replace('${PLUGIN_ROOT}', path.join(__dirname, '..'));
+      if (fs.existsSync(resolved)) {
+        // Just check existence for now - actual caching happens on first use
+        loadedCount++;
+      }
+    } catch (e) {
+      // Ignore individual import errors
+    }
+  }
+
+  debugLog('SessionStart', 'Import preload check', { available: loadedCount, total: commonImports.length });
+}
+
+// Execute v1.4.2 fixes
+const userPromptBugWarning = checkUserPromptSubmitBug();
+const forkEnabledSkills = scanSkillsForForkConfig();
+preloadCommonImports();
+
+/**
+ * Detect current PDCA phase from status file
+ * @returns {string} Phase number as string
+ */
+function detectPdcaPhase() {
+  const statusPath = path.join(process.cwd(), 'docs/.pdca-status.json');
+
+  if (fs.existsSync(statusPath)) {
+    try {
+      const content = fs.readFileSync(statusPath, 'utf8');
+      const match = content.match(/"currentPhase"\s*:\s*(\d+)/);
+      if (match && match[1]) {
+        return match[1];
+      }
+    } catch (e) {
+      // Ignore read errors
+    }
+  }
+
+  return '1';
+}
+
+/**
+ * v1.4.0: Enhanced Onboarding with PDCA Status Check
+ * Checks for existing work and generates appropriate prompts
+ * @returns {object} Onboarding response data
+ */
+function enhancedOnboarding() {
+  const pdcaStatus = getPdcaStatusFull();
+  const level = detectLevel();
+  const config = getBkitConfig();
+
+  debugLog('SessionStart', 'Enhanced onboarding', {
+    hasActiveFeatures: pdcaStatus.activeFeatures?.length > 0,
+    level,
+    primaryFeature: pdcaStatus.primaryFeature
+  });
+
+  // 1. Check for existing work
+  if (pdcaStatus.activeFeatures && pdcaStatus.activeFeatures.length > 0) {
+    const primary = pdcaStatus.primaryFeature;
+    const featureData = pdcaStatus.features?.[primary];
+    const phase = featureData?.phase || 'plan';
+    const matchRate = featureData?.matchRate;
+
+    // Phase display mapping
+    const phaseDisplay = {
+      'plan': 'Plan',
+      'design': 'Design',
+      'do': 'Implementation',
+      'check': 'Verification',
+      'act': 'Improvement',
+      'completed': 'Completed'
+    };
+
+    return {
+      type: 'resume',
+      hasExistingWork: true,
+      primaryFeature: primary,
+      phase: phase,
+      matchRate: matchRate,
+      prompt: emitUserPrompt({
+        questions: [{
+          question: `Previous work detected. How would you like to proceed?\nCurrent: "${primary}" - ${phaseDisplay[phase] || phase}${matchRate ? ` (${matchRate}%)` : ''}`,
+          header: 'Resume',
+          options: [
+            { label: `Continue ${primary}`, description: `Resume ${phaseDisplay[phase] || phase} phase` },
+            { label: 'Start new task', description: 'Develop a different feature' },
+            { label: 'Check status', description: 'View PDCA status (/pdca status)' }
+          ],
+          multiSelect: false
+        }]
+      }),
+      suggestedAction: matchRate && matchRate < 90 ? '/pdca iterate' : '/pdca status'
+    };
+  }
+
+  // 2. New user onboarding
+  return {
+    type: 'new_user',
+    hasExistingWork: false,
+    level: level,
+    prompt: emitUserPrompt({
+      questions: [{
+        question: 'How can I help you?',
+        header: 'Help Type',
+        options: [
+          { label: 'Learn bkit', description: 'Introduction and 9-phase pipeline' },
+          { label: 'Learn Claude Code', description: 'Settings and usage' },
+          { label: 'Start new project', description: 'Project initialization' },
+          { label: 'Start freely', description: 'Proceed without guide' }
+        ],
+        multiSelect: false
+      }]
+    })
+  };
+}
+
+/**
+ * v1.4.0 P2: Analyze user request for ambiguity and generate clarifying questions
+ * @param {string} userRequest - User's request text
+ * @param {object} context - Current context (features, phase, etc.)
+ * @returns {object|null} Ambiguity analysis result or null if clear
+ */
+function analyzeRequestAmbiguity(userRequest, context = {}) {
+  if (!userRequest || userRequest.length < 10) {
+    return null;
+  }
+
+  const ambiguityResult = calculateAmbiguityScore(userRequest, context);
+
+  debugLog('SessionStart', 'Ambiguity analysis', {
+    score: ambiguityResult.score,
+    factorsCount: ambiguityResult.factors.length,
+    needsClarification: ambiguityResult.score >= 50
+  });
+
+  if (ambiguityResult.score >= 50 && ambiguityResult.clarifyingQuestions) {
+    return {
+      needsClarification: true,
+      score: ambiguityResult.score,
+      factors: ambiguityResult.factors,
+      questions: ambiguityResult.clarifyingQuestions,
+      prompt: emitUserPrompt({
+        questions: ambiguityResult.clarifyingQuestions.slice(0, 2).map((q, i) => ({
+          question: q,
+          header: `Clarify ${i + 1}`,
+          options: [
+            { label: 'Yes, correct', description: 'This interpretation is correct' },
+            { label: 'No', description: 'Please interpret differently' },
+            { label: 'More details', description: 'I will explain in more detail' }
+          ],
+          multiSelect: false
+        }))
+      })
+    };
+  }
+
+  return null;
+}
+
+/**
+ * v1.4.0: Generate trigger keyword reference
+ * @returns {string} Formatted trigger keyword table
+ */
+function getTriggerKeywordTable() {
+  return `
+## 🎯 v1.4.0 Auto-Trigger Keywords (8 Languages Supported)
+
+### Agent Triggers
+| Keywords | Agent | Action |
+|----------|-------|--------|
+| verify, 검증, 確認, 验证, verificar, vérifier, prüfen, verificare | bkit:gap-detector | Run Gap analysis |
+| improve, 개선, 改善, 改进, mejorar, améliorer, verbessern, migliorare | bkit:pdca-iterator | Auto-improvement iteration |
+| analyze, 분석, 分析, 品質, analizar, analyser, analysieren, analizzare | bkit:code-analyzer | Code quality analysis |
+| report, 보고서, 報告, 报告, informe, rapport, Bericht, rapporto | bkit:report-generator | Generate completion report |
+| help, 도움, 助けて, 帮助, ayuda, aide, Hilfe, aiuto | bkit:starter-guide | Beginner guide |
+| bkend, BaaS, backend service, 백엔드 서비스, バックエンドサービス, 后端服务 | bkit:bkend-expert | Backend/BaaS expert |
+
+### Skill Triggers (Auto-detection)
+| Keywords | Skill | Level |
+|----------|-------|-------|
+| static site, 정적 웹, sitio estático, site statique | starter | Starter |
+| login, fullstack, 로그인, connexion, Anmeldung | dynamic | Dynamic |
+| microservices, k8s, 마이크로서비스, microservizi | enterprise | Enterprise |
+| mobile app, React Native, 모바일 앱, app mobile | mobile-app | All |
+
+💡 Use natural language and the appropriate tool will be activated automatically.
+`;
+}
+
+// Persist environment variables (Claude Code only)
+const envFile = process.env.CLAUDE_ENV_FILE;
+if (envFile) {
+  const detectedLevel = detectLevel();
+  const detectedPhase = detectPdcaPhase();
+
+  try {
+    fs.appendFileSync(envFile, `export BKIT_LEVEL=${detectedLevel}\n`);
+    fs.appendFileSync(envFile, `export BKIT_PDCA_PHASE=${detectedPhase}\n`);
+    fs.appendFileSync(envFile, `export BKIT_PLATFORM=claude\n`);
+  } catch (e) {
+    // Ignore write errors
+  }
+}
+
+// ============================================================
+// Output Response (Claude Code only) - v1.5.0
+// ============================================================
+
+// Get enhanced onboarding data
+const onboardingData = enhancedOnboarding();
+const triggerTable = getTriggerKeywordTable();
+
+// Claude Code Output: JSON with Tool Call Prompt
+// Build context based on onboarding type
+let additionalContext = `# bkit Vibecoding Kit v1.5.5 - Session Startup\n\n`;
+
+  if (onboardingData.hasExistingWork) {
+    additionalContext += `## 🔄 Previous Work Detected\n\n`;
+    additionalContext += `- **Feature**: ${onboardingData.primaryFeature}\n`;
+    additionalContext += `- **Current Phase**: ${onboardingData.phase}\n`;
+    if (onboardingData.matchRate) {
+      additionalContext += `- **Match Rate**: ${onboardingData.matchRate}%\n`;
+    }
+    additionalContext += `\n### 🚨 MANDATORY: Call AskUserQuestion on user's first message\n\n`;
+    additionalContext += `${onboardingData.prompt}\n\n`;
+    additionalContext += `### Actions by selection:\n`;
+    additionalContext += `- **Continue ${onboardingData.primaryFeature}** → Run /pdca status then guide to next phase\n`;
+    additionalContext += `- **Start new task** → Ask for new feature name then run /pdca plan\n`;
+    additionalContext += `- **Check status** → Run /pdca status\n\n`;
   } else {
-    record(sessionIdForFp, fp);
+    additionalContext += `## 🚨 MANDATORY: Session Start Action\n\n`;
+    additionalContext += `**AskUserQuestion tool** call required on user's first message.\n\n`;
+    additionalContext += `${onboardingData.prompt}\n\n`;
+    additionalContext += `### Actions by selection:\n`;
+    additionalContext += `- **Learn bkit** → Run /development-pipeline\n`;
+    additionalContext += `- **Learn Claude Code** → Run /claude-code-learning\n`;
+    additionalContext += `- **Start new project** → Select level then run /starter, /dynamic, or /enterprise\n`;
+    additionalContext += `- **Start freely** → General conversation mode\n\n`;
   }
-} catch (e) {
-  debugLog('SessionStart', 'ENH-239 fingerprint failed', { error: e.message });
-  // fail-open: 기존 동작 유지
-}
+
+  // v1.5.2: Feature Awareness - Agent Teams, Output Styles, Agent Memory
+  const detectedLevel = detectLevel();
+
+  // Agent Teams detection and suggestion
+  try {
+    const { isTeamModeAvailable, getTeamConfig } = require('../lib/team');
+    if (isTeamModeAvailable()) {
+      const teamConfig = getTeamConfig();
+      additionalContext += `## CTO-Led Agent Teams (Active)\n`;
+      additionalContext += `- CTO Lead: cto-lead (opus) orchestrates PDCA workflow\n`;
+      additionalContext += `- Start: \`/pdca team {feature}\`\n`;
+      additionalContext += `- Display mode: ${teamConfig.displayMode}\n`;
+      if (detectedLevel === 'Enterprise') {
+        additionalContext += `- Enterprise: 5 teammates (architect, developer, qa, reviewer, security)\n`;
+        additionalContext += `- Patterns: leader → council → swarm → council → watchdog\n`;
+      } else if (detectedLevel === 'Dynamic') {
+        additionalContext += `- Dynamic: 3 teammates (developer, frontend, qa)\n`;
+        additionalContext += `- Patterns: leader → leader → swarm → council → leader\n`;
+      }
+      additionalContext += `\n`;
+    } else if (detectedLevel !== 'Starter') {
+      additionalContext += `## CTO-Led Agent Teams (Not Enabled)\n`;
+      additionalContext += `- Your ${detectedLevel} project supports CTO-Led Agent Teams\n`;
+      additionalContext += `- CTO Lead (opus) orchestrates specialized teammates for parallel PDCA\n`;
+      additionalContext += `- To enable: set \`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1\` environment variable\n`;
+      additionalContext += `- Then use: \`/pdca team {feature}\`\n\n`;
+    }
+  } catch (e) {
+    debugLog('SessionStart', 'Agent Teams detection skipped', { error: e.message });
+  }
+
+  // Output Styles suggestion based on level
+  const levelStyleMap = {
+    'Starter': 'bkit-learning',
+    'Dynamic': 'bkit-pdca-guide',
+    'Enterprise': 'bkit-enterprise'
+  };
+  const suggestedStyle = levelStyleMap[detectedLevel] || 'bkit-pdca-guide';
+  additionalContext += `## Output Styles (v1.5.5)\n`;
+  additionalContext += `- Recommended for ${detectedLevel} level: \`${suggestedStyle}\`\n`;
+  additionalContext += `- Change anytime with \`/output-style\`\n`;
+  additionalContext += `- Available: bkit-learning, bkit-pdca-guide, bkit-enterprise, bkit-pdca-enterprise\n`;
+  additionalContext += `- If styles not visible in /output-style menu, run \`/output-style-setup\`\n\n`;
+
+  // Agent Memory awareness
+  additionalContext += `## Agent Memory (Auto-Active)\n`;
+  additionalContext += `- All bkit agents remember context across sessions automatically\n`;
+  additionalContext += `- 9 agents use project scope, 2 agents (starter-guide, pipeline-guide) use user scope\n`;
+  additionalContext += `- No configuration needed\n\n`;
+
+  // bkend MCP status check (G-09)
+  if (detectedLevel === 'Dynamic' || detectedLevel === 'Enterprise') {
+    try {
+      const mcpJsonPath = path.join(process.cwd(), '.mcp.json');
+      let bkendMcpConnected = false;
+      if (fs.existsSync(mcpJsonPath)) {
+        const mcpContent = fs.readFileSync(mcpJsonPath, 'utf-8');
+        if (mcpContent.includes('bkend') || mcpContent.includes('api.bkend.ai')) {
+          bkendMcpConnected = true;
+        }
+      }
+      if (bkendMcpConnected) {
+        additionalContext += `## bkend.ai MCP Status\n`;
+        additionalContext += `- Status: Connected\n`;
+        additionalContext += `- Use natural language to manage backend (DB, Auth, Storage)\n\n`;
+      } else {
+        additionalContext += `## bkend.ai MCP Status\n`;
+        additionalContext += `- Status: Not configured\n`;
+        additionalContext += `- Setup: \`claude mcp add bkend --transport http https://api.bkend.ai/mcp\`\n`;
+        additionalContext += `- bkend.ai provides Database, Auth, Storage as BaaS\n\n`;
+      }
+    } catch (e) {
+      debugLog('SessionStart', 'bkend MCP check skipped', { error: e.message });
+    }
+  }
+
+  additionalContext += `## PDCA Core Rules (Always Apply)\n`;
+  additionalContext += `- New feature request → Check/create Plan/Design documents first\n`;
+  additionalContext += `- After implementation → Suggest Gap analysis\n`;
+  additionalContext += `- Gap Analysis < 90% → Auto-improvement with pdca-iterator\n`;
+  additionalContext += `- Gap Analysis >= 90% → Completion report with report-generator\n\n`;
+
+  additionalContext += triggerTable;
+  additionalContext += `\n\n## v1.4.0 Automation Features\n`;
+  additionalContext += `- 🎯 8-language auto-detection: EN, KO, JA, ZH, ES, FR, DE, IT\n`;
+  additionalContext += `- 🤖 Implicit Agent/Skill triggers\n`;
+  additionalContext += `- 📊 Ambiguity detection and clarifying question generation\n`;
+  additionalContext += `- 🔄 Automatic PDCA phase progression\n\n`;
+  additionalContext += `💡 Important: AI Agent is not perfect. Always verify important decisions.`;
+
+  // ============================================================
+  // v1.4.1: bkit Feature Usage Report Rule (Response Report Rule)
+  // ============================================================
+  additionalContext += `
+
+## 📊 bkit Feature Usage Report (v1.5.5 - Required for all responses)
+
+**Rule: Include the following format at the end of every response to report bkit feature usage.**
+
+\`\`\`
+─────────────────────────────────────────────────
+📊 bkit Feature Usage
+─────────────────────────────────────────────────
+✅ Used: [bkit features used in this response]
+⏭️ Not Used: [Major unused features] (reason)
+💡 Recommended: [Features suitable for next task]
+─────────────────────────────────────────────────
+\`\`\`
+
+### bkit Features to Report:
+
+**1. PDCA Skill (Priority) - Unified PDCA Management:**
+/pdca plan, /pdca design, /pdca do, /pdca analyze, /pdca iterate, /pdca report, /pdca status, /pdca next
+
+**2. Task System (Priority):**
+TaskCreate, TaskUpdate, TaskList, TaskGet
+
+**3. Agents (Priority):**
+gap-detector, pdca-iterator, code-analyzer, report-generator, starter-guide, design-validator, qa-monitor, pipeline-guide, bkend-expert, enterprise-expert, infra-architect
+
+**4. Core Skills (21):**
+- **PDCA**: /pdca (plan, design, do, analyze, iterate, report, status, next)
+- **Level**: /starter, /dynamic, /enterprise
+- **Pipeline**: /development-pipeline (start, next, status)
+- **Phase**: /phase-1-schema ~ /phase-9-deployment
+- **Utility**: /code-review, /zero-script-qa, /claude-code-learning, /mobile-app, /desktop-app, /bkit-templates, /bkit-rules
+
+**5. Tools (when relevant):**
+AskUserQuestion, SessionStart Hook, Read, Write, Edit, Bash
+
+### Reporting Rules:
+
+1. **Required**: Report at the end of every response (incomplete without report)
+2. **Used features**: List bkit features actually used in this response
+3. **Unused explanation**: Briefly explain why major features were not used
+4. **Recommendation**: Suggest next skill based on current PDCA phase
+
+### PDCA Phase Recommendations:
+
+| Current Status | Recommended Skill |
+|----------------|-------------------|
+| No PDCA | "Start with /pdca plan {feature}" |
+| Plan completed | "Design with /pdca design {feature}" |
+| Design completed | "Start implementation or /pdca do {feature}" |
+| Do completed | "Gap analysis with /pdca analyze {feature}" |
+| Check < 90% | "Auto-improve with /pdca iterate {feature}" |
+| Check ≥ 90% | "Completion report with /pdca report {feature}" |
+
+`;
 
 const response = {
-  systemMessage: `bkit Vibecoding Kit v2.1.9 activated (Claude Code)`,
+  systemMessage: `bkit Vibecoding Kit v1.5.5 activated (Claude Code)`,
   hookSpecificOutput: {
     hookEventName: "SessionStart",
-    onboardingType: onboardingContext.onboardingData.type,
-    hasExistingWork: onboardingContext.onboardingData.hasExistingWork,
-    primaryFeature: primaryFeature,
-    currentPhase: currentPhase,
-    matchRate: onboardingContext.onboardingData.matchRate || null,
-    additionalContext: additionalContext,
-    sessionTitle,
-    // v2.1.1 H-01: Pass AskUserQuestion payload from onboarding
-    userPrompt: onboardingContext.onboardingData.userPrompt || undefined,
+    onboardingType: onboardingData.type,
+    hasExistingWork: onboardingData.hasExistingWork,
+    primaryFeature: onboardingData.primaryFeature || null,
+    currentPhase: onboardingData.phase || null,
+    matchRate: onboardingData.matchRate || null,
+    additionalContext: additionalContext
   }
 };
 

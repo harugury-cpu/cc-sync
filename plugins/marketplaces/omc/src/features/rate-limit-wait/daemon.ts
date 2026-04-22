@@ -15,15 +15,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, chmodSync, statSync, appendFileSync, renameSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { homedir } from 'os';
 import { spawn } from 'child_process';
 import { resolveDaemonModulePath } from '../../utils/daemon-module-path.js';
-import { getGlobalOmcStatePath } from '../../utils/paths.js';
-import {
-  checkRateLimitStatus,
-  formatRateLimitStatus,
-  isRateLimitStatusDegraded,
-  shouldMonitorBlockedPanes,
-} from './rate-limit-monitor.js';
+import { checkRateLimitStatus, formatRateLimitStatus } from './rate-limit-monitor.js';
 import {
   isTmuxAvailable,
   scanForBlockedPanes,
@@ -35,7 +30,6 @@ import type {
   DaemonConfig,
   DaemonResponse,
 } from './types.js';
-import { isProcessAlive } from '../../platform/index.js';
 
 // ESM compatibility: __filename is not available in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -45,9 +39,9 @@ const DEFAULT_CONFIG: Required<DaemonConfig> = {
   pollIntervalMs: 60 * 1000, // 1 minute
   paneLinesToCapture: 15,
   verbose: false,
-  stateFilePath: getGlobalOmcStatePath('rate-limit-daemon.json'),
-  pidFilePath: getGlobalOmcStatePath('rate-limit-daemon.pid'),
-  logFilePath: getGlobalOmcStatePath('rate-limit-daemon.log'),
+  stateFilePath: join(homedir(), '.omc', 'state', 'rate-limit-daemon.json'),
+  pidFilePath: join(homedir(), '.omc', 'state', 'rate-limit-daemon.pid'),
+  logFilePath: join(homedir(), '.omc', 'state', 'rate-limit-daemon.log'),
 };
 
 /** Maximum log file size before rotation (1MB) */
@@ -76,7 +70,7 @@ const DAEMON_ENV_ALLOWLIST = [
   // Shell
   'SHELL',
   // Node.js
-  'NODE_ENV', 'NODE_EXTRA_CA_CERTS',
+  'NODE_ENV',
   // Proxy settings
   'HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy', 'NO_PROXY', 'no_proxy',
   // Windows system
@@ -234,6 +228,19 @@ function removePidFile(config: Required<DaemonConfig>): void {
 }
 
 /**
+ * Check if a process is running
+ */
+function isProcessRunning(pid: number): boolean {
+  try {
+    // Signal 0 doesn't actually send a signal, just checks if process exists
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Check if daemon is currently running
  */
 export function isDaemonRunning(config?: DaemonConfig): boolean {
@@ -244,7 +251,7 @@ export function isDaemonRunning(config?: DaemonConfig): boolean {
     return false;
   }
 
-  if (!isProcessAlive(pid)) {
+  if (!isProcessRunning(pid)) {
     // Stale PID file, clean up
     removePidFile(cfg);
     return false;
@@ -348,8 +355,8 @@ async function pollLoop(config: Required<DaemonConfig>): Promise<void> {
           setTimeout(() => reject(new Error('checkRateLimitStatus timed out after 30s')), 30_000)
         ),
       ]);
-      const wasLimited = shouldMonitorBlockedPanes(state.rateLimitStatus);
-      const isNowLimited = shouldMonitorBlockedPanes(rateLimitStatus);
+      const wasLimited = state.rateLimitStatus?.isLimited ?? false;
+      const isNowLimited = rateLimitStatus?.isLimited ?? false;
 
       state.rateLimitStatus = rateLimitStatus;
 
@@ -361,12 +368,9 @@ async function pollLoop(config: Required<DaemonConfig>): Promise<void> {
 
       // If currently rate limited, scan for blocked panes
       if (isNowLimited && isTmuxAvailable()) {
-        const scanReason = rateLimitStatus?.isLimited
-          ? 'Rate limited - scanning for blocked panes'
-          : 'Usage API degraded (429/stale cache) - scanning for blocked panes';
-        log(scanReason, config);
+        log('Rate limited - scanning for blocked panes', config);
 
-        const blockedPanes = scanForBlockedPanes(config.paneLinesToCapture, dirname(config.stateFilePath));
+        const blockedPanes = scanForBlockedPanes(config.paneLinesToCapture);
 
         // Add newly detected blocked panes
         for (const pane of blockedPanes) {
@@ -568,7 +572,7 @@ export function stopDaemon(config?: DaemonConfig): DaemonResponse {
     };
   }
 
-  if (!isProcessAlive(pid)) {
+  if (!isProcessRunning(pid)) {
     removePidFile(cfg);
     return {
       success: true,
@@ -646,7 +650,7 @@ export async function detectBlockedPanes(config?: DaemonConfig): Promise<DaemonR
   }
 
   const rateLimitStatus = await checkRateLimitStatus();
-  const blockedPanes = scanForBlockedPanes(cfg.paneLinesToCapture, dirname(cfg.stateFilePath));
+  const blockedPanes = scanForBlockedPanes(cfg.paneLinesToCapture);
 
   return {
     success: true,
@@ -690,7 +694,7 @@ export function formatDaemonState(state: DaemonState): string {
   // Rate limit status
   lines.push('');
   if (state.rateLimitStatus) {
-    if (state.rateLimitStatus.isLimited || isRateLimitStatusDegraded(state.rateLimitStatus)) {
+    if (state.rateLimitStatus.isLimited) {
       lines.push(`⚠ ${formatRateLimitStatus(state.rateLimitStatus)}`);
     } else {
       lines.push('✓ Not rate limited');
@@ -730,8 +734,10 @@ export async function pollLoopWithConfigFile(configPath: string): Promise<void> 
   const configContent = readFileSync(configPath, 'utf-8');
   const config = JSON.parse(configContent) as Required<DaemonConfig>;
 
-  // Clean up the temp config file now that we've read it
-  try { unlinkSync(configPath); } catch { /* ignore cleanup errors */ }
+  // Restore Date objects from JSON
+  if (config.stateFilePath) {
+    // Config is valid, proceed with poll loop
+  }
 
   await pollLoop(config);
 }

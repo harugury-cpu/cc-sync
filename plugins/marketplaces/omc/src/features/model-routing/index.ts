@@ -91,10 +91,6 @@ export {
   TIER_TASK_INSTRUCTIONS,
 } from './prompts/index.js';
 
-// Local imports for routeAndAdaptTask convenience function
-import { routeWithEscalation } from './router.js';
-import { adaptPromptForTier } from './prompts/index.js';
-
 /**
  * Convenience function to route and adapt prompt in one call
  */
@@ -103,6 +99,9 @@ export function routeAndAdaptTask(
   agentType?: string,
   previousFailures?: number
 ): { decision: import('./types.js').RoutingDecision; adaptedPrompt: string } {
+  const { routeWithEscalation } = require('./router.js');
+  const { adaptPromptForTier } = require('./prompts/index.js');
+
   const decision = routeWithEscalation({
     taskPrompt,
     agentType,

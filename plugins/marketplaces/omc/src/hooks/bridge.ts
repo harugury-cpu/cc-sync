@@ -13,100 +13,44 @@
  * ```
  */
 
-import { pathToFileURL } from "url";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync,
-} from "fs";
+import { pathToFileURL } from 'url';
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { resolveToWorktreeRoot, getOmcRoot } from "../lib/worktree-paths.js";
-import { readModeState, writeModeState } from "../lib/mode-state-io.js";
-import { formatOmcCliInvocation } from "../utils/omc-cli-rendering.js";
-import { createSwallowedErrorLogger } from "../lib/swallowed-error.js";
-import { readCanonicalTeamStateCandidate } from "./team-canonical-state.js";
 
 // Hot-path imports: needed on every/most hook invocations (keyword-detector, pre/post-tool-use)
-import {
-  removeCodeBlocks,
-  getAllKeywordsWithSizeCheck,
-  applyRalplanGate,
-  sanitizeForKeywordDetection,
-  NON_LATIN_SCRIPT_PATTERN,
-} from "./keyword-detector/index.js";
-import {
-  processOrchestratorPreTool,
-  processOrchestratorPostTool,
-} from "./omc-orchestrator/index.js";
+import { removeCodeBlocks, getAllKeywordsWithSizeCheck, applyRalplanGate, sanitizeForKeywordDetection, NON_LATIN_SCRIPT_PATTERN } from "./keyword-detector/index.js";
+import { processOrchestratorPreTool, processOrchestratorPostTool } from "./omc-orchestrator/index.js";
 import { normalizeHookInput } from "./bridge-normalize.js";
 import {
   addBackgroundTask,
-  completeBackgroundTask,
-  completeMostRecentMatchingBackgroundTask,
   getRunningTaskCount,
-  remapBackgroundTaskId,
-  remapMostRecentMatchingBackgroundTaskId,
 } from "../hud/background-tasks.js";
 import { readHudState, writeHudState } from "../hud/state.js";
-import { compactOmcStartupGuidance, loadConfig } from "../config/loader.js";
-import {
-  activatePromptPrerequisiteState,
-  buildPromptPrerequisiteDenyReason,
-  buildPromptPrerequisiteReminder,
-  clearPromptPrerequisiteState,
-  getPromptPrerequisiteConfig,
-  isPromptPrerequisiteBlockingTool,
-  parsePromptPrerequisiteSections,
-  readPromptPrerequisiteState,
-  recordPromptPrerequisiteProgress,
-  shouldEnforcePromptPrerequisites,
-} from "./prompt-prerequisites/index.js";
-import {
-  resolveAutopilotPlanPath,
-  resolveOpenQuestionsPlanPath,
-} from "../config/plan-output.js";
-import { formatAutopilotRuntimeInsight } from "./autopilot/runtime-insight.js";
-import {
-  writeSkillActiveState,
-  isCanonicalWorkflowSkill,
-  upsertWorkflowSkillSlot,
-  markWorkflowSkillCompleted,
-  pruneExpiredWorkflowSkillTombstones,
-  readSkillActiveStateNormalized,
-  writeSkillActiveStateCopies,
-  type ActiveSkillSlot,
-} from "./skill-state/index.js";
-import { parseExplicitWorkflowSlashInvocation } from "./keyword-detector/index.js";
+import { loadConfig } from "../config/loader.js";
+import { writeSkillActiveState } from "./skill-state/index.js";
 import {
   ULTRAWORK_MESSAGE,
   ULTRATHINK_MESSAGE,
   SEARCH_MESSAGE,
   ANALYZE_MESSAGE,
-  TDD_MESSAGE,
-  CODE_REVIEW_MESSAGE,
-  SECURITY_REVIEW_MESSAGE,
   RALPH_MESSAGE,
   PROMPT_TRANSLATION_MESSAGE,
 } from "../installer/hooks.js";
 // Agent dashboard is used in pre/post-tool-use hot path
-import { getAgentDashboard } from "./subagent-tracker/index.js";
-// Session replay recordFileTouch is used in pre-tool-use hot path
-import { recordFileTouch } from "./subagent-tracker/session-replay.js";
-// Type-only imports for lazy-loaded modules (zero runtime cost)
-import type {
-  SubagentStartInput,
-  SubagentStopInput,
+import {
+  getAgentDashboard,
 } from "./subagent-tracker/index.js";
+// Session replay recordFileTouch is used in pre-tool-use hot path
+import {
+  recordFileTouch,
+} from "./subagent-tracker/session-replay.js";
+
+// Type-only imports for lazy-loaded modules (zero runtime cost)
+import type { SubagentStartInput, SubagentStopInput } from "./subagent-tracker/index.js";
 import type { PreCompactInput } from "./pre-compact/index.js";
 import type { SetupInput } from "./setup/index.js";
-import {
-  getBackgroundBashPermissionFallback,
-  getBackgroundTaskPermissionFallback,
-  type PermissionRequestInput,
-} from "./permission-handler/index.js";
+import type { PermissionRequestInput } from "./permission-handler/index.js";
 import type { SessionEndInput } from "./session-end/index.js";
 import type { StopContext } from "./todo-continuation/index.js";
 // Security: wrap untrusted file content to prevent prompt injection
@@ -114,7 +58,7 @@ import { wrapUntrustedFileContent } from "../agents/prompt-helpers.js";
 
 const PKILL_F_FLAG_PATTERN = /\bpkill\b.*\s-f\b/;
 const PKILL_FULL_FLAG_PATTERN = /\bpkill\b.*--full\b/;
-const WORKER_BLOCKED_TMUX_PATTERN = /\btmux\s+/i;
+const WORKER_BLOCKED_TMUX_PATTERN = /\btmux\s+(split-window|new-session|new-window|join-pane)\b/i;
 const WORKER_BLOCKED_TEAM_CLI_PATTERN = /\bom[cx]\s+team\b(?!\s+api\b)/i;
 const WORKER_BLOCKED_SKILL_PATTERN = /\$(team|ultrawork|autopilot|ralph)\b/i;
 
@@ -148,300 +92,6 @@ const TEAM_STAGE_ALIASES: Record<string, string> = {
   fix: "team-fix",
   fixing: "team-fix",
 };
-
-const BACKGROUND_AGENT_ID_PATTERN = /agentId:\s*([a-zA-Z0-9_-]+)/;
-const TASK_OUTPUT_ID_PATTERN = /<task_id>([^<]+)<\/task_id>/i;
-const TASK_OUTPUT_STATUS_PATTERN = /<status>([^<]+)<\/status>/i;
-const SAFE_SESSION_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,255}$/;
-const MODE_CONFIRMATION_SKILL_MAP: Record<string, string[]> = {
-  ralph: ["ralph", "ultrawork"],
-  ultrawork: ["ultrawork"],
-  autopilot: ["autopilot"],
-  ralplan: ["ralplan"],
-};
-
-
-function getExtraField(input: HookInput, key: string): unknown {
-  return (input as Record<string, unknown>)[key];
-}
-
-function getHookToolUseId(input: HookInput): string | undefined {
-  const value = getExtraField(input, "tool_use_id");
-  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
-}
-
-function extractAsyncAgentId(toolOutput: unknown): string | undefined {
-  if (typeof toolOutput !== "string") {
-    return undefined;
-  }
-  return toolOutput.match(BACKGROUND_AGENT_ID_PATTERN)?.[1];
-}
-
-function parseTaskOutputLifecycle(toolOutput: unknown): { taskId: string; status: string } | null {
-  if (typeof toolOutput !== "string") {
-    return null;
-  }
-
-  const taskId = toolOutput.match(TASK_OUTPUT_ID_PATTERN)?.[1]?.trim();
-  const status = toolOutput.match(TASK_OUTPUT_STATUS_PATTERN)?.[1]?.trim().toLowerCase();
-  if (!taskId || !status) {
-    return null;
-  }
-
-  return { taskId, status };
-}
-
-function taskOutputDidFail(status: string): boolean {
-  return status === "failed" || status === "error";
-}
-
-function taskLaunchDidFail(toolOutput: unknown): boolean {
-  if (typeof toolOutput !== "string") {
-    return false;
-  }
-
-  const normalized = toolOutput.toLowerCase();
-  return normalized.includes("error") || normalized.includes("failed");
-}
-
-function getModeStatePaths(directory: string, modeName: string, sessionId?: string): string[] {
-  const stateDir = join(getOmcRoot(directory), "state");
-  const safeSessionId = typeof sessionId === "string" && SAFE_SESSION_ID_PATTERN.test(sessionId)
-    ? sessionId
-    : undefined;
-
-  return [
-    safeSessionId ? join(stateDir, "sessions", safeSessionId, `${modeName}-state.json`) : null,
-    join(stateDir, `${modeName}-state.json`),
-  ].filter((statePath): statePath is string => Boolean(statePath));
-}
-
-function updateModeAwaitingConfirmation(
-  directory: string,
-  modeName: string,
-  sessionId: string | undefined,
-  awaitingConfirmation: boolean,
-): void {
-  for (const statePath of getModeStatePaths(directory, modeName, sessionId)) {
-    if (!existsSync(statePath)) {
-      continue;
-    }
-
-    try {
-      const state = JSON.parse(readFileSync(statePath, "utf-8")) as Record<string, unknown>;
-      if (!state || typeof state !== "object") {
-        continue;
-      }
-
-      if (awaitingConfirmation) {
-        state.awaiting_confirmation = true;
-        state.awaiting_confirmation_set_at = new Date().toISOString();
-      } else if (state.awaiting_confirmation === true) {
-        delete state.awaiting_confirmation;
-        delete state.awaiting_confirmation_set_at;
-      } else {
-        continue;
-      }
-
-      const tmpPath = `${statePath}.${process.pid}.${Date.now()}.tmp`;
-      writeFileSync(tmpPath, JSON.stringify(state, null, 2));
-      renameSync(tmpPath, statePath);
-    } catch {
-      // Best-effort state sync only.
-    }
-  }
-}
-
-function markModeAwaitingConfirmation(
-  directory: string,
-  sessionId: string | undefined,
-  ...modeNames: string[]
-): void {
-  for (const modeName of modeNames) {
-    updateModeAwaitingConfirmation(directory, modeName, sessionId, true);
-  }
-}
-
-function confirmSkillModeStates(directory: string, skillName: string, sessionId?: string): void {
-  for (const modeName of MODE_CONFIRMATION_SKILL_MAP[skillName] ?? []) {
-    updateModeAwaitingConfirmation(directory, modeName, sessionId, false);
-  }
-}
-
-function getSkillInvocationArgs(toolInput: unknown): string {
-  if (!toolInput || typeof toolInput !== "object") {
-    return "";
-  }
-
-  const input = toolInput as Record<string, unknown>;
-  const candidates = [
-    input.args,
-    input.arguments,
-    input.argument,
-    input.skill_args,
-    input.skillArgs,
-    input.prompt,
-    input.description,
-    input.input,
-  ];
-
-  return candidates.find((value): value is string => typeof value === "string" && value.trim().length > 0)?.trim() ?? "";
-}
-
-function isConsensusPlanningSkillInvocation(skillName: string | null, toolInput: unknown): boolean {
-  if (!skillName) {
-    return false;
-  }
-
-  if (skillName === "ralplan") {
-    return true;
-  }
-
-  if (skillName !== "omc-plan" && skillName !== "plan") {
-    return false;
-  }
-
-  return getSkillInvocationArgs(toolInput).toLowerCase().includes("--consensus");
-}
-
-function activateRalplanState(directory: string, sessionId?: string): void {
-  writeModeState(
-    "ralplan",
-    {
-      active: true,
-      session_id: sessionId,
-      current_phase: "ralplan",
-      started_at: new Date().toISOString(),
-    },
-    directory,
-    sessionId,
-  );
-}
-
-function deactivateRalplanState(directory: string, sessionId?: string): void {
-  const state = readModeState<Record<string, unknown>>("ralplan", directory, sessionId);
-  if (!state) {
-    return;
-  }
-
-  const currentPhase =
-    typeof state.current_phase === "string" ? state.current_phase : undefined;
-  const terminalPhases = new Set([
-    "complete",
-    "completed",
-    "failed",
-    "cancelled",
-    "done",
-  ]);
-  const completedAt =
-    typeof state.completed_at === "string"
-      ? state.completed_at
-      : new Date().toISOString();
-
-  writeModeState(
-    "ralplan",
-    {
-      ...state,
-      active: false,
-      current_phase:
-        currentPhase && terminalPhases.has(currentPhase.toLowerCase())
-          ? currentPhase
-          : "complete",
-      completed_at: completedAt,
-      deactivated_reason:
-        typeof state.deactivated_reason === "string"
-          ? state.deactivated_reason
-          : "skill_completed",
-    },
-    directory,
-    sessionId,
-  );
-}
-
-function seedRalplanStartupState(directory: string, sessionId?: string): void {
-  const existingState = readModeState<Record<string, unknown>>("ralplan", directory, sessionId);
-  if (existingState?.active === true) {
-    if (existingState.awaiting_confirmation === true) {
-      markModeAwaitingConfirmation(directory, sessionId, "ralplan");
-    }
-    return;
-  }
-
-  activateRalplanState(directory, sessionId);
-  markModeAwaitingConfirmation(directory, sessionId, "ralplan");
-}
-
-async function seedAutopilotStartupState(
-  directory: string,
-  prompt: string,
-  sessionId?: string,
-): Promise<void> {
-  const { readAutopilotState, writeAutopilotState, DEFAULT_CONFIG } = await import("./autopilot/index.js");
-  const existingState = readAutopilotState(directory, sessionId);
-  const existingAutopilotRecord = existingState as unknown as Record<string, unknown> | null;
-
-  if (existingState?.active === true) {
-    if (existingAutopilotRecord?.awaiting_confirmation === true) {
-      markModeAwaitingConfirmation(directory, sessionId, "autopilot");
-    }
-    return;
-  }
-
-  const now = new Date().toISOString();
-  const wrote = writeAutopilotState(
-    directory,
-    {
-      active: true,
-      phase: "expansion",
-      iteration: 1,
-      max_iterations: DEFAULT_CONFIG.maxIterations ?? 10,
-      originalIdea: prompt,
-      expansion: {
-        analyst_complete: false,
-        architect_complete: false,
-        spec_path: null,
-        requirements_summary: "",
-        tech_stack: [],
-      },
-      planning: {
-        plan_path: null,
-        architect_iterations: 0,
-        approved: false,
-      },
-      execution: {
-        ralph_iterations: 0,
-        ultrawork_active: false,
-        tasks_completed: 0,
-        tasks_total: 0,
-        files_created: [],
-        files_modified: [],
-      },
-      qa: {
-        ultraqa_cycles: 0,
-        build_status: "pending",
-        lint_status: "pending",
-        test_status: "pending",
-      },
-      validation: {
-        architects_spawned: 0,
-        verdicts: [],
-        all_approved: false,
-        validation_rounds: 0,
-      },
-      started_at: now,
-      completed_at: null,
-      phase_durations: {},
-      total_agents_spawned: 0,
-      wisdom_entries: 0,
-      session_id: sessionId,
-      project_path: directory,
-    },
-    sessionId,
-  );
-  if (wrote) {
-    markModeAwaitingConfirmation(directory, sessionId, "autopilot");
-  }
-}
 
 interface TeamStagedState {
   active?: boolean;
@@ -478,16 +128,13 @@ function readTeamStagedState(
       ]
     : [join(stateDir, "team-state.json")];
 
-  let coarseState: TeamStagedState | null = null;
   for (const statePath of statePaths) {
     if (!existsSync(statePath)) {
       continue;
     }
 
     try {
-      const parsed = JSON.parse(
-        readFileSync(statePath, "utf-8"),
-      ) as TeamStagedState;
+      const parsed = JSON.parse(readFileSync(statePath, "utf-8")) as TeamStagedState;
       if (typeof parsed !== "object" || parsed === null) {
         continue;
       }
@@ -497,34 +144,13 @@ function readTeamStagedState(
         continue;
       }
 
-      coarseState = parsed;
-      if (parsed.active === true && !isTeamStateTerminal(parsed)) {
-        return parsed;
-      }
+      return parsed;
     } catch {
       continue;
     }
   }
 
-  const canonical = readCanonicalTeamStateCandidate(directory, sessionId);
-  if (canonical) {
-    return {
-      active: canonical.active,
-      session_id: canonical.sessionId,
-      team_name: canonical.teamName,
-      stage: canonical.stage,
-      current_stage: canonical.stage,
-      current_phase: canonical.stage,
-      phase: canonical.stage,
-      status: canonical.stage,
-      task: canonical.task,
-      started_at: canonical.startedAt,
-      last_checked_at: canonical.updatedAt,
-      reinforcement_count: 0,
-    };
-  }
-
-  return coarseState;
+  return null;
 }
 
 function getTeamStage(state: TeamStagedState): string {
@@ -539,12 +165,7 @@ function getTeamStage(state: TeamStagedState): string {
 }
 
 function getTeamStageForEnforcement(state: TeamStagedState): string | null {
-  const rawStage =
-    state.stage ??
-    state.current_stage ??
-    state.currentStage ??
-    state.current_phase ??
-    state.phase;
+  const rawStage = state.stage ?? state.current_stage ?? state.currentStage ?? state.current_phase ?? state.phase;
   if (typeof rawStage !== "string") {
     return null;
   }
@@ -559,10 +180,7 @@ function getTeamStageForEnforcement(state: TeamStagedState): string | null {
   return alias && TEAM_ACTIVE_STAGES.has(alias) ? alias : null;
 }
 
-function readTeamStopBreakerCount(
-  directory: string,
-  sessionId?: string,
-): number {
+function readTeamStopBreakerCount(directory: string, sessionId?: string): number {
   const stateDir = join(getOmcRoot(directory), "state");
   const breakerPath = sessionId
     ? join(stateDir, "sessions", sessionId, "team-stop-breaker.json")
@@ -572,16 +190,10 @@ function readTeamStopBreakerCount(
     if (!existsSync(breakerPath)) {
       return 0;
     }
-    const parsed = JSON.parse(readFileSync(breakerPath, "utf-8")) as {
-      count?: unknown;
-      updated_at?: unknown;
-    };
+    const parsed = JSON.parse(readFileSync(breakerPath, "utf-8")) as { count?: unknown; updated_at?: unknown };
     if (typeof parsed.updated_at === "string") {
       const updatedAt = new Date(parsed.updated_at).getTime();
-      if (
-        Number.isFinite(updatedAt) &&
-        Date.now() - updatedAt > TEAM_STOP_BLOCKER_TTL_MS
-      ) {
+      if (Number.isFinite(updatedAt) && Date.now() - updatedAt > TEAM_STOP_BLOCKER_TTL_MS) {
         return 0;
       }
     }
@@ -592,11 +204,7 @@ function readTeamStopBreakerCount(
   }
 }
 
-function writeTeamStopBreakerCount(
-  directory: string,
-  sessionId: string | undefined,
-  count: number,
-): void {
+function writeTeamStopBreakerCount(directory: string, sessionId: string | undefined, count: number): void {
   const stateDir = join(getOmcRoot(directory), "state");
   const breakerPath = sessionId
     ? join(stateDir, "sessions", sessionId, "team-stop-breaker.json")
@@ -618,11 +226,7 @@ function writeTeamStopBreakerCount(
     mkdirSync(dirname(breakerPath), { recursive: true });
     writeFileSync(
       breakerPath,
-      JSON.stringify(
-        { count: safeCount, updated_at: new Date().toISOString() },
-        null,
-        2,
-      ),
+      JSON.stringify({ count: safeCount, updated_at: new Date().toISOString() }, null, 2),
       "utf-8",
     );
   } catch {
@@ -631,12 +235,7 @@ function writeTeamStopBreakerCount(
 }
 
 function isTeamStateTerminal(state: TeamStagedState): boolean {
-  if (
-    state.terminal === true ||
-    state.cancelled === true ||
-    state.canceled === true ||
-    state.completed === true
-  ) {
+  if (state.terminal === true || state.cancelled === true || state.canceled === true || state.completed === true) {
     return true;
   }
 
@@ -663,14 +262,10 @@ function getTeamStagePrompt(stage: string): string {
   }
 }
 
-function teamWorkerIdentityFromEnv(
-  env: NodeJS.ProcessEnv = process.env,
-): string {
-  const omc =
-    typeof env.OMC_TEAM_WORKER === "string" ? env.OMC_TEAM_WORKER.trim() : "";
+function teamWorkerIdentityFromEnv(env: NodeJS.ProcessEnv = process.env): string {
+  const omc = typeof env.OMC_TEAM_WORKER === "string" ? env.OMC_TEAM_WORKER.trim() : "";
   if (omc) return omc;
-  const omx =
-    typeof env.OMX_TEAM_WORKER === "string" ? env.OMX_TEAM_WORKER.trim() : "";
+  const omx = typeof env.OMX_TEAM_WORKER === "string" ? env.OMX_TEAM_WORKER.trim() : "";
   return omx;
 }
 
@@ -680,7 +275,7 @@ function workerBashBlockReason(command: string): string | null {
     return "Team worker cannot run tmux pane/session orchestration commands.";
   }
   if (WORKER_BLOCKED_TEAM_CLI_PATTERN.test(command)) {
-    return `Team worker cannot run team orchestration commands. Use only \`${formatOmcCliInvocation("team api ... --json")}\`.`;
+    return "Team worker cannot run team orchestration commands. Use only `omc team api ... --json`.";
   }
   if (WORKER_BLOCKED_SKILL_PATTERN.test(command)) {
     return "Team worker cannot invoke orchestration skills (`$team`, `$ultrawork`, `$autopilot`, `$ralph`).";
@@ -773,63 +368,6 @@ export interface HookOutput {
   modifiedInput?: unknown;
 }
 
-type SerializableHookOutput = HookOutput & {
-  suppressOutput?: boolean;
-  systemMessage?: string;
-  hookSpecificOutput?: Record<string, unknown>;
-};
-
-function hasInjectableText(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-/**
- * Strip empty hook text fields before serializing to Claude Code.
- *
- * Some hook handlers use empty strings as internal sentinels. Passing those
- * through to the shell hook protocol can create empty system-message/context
- * injections on the next turn, which is especially risky after Task/Agent
- * completion when Claude is deciding whether to continue.
- */
-export function sanitizeHookOutputForSerialization(
-  output: SerializableHookOutput,
-): SerializableHookOutput {
-  const sanitized: SerializableHookOutput = { ...output };
-
-  if (!hasInjectableText(sanitized.message)) {
-    delete sanitized.message;
-  }
-
-  if (!hasInjectableText(sanitized.systemMessage)) {
-    delete sanitized.systemMessage;
-  }
-
-  const hookSpecificOutput = sanitized.hookSpecificOutput;
-  if (hookSpecificOutput && typeof hookSpecificOutput === "object") {
-    const nextHookSpecificOutput = { ...hookSpecificOutput };
-
-    if (!hasInjectableText(nextHookSpecificOutput.additionalContext)) {
-      delete nextHookSpecificOutput.additionalContext;
-    }
-
-    sanitized.hookSpecificOutput =
-      Object.keys(nextHookSpecificOutput).length > 0
-        ? nextHookSpecificOutput
-        : undefined;
-
-    if (!sanitized.hookSpecificOutput) {
-      delete sanitized.hookSpecificOutput;
-    }
-  }
-
-  return sanitized;
-}
-
-function isDelegationToolName(toolName: string | undefined): boolean {
-  const normalizedToolName = (toolName || "").toLowerCase();
-  return normalizedToolName === "task" || normalizedToolName === "agent";
-}
-
 /**
  * Hook types that can be processed
  */
@@ -870,197 +408,6 @@ function getPromptText(input: HookInput): string {
   return "";
 }
 
-function isExplicitAskSlashInvocation(promptText: string): boolean {
-  return /^\s*\/(?:oh-my-claudecode:)?ask\s+(?:claude|codex|gemini)\b/i.test(promptText);
-}
-
-function activateRalplanStartupState(directory: string, sessionId?: string): void {
-  const now = new Date().toISOString();
-  writeModeState(
-    "ralplan",
-    {
-      active: true,
-      session_id: sessionId,
-      current_phase: "ralplan",
-      started_at: now,
-      awaiting_confirmation: true,
-      awaiting_confirmation_set_at: now,
-      last_checked_at: now,
-    },
-    directory,
-    sessionId,
-  );
-}
-
-/**
- * Resolve the on-disk path of the mode-specific state file for a workflow
- * skill. Returns the session-scoped path when a session id is available, else
- * the root path. Used to persist `mode_state_path` on the workflow slot so
- * downstream consumers can locate the mode payload.
- */
-function resolveWorkflowSlotModeStatePath(
-  directory: string,
-  skillName: string,
-  sessionId?: string,
-): string {
-  const paths = getModeStatePaths(directory, skillName, sessionId);
-  return paths[0] ?? "";
-}
-
-/**
- * Seed (or refresh) a canonical workflow-slot entry in the dual-copy ledger
- * via the only sanctioned helper, `writeSkillActiveStateCopies()`. Returns
- * `true` when at least one copy was written, `false` on best-effort failure.
- */
-function seedWorkflowSlotForSkill(
-  directory: string,
-  skillName: string,
-  sessionId: string | undefined,
-  source: string,
-  parentSkill?: string | null,
-): boolean {
-  if (!isCanonicalWorkflowSkill(skillName)) return false;
-  const normalized = skillName.toLowerCase().replace(/^oh-my-claudecode:/, "");
-
-  try {
-    const current = readSkillActiveStateNormalized(directory, sessionId);
-    const pruned = pruneExpiredWorkflowSkillTombstones(current);
-
-    // Resolve mode-state file pointers eagerly so downstream readers can
-    // locate the mode payload without re-deriving the path.
-    const rootStatePath = resolveStatePathSafe("skill-active", directory);
-    const sessionStatePath = sessionId
-      ? resolveSessionStatePathSafe("skill-active", sessionId, directory)
-      : "";
-    const modeStatePath = resolveWorkflowSlotModeStatePath(
-      directory,
-      normalized,
-      sessionId,
-    );
-
-    const slotData: Partial<ActiveSkillSlot> = {
-      session_id: sessionId ?? "",
-      mode_state_path: modeStatePath,
-      initialized_mode: normalized,
-      initialized_state_path: rootStatePath,
-      initialized_session_state_path: sessionStatePath,
-      source,
-    };
-    if (parentSkill !== undefined) {
-      slotData.parent_skill = parentSkill;
-    }
-
-    const next = upsertWorkflowSkillSlot(pruned, normalized, slotData);
-    return writeSkillActiveStateCopies(directory, next, sessionId);
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Idempotently confirm a workflow slot — refreshes `last_confirmed_at` when
- * the slot is live. No-op when the slot is missing or already tombstoned.
- */
-function confirmWorkflowSlot(
-  directory: string,
-  skillName: string,
-  sessionId?: string,
-): boolean {
-  if (!isCanonicalWorkflowSkill(skillName)) return false;
-  const normalized = skillName.toLowerCase().replace(/^oh-my-claudecode:/, "");
-
-  try {
-    const current = readSkillActiveStateNormalized(directory, sessionId);
-    const slot = current.active_skills[normalized];
-    if (!slot || slot.completed_at) return false;
-    const next = upsertWorkflowSkillSlot(current, normalized, {
-      last_confirmed_at: new Date().toISOString(),
-    });
-    return writeSkillActiveStateCopies(directory, next, sessionId);
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Soft-tombstone a workflow slot on completion. The slot is retained until
- * the TTL pruner removes it, so late-arriving stop hooks see consistent
- * state.
- */
-function tombstoneWorkflowSlot(
-  directory: string,
-  skillName: string,
-  sessionId?: string,
-): boolean {
-  if (!isCanonicalWorkflowSkill(skillName)) return false;
-  const normalized = skillName.toLowerCase().replace(/^oh-my-claudecode:/, "");
-  try {
-    const current = readSkillActiveStateNormalized(directory, sessionId);
-    if (!current.active_skills[normalized]) return false;
-    const next = markWorkflowSkillCompleted(current, normalized);
-    return writeSkillActiveStateCopies(directory, next, sessionId);
-  } catch {
-    return false;
-  }
-}
-
-function resolveStatePathSafe(stateName: string, directory: string): string {
-  try {
-    // Lazy resolve to avoid a circular import; same module is imported in
-    // skill-state via the mode-paths registry.
-    return join(getOmcRoot(directory), "state", `${stateName}-state.json`);
-  } catch {
-    return "";
-  }
-}
-
-function resolveSessionStatePathSafe(
-  stateName: string,
-  sessionId: string,
-  directory: string,
-): string {
-  try {
-    return join(
-      getOmcRoot(directory),
-      "state",
-      "sessions",
-      sessionId,
-      `${stateName}-state.json`,
-    );
-  } catch {
-    return "";
-  }
-}
-
-/**
- * Mode-specific seeding entrypoints invoked alongside the workflow slot when
- * the user issues an explicit slash command. Each branch is a no-op when the
- * mode does not require pre-skill state (e.g. `team`, where the team skill
- * itself owns initial state via worker spawning).
- */
-async function seedModeStateForExplicitWorkflowSlash(
-  skill: string,
-  directory: string,
-  promptText: string,
-  sessionId?: string,
-): Promise<void> {
-  switch (skill) {
-    case "ralplan":
-      activateRalplanStartupState(directory, sessionId);
-      return;
-    case "autopilot":
-      await seedAutopilotStartupState(directory, promptText, sessionId);
-      return;
-    default:
-      // ralph / ultrawork / team / ultraqa / deep-interview / self-improve
-      // own their state activation inside their own Skill PostToolUse handlers.
-      // Pre-Skill seeding for these would clobber existing in-flight state
-      // (e.g. nested `autopilot → ralph`); the workflow slot alone is enough
-      // to keep stop-hook enforcement from premature termination.
-      return;
-  }
-}
-
 /**
  * Process keyword detection hook
  * Detects magic keywords and returns injection message
@@ -1078,13 +425,6 @@ async function processKeywordDetector(input: HookInput): Promise<HookOutput> {
     return { continue: true };
   }
 
-  // `/ask <provider> ...` delegates the remainder of the prompt to an
-  // external advisor. Do not interpret magic keywords inside that payload as
-  // instructions for the current Claude Code session.
-  if (isExplicitAskSlashInvocation(promptText)) {
-    return { continue: true };
-  }
-
   // Remove code blocks to prevent false positives
   const cleanedText = removeCodeBlocks(promptText);
 
@@ -1092,55 +432,15 @@ async function processKeywordDetector(input: HookInput): Promise<HookOutput> {
   const directory = resolveToWorktreeRoot(input.directory);
   const messages: string[] = [];
 
-  // Unified explicit slash invocation handler — covers all 8 canonical
-  // workflow skills (autopilot, ralph, team, ultrawork, ultraqa,
-  // deep-interview, ralplan, self-improve). Seeds the workflow slot via the
-  // sanctioned dual-copy helper BEFORE the Skill tool fires, and seeds the
-  // mode-specific state file when the mode requires pre-Skill state. The
-  // ralplan path additionally returns the legacy [RALPLAN INIT] context
-  // injection so existing routing tests remain green.
-  const explicitSlash = parseExplicitWorkflowSlashInvocation(promptText);
-  if (explicitSlash) {
-    seedWorkflowSlotForSkill(
-      directory,
-      explicitSlash.skill,
-      sessionId,
-      "prompt-submit:explicit-slash",
-    );
-    await seedModeStateForExplicitWorkflowSlash(
-      explicitSlash.skill,
-      directory,
-      promptText,
-      sessionId,
-    );
-
-    if (explicitSlash.skill === "ralplan") {
-      return {
-        continue: true,
-        hookSpecificOutput: {
-          hookEventName: "UserPromptSubmit",
-          additionalContext:
-            `[RALPLAN INIT] Explicit /ralplan invoke detected during UserPromptSubmit.\n` +
-            `ralplan state is armed for startup and marked awaiting confirmation, so the stop hook will not block this initialization path.\n` +
-            `Proceed immediately with the consensus planning workflow for:\n${promptText}`,
-        },
-      } as HookOutput & { hookSpecificOutput: Record<string, unknown> };
-    }
-    // For non-ralplan workflow slash invocations, fall through so the regular
-    // keyword pipeline still emits the mode message constants and routes
-    // through the normal activation path. The workflow slot is already armed
-    // so the stop-hook will treat the upcoming Skill invocation as authorized.
-  }
-
   // Record prompt submission time in HUD state
   try {
-    const hudState = readHudState(directory, input.sessionId) || {
+    const hudState = readHudState(directory) || {
       timestamp: new Date().toISOString(),
       backgroundTasks: [],
     };
     hudState.lastPromptTimestamp = new Date().toISOString();
     hudState.timestamp = new Date().toISOString();
-    writeHudState(hudState, directory, input.sessionId);
+    writeHudState(hudState, directory);
   } catch {
     // Silent failure - don't break keyword detection
   }
@@ -1148,76 +448,50 @@ async function processKeywordDetector(input: HookInput): Promise<HookOutput> {
   // Load config for task-size detection settings
   const config = loadConfig();
   const taskSizeConfig = config.taskSizeDetection ?? {};
-  const promptPrerequisiteConfig = getPromptPrerequisiteConfig(config);
 
   // Get all keywords with optional task-size filtering (issue #790)
   const sizeCheckResult = getAllKeywordsWithSizeCheck(cleanedText, {
     enabled: taskSizeConfig.enabled !== false,
     smallWordLimit: taskSizeConfig.smallWordLimit ?? 50,
     largeWordLimit: taskSizeConfig.largeWordLimit ?? 200,
-    suppressHeavyModesForSmallTasks:
-      taskSizeConfig.suppressHeavyModesForSmallTasks !== false,
+    suppressHeavyModesForSmallTasks: taskSizeConfig.suppressHeavyModesForSmallTasks !== false,
   });
 
   // Apply ralplan-first gate BEFORE task-size suppression (issue #997).
   // Reconstruct the full keyword set so the gate sees execution keywords
   // that task-size suppression may have already removed for small tasks.
-  const fullKeywords = [
-    ...sizeCheckResult.keywords,
-    ...sizeCheckResult.suppressedKeywords,
-  ];
+  const fullKeywords = [...sizeCheckResult.keywords, ...sizeCheckResult.suppressedKeywords];
   const gateResult = applyRalplanGate(fullKeywords, cleanedText);
 
   let keywords: typeof fullKeywords;
   if (gateResult.gateApplied) {
     // Gate fired: redirect to ralplan (task-size suppression is moot — we're planning, not executing)
     keywords = gateResult.keywords;
-    const gated = gateResult.gatedKeywords.join(", ");
+    const gated = gateResult.gatedKeywords.join(', ');
     messages.push(
       `[RALPLAN GATE] Redirecting ${gated} → ralplan for scoping.\n` +
-        `Tip: add a concrete anchor to run directly next time:\n` +
-        `  \u2022 "ralph fix the bug in src/auth.ts"  (file path)\n` +
-        `  \u2022 "ralph implement #42"               (issue number)\n` +
-        `  \u2022 "ralph fix processKeyword"           (symbol name)\n` +
-        `Or prefix with \`force:\` / \`!\` to bypass.`,
+      `Tip: add a concrete anchor to run directly next time:\n` +
+      `  \u2022 "ralph fix the bug in src/auth.ts"  (file path)\n` +
+      `  \u2022 "ralph implement #42"               (issue number)\n` +
+      `  \u2022 "ralph fix processKeyword"           (symbol name)\n` +
+      `Or prefix with \`force:\` / \`!\` to bypass.`
     );
   } else {
     // Gate did not fire: use task-size-suppressed result as normal
     keywords = sizeCheckResult.keywords;
 
     // Notify user when heavy modes were suppressed for a small task
-    if (
-      sizeCheckResult.suppressedKeywords.length > 0 &&
-      sizeCheckResult.taskSizeResult
-    ) {
-      const suppressed = sizeCheckResult.suppressedKeywords.join(", ");
+    if (sizeCheckResult.suppressedKeywords.length > 0 && sizeCheckResult.taskSizeResult) {
+      const suppressed = sizeCheckResult.suppressedKeywords.join(', ');
       const reason = sizeCheckResult.taskSizeResult.reason;
       messages.push(
         `[TASK-SIZE: SMALL] Heavy orchestration mode(s) suppressed: ${suppressed}.\n` +
-          `Reason: ${reason}\n` +
-          `Running directly without heavy agent stacking. ` +
-          `Prefix with \`quick:\`, \`simple:\`, or \`tiny:\` to always use lightweight mode. ` +
-          `Use explicit mode keywords (e.g. \`ralph\`) only when you need full orchestration.`,
+        `Reason: ${reason}\n` +
+        `Running directly without heavy agent stacking. ` +
+        `Prefix with \`quick:\`, \`simple:\`, or \`tiny:\` to always use lightweight mode. ` +
+        `Use explicit mode keywords (e.g. \`ralph\`) only when you need full orchestration.`
       );
     }
-  }
-
-  const promptPrerequisiteParse = parsePromptPrerequisiteSections(promptText, promptPrerequisiteConfig);
-  const executionKeywords = fullKeywords.filter((keywordType) =>
-    promptPrerequisiteConfig.executionKeywords.includes(keywordType),
-  );
-  if (shouldEnforcePromptPrerequisites(executionKeywords, promptPrerequisiteParse, promptPrerequisiteConfig)) {
-    const state = activatePromptPrerequisiteState(
-      directory,
-      sessionId,
-      executionKeywords,
-      promptPrerequisiteParse,
-    );
-    if (state) {
-      messages.push(buildPromptPrerequisiteReminder(state));
-    }
-  } else if (executionKeywords.length > 0) {
-    clearPromptPrerequisiteState(directory, sessionId);
   }
 
   const sanitizedText = sanitizeForKeywordDetection(cleanedText);
@@ -1236,7 +510,7 @@ async function processKeywordDetector(input: HookInput): Promise<HookOutput> {
 
   if (keywords.length === 0) {
     if (messages.length > 0) {
-      return { continue: true, message: messages.join("\n\n---\n\n") };
+      return { continue: true, message: messages.join('\n\n---\n\n') };
     }
     return { continue: true };
   }
@@ -1246,27 +520,31 @@ async function processKeywordDetector(input: HookInput): Promise<HookOutput> {
     switch (keywordType) {
       case "ralph": {
         // Lazy-load ralph module
-        const {
-          createRalphLoopHook,
-          detectCriticModeFlag,
-          stripCriticModeFlag,
-        } = await import("./ralph/index.js");
+        const { createRalphLoopHook, findPrdPath: findPrd, initPrd: initPrdFn, initProgress: initProgressFn, detectNoPrdFlag: detectNoPrd, stripNoPrdFlag: stripNoPrd } = await import("./ralph/index.js");
 
-        const criticMode = detectCriticModeFlag(promptText) ?? undefined;
-        const cleanPrompt = stripCriticModeFlag(promptText);
+        // Handle --no-prd flag
+        const noPrd = detectNoPrd(promptText);
+        const cleanPrompt = noPrd ? stripNoPrd(promptText) : promptText;
+
+        // Auto-generate scaffold PRD if none exists and --no-prd not set
+        const existingPrd = findPrd(directory);
+        if (!noPrd && !existingPrd) {
+          const { basename } = await import("path");
+          const { execSync } = await import("child_process");
+          const projectName = basename(directory);
+          let branchName = 'ralph/task';
+          try {
+            branchName = execSync('git rev-parse --abbrev-ref HEAD', { cwd: directory, encoding: 'utf-8', timeout: 5000 }).trim();
+          } catch {
+            // Not a git repo or git not available — use fallback
+          }
+          initPrdFn(directory, projectName, branchName, cleanPrompt);
+          initProgressFn(directory);
+        }
 
         // Activate ralph state which also auto-activates ultrawork
         const hook = createRalphLoopHook(directory);
-        const started = hook.startLoop(
-          sessionId,
-          cleanPrompt,
-          {
-            ...(criticMode ? { criticMode } : {}),
-          },
-        );
-        if (started) {
-          markModeAwaitingConfirmation(directory, sessionId, 'ralph', 'ultrawork');
-        }
+        hook.startLoop(sessionId, cleanPrompt);
 
         messages.push(RALPH_MESSAGE);
         break;
@@ -1276,10 +554,7 @@ async function processKeywordDetector(input: HookInput): Promise<HookOutput> {
         // Lazy-load ultrawork module
         const { activateUltrawork } = await import("./ultrawork/index.js");
         // Activate persistent ultrawork state
-        const activated = activateUltrawork(promptText, sessionId, directory);
-        if (activated) {
-          markModeAwaitingConfirmation(directory, sessionId, 'ultrawork');
-        }
+        activateUltrawork(promptText, sessionId, directory);
         messages.push(ULTRAWORK_MESSAGE);
         break;
       }
@@ -1296,29 +571,12 @@ async function processKeywordDetector(input: HookInput): Promise<HookOutput> {
         messages.push(ANALYZE_MESSAGE);
         break;
 
-      case "tdd":
-        messages.push(TDD_MESSAGE);
-        break;
-
-      case "code-review":
-        messages.push(CODE_REVIEW_MESSAGE);
-        break;
-
-      case "security-review":
-        messages.push(SECURITY_REVIEW_MESSAGE);
-        break;
-
       // For modes without dedicated message constants, return generic activation message
       // These are handled by UserPromptSubmit hook for skill invocation
       case "cancel":
       case "autopilot":
       case "ralplan":
-      case "deep-interview":
-        if (keywordType === "autopilot") {
-          await seedAutopilotStartupState(directory, cleanedText, sessionId);
-        } else if (keywordType === "ralplan") {
-          seedRalplanStartupState(directory, sessionId);
-        }
+      case "tdd":
         messages.push(
           `[MODE: ${keywordType.toUpperCase()}] Skill invocation handled by UserPromptSubmit hook.`,
         );
@@ -1326,12 +584,11 @@ async function processKeywordDetector(input: HookInput): Promise<HookOutput> {
 
       case "codex":
       case "gemini": {
-        const teamStartCommand = formatOmcCliInvocation(`team start --agent ${keywordType} --count N --task "<task from user message>"`);
         messages.push(
           `[MAGIC KEYWORD: team]\n` +
-            `User intent: delegate to ${keywordType} CLI workers via ${formatOmcCliInvocation('team')}.\n` +
-            `Agent type: ${keywordType}. Parse N from user message (default 1).\n` +
-            `Invoke: ${teamStartCommand}`,
+          `User intent: delegate to ${keywordType} CLI workers via omc team CLI.\n` +
+          `Agent type: ${keywordType}. Parse N from user message (default 1).\n` +
+          `Invoke: omc team start --agent ${keywordType} --count N --task "<task from user message>"`
         );
         break;
       }
@@ -1373,22 +630,13 @@ async function processStopContinuation(_input: HookInput): Promise<HookOutput> {
  * ultrawork self-heal, and architect rejection handling).
  */
 async function processPersistentMode(input: HookInput): Promise<HookOutput> {
-  const rawSessionId = (input as Record<string, unknown>).session_id as
-    | string
-    | undefined;
+  const rawSessionId = (input as Record<string, unknown>).session_id as string | undefined;
   const sessionId = input.sessionId ?? rawSessionId;
   const directory = resolveToWorktreeRoot(input.directory);
 
   // Lazy-load persistent-mode and todo-continuation modules
-  const {
-    checkPersistentModes,
-    createHookOutput,
-    shouldWakeOpenClawOnStop,
-    shouldSendIdleNotification,
-    recordIdleNotificationSent,
-  } = await import("./persistent-mode/index.js");
-  const { isExplicitCancelCommand, isAuthenticationError } =
-    await import("./todo-continuation/index.js");
+  const { checkPersistentModes, createHookOutput, shouldSendIdleNotification, recordIdleNotificationSent } = await import("./persistent-mode/index.js");
+  const { isExplicitCancelCommand, isAuthenticationError } = await import("./todo-continuation/index.js");
 
   // Extract stop context for abort detection (supports both camelCase and snake_case)
   const stopContext: StopContext = {
@@ -1417,64 +665,35 @@ async function processPersistentMode(input: HookInput): Promise<HookOutput> {
     toolName: input.toolName,
     tool_input: (input as Record<string, unknown>).tool_input,
     toolInput: input.toolInput,
-    reason: (input as Record<string, unknown>).reason as string | undefined,
-    transcript_path: (input as Record<string, unknown>).transcript_path as
-      | string
-      | undefined,
-    transcriptPath: (input as Record<string, unknown>).transcriptPath as
-      | string
-      | undefined,
   };
 
   const result = await checkPersistentModes(sessionId, directory, stopContext);
   const output = createHookOutput(result);
 
-  // Skip legacy bridge.ts team enforcement if persistent-mode already
-  // handled this stop event (or intentionally emitted a stop message).
-  // Prevents mixed/double continuation prompts across modes.
-  if (result.mode !== "none" || Boolean(output.message)) {
-    return output;
-  }
-
   const teamState = readTeamStagedState(directory, sessionId);
-  if (
-    !teamState ||
-    teamState.active !== true ||
-    isTeamStateTerminal(teamState)
-  ) {
+  if (!teamState || teamState.active !== true || isTeamStateTerminal(teamState)) {
     writeTeamStopBreakerCount(directory, sessionId, 0);
     // No persistent mode and no active team — Claude is truly idle.
     // Send session-idle notification (non-blocking) unless this was a user abort or context limit.
     if (result.mode === "none" && sessionId) {
-      const isAbort =
-        stopContext.user_requested === true ||
-        stopContext.userRequested === true;
-      const isContextLimit =
-        stopContext.stop_reason === "context_limit" ||
-        stopContext.stopReason === "context_limit";
+      const isAbort = stopContext.user_requested === true || stopContext.userRequested === true;
+      const isContextLimit = stopContext.stop_reason === "context_limit" || stopContext.stopReason === "context_limit";
       if (!isAbort && !isContextLimit) {
+        // Always wake OpenClaw on stop — cooldown only applies to user-facing notifications
+        _openclaw.wake("stop", { sessionId, projectPath: directory });
+
         // Per-session cooldown: prevent notification spam when the session idles repeatedly.
         // Uses session-scoped state so one session does not suppress another.
         const stateDir = join(getOmcRoot(directory), "state");
-        const { getIdleNotificationRepoState } = await import("./persistent-mode/idle-repo-state.js");
-        const idleRepoState = getIdleNotificationRepoState(directory);
-        if (shouldWakeOpenClawOnStop(stateDir, sessionId, idleRepoState)) {
-          _openclaw.wake("stop", { sessionId, projectPath: directory });
-        }
-        if (shouldSendIdleNotification(stateDir, sessionId, idleRepoState)) {
-          recordIdleNotificationSent(stateDir, sessionId, idleRepoState);
-          const logSessionIdleNotifyFailure = createSwallowedErrorLogger(
-            'hooks.bridge session-idle notification failed',
-          );
-          import("../notifications/index.js")
-            .then(({ notify }) =>
-              notify("session-idle", {
-                sessionId,
-                projectPath: directory,
-                profileName: process.env.OMC_NOTIFY_PROFILE,
-              }).catch(logSessionIdleNotifyFailure),
-            )
-            .catch(logSessionIdleNotifyFailure);
+        if (shouldSendIdleNotification(stateDir, sessionId)) {
+          recordIdleNotificationSent(stateDir, sessionId);
+          import("../notifications/index.js").then(({ notify }) =>
+            notify("session-idle", {
+              sessionId,
+              projectPath: directory,
+              profileName: process.env.OMC_NOTIFY_PROFILE,
+            }).catch(() => {})
+          ).catch(() => {});
         }
       }
 
@@ -1558,18 +777,13 @@ async function processSessionStart(input: HookInput): Promise<HookOutput> {
 
   // Send session-start notification (non-blocking, swallows errors)
   if (sessionId) {
-    const logSessionStartNotifyFailure = createSwallowedErrorLogger(
-      'hooks.bridge session-start notification failed',
-    );
-    import("../notifications/index.js")
-      .then(({ notify }) =>
-        notify("session-start", {
-          sessionId,
-          projectPath: directory,
-          profileName: process.env.OMC_NOTIFY_PROFILE,
-        }).catch(logSessionStartNotifyFailure),
-      )
-      .catch(logSessionStartNotifyFailure);
+    import("../notifications/index.js").then(({ notify }) =>
+      notify("session-start", {
+        sessionId,
+        projectPath: directory,
+        profileName: process.env.OMC_NOTIFY_PROFILE,
+      }).catch(() => {})
+    ).catch(() => {});
     // Wake OpenClaw gateway for session-start (non-blocking)
     _openclaw.wake("session-start", { sessionId, projectPath: directory });
   }
@@ -1579,27 +793,20 @@ async function processSessionStart(input: HookInput): Promise<HookOutput> {
     Promise.all([
       import("../notifications/reply-listener.js"),
       import("../notifications/config.js"),
-    ])
-      .then(
-        ([
-          { startReplyListener },
-          {
-            getReplyConfig,
-            getNotificationConfig,
-            getReplyListenerPlatformConfig,
-          },
-        ]) => {
-          const replyConfig = getReplyConfig();
-          if (!replyConfig) return;
-          const notifConfig = getNotificationConfig();
-          const platformConfig = getReplyListenerPlatformConfig(notifConfig);
-          startReplyListener({
-            ...replyConfig,
-            ...platformConfig,
-          });
-        },
-      )
-      .catch(() => {});
+    ]).then(
+      ([
+        { startReplyListener },
+        { getReplyConfig, getNotificationConfig, getReplyListenerPlatformConfig },
+      ]) => {
+      const replyConfig = getReplyConfig();
+      if (!replyConfig) return;
+      const notifConfig = getNotificationConfig();
+      const platformConfig = getReplyListenerPlatformConfig(notifConfig);
+      startReplyListener({
+        ...replyConfig,
+        ...platformConfig,
+      });
+    }).catch(() => {});
   }
 
   const messages: string[] = [];
@@ -1615,7 +822,7 @@ async function processSessionStart(input: HookInput): Promise<HookOutput> {
   }
 
   // Check for active autopilot state - only restore if it belongs to this session
-  const autopilotState = readAutopilotState(directory, sessionId);
+  const autopilotState = readAutopilotState(directory);
   if (autopilotState?.active && autopilotState.session_id === sessionId) {
     messages.push(`<session-restore>
 
@@ -1625,7 +832,7 @@ You have an active autopilot session from ${autopilotState.started_at}.
 Original idea: ${autopilotState.originalIdea}
 Current phase: ${autopilotState.phase}
 
-Treat this as prior-session context only. Prioritize the user's newest request, and resume autopilot only if the user explicitly asks to continue it.
+Continue autopilot execution until complete.
 
 </session-restore>
 
@@ -1635,7 +842,7 @@ Treat this as prior-session context only. Prioritize the user's newest request, 
   }
 
   // Check for active ultrawork state - only restore if it belongs to this session
-  const ultraworkState = readUltraworkState(directory, sessionId);
+  const ultraworkState = readUltraworkState(directory);
   if (ultraworkState?.active && ultraworkState.session_id === sessionId) {
     messages.push(`<session-restore>
 
@@ -1644,39 +851,7 @@ Treat this as prior-session context only. Prioritize the user's newest request, 
 You have an active ultrawork session from ${ultraworkState.started_at}.
 Original task: ${ultraworkState.original_prompt}
 
-Treat this as prior-session context only. Prioritize the user's newest request, and resume ultrawork only if the user explicitly asks to continue it.
-
-</session-restore>
-
----
-
-`);
-  }
-
-  const ralplanState = readModeState<Record<string, unknown>>("ralplan", directory, sessionId);
-  if (ralplanState?.active === true && ralplanState.session_id === sessionId) {
-    const ralplanPhase =
-      typeof ralplanState.current_phase === "string"
-        ? ralplanState.current_phase
-        : typeof ralplanState.phase === "string"
-          ? ralplanState.phase
-          : typeof ralplanState.status === "string"
-            ? ralplanState.status
-            : "ralplan";
-    const restoreStatus =
-      ralplanState.awaiting_confirmation === true
-        ? "awaiting skill confirmation"
-        : "active";
-
-    messages.push(`<session-restore>
-
-[RALPLAN MODE RESTORED]
-
-You have an active ralplan consensus planning session from ${ralplanState.started_at ?? "an earlier turn"}.
-Current phase: ${ralplanPhase}
-Status: ${restoreStatus}
-
-Treat this as prior-session context only. Prioritize the user's newest request, and resume ralplan only if the user explicitly asks to continue it.
+Continue working in ultrawork mode until all tasks are complete.
 
 </session-restore>
 
@@ -1712,7 +887,7 @@ You have an active Team staged run for "${teamName}".
 Current stage: ${stage}
 ${getTeamStagePrompt(stage)}
 
-Treat this as prior-session context only. Prioritize the user's newest request, and resume the staged Team workflow only if the user explicitly asks to continue it.
+Resume from this stage and continue the staged Team workflow.
 
 </session-restore>
 
@@ -1723,12 +898,10 @@ Treat this as prior-session context only. Prioritize the user's newest request, 
   }
 
   // Load root AGENTS.md if it exists (deepinit output - issue #613)
-  const agentsMdPath = join(directory, "AGENTS.md");
+  const agentsMdPath = join(directory, 'AGENTS.md');
   if (existsSync(agentsMdPath)) {
     try {
-      let agentsContent = compactOmcStartupGuidance(
-        readFileSync(agentsMdPath, "utf-8"),
-      ).trim();
+      let agentsContent = readFileSync(agentsMdPath, 'utf-8').trim();
       if (agentsContent) {
         // Truncate to ~5000 tokens (20000 chars) to avoid context bloat
         const MAX_AGENTS_CHARS = 20000;
@@ -1736,10 +909,7 @@ Treat this as prior-session context only. Prioritize the user's newest request, 
           agentsContent = agentsContent.slice(0, MAX_AGENTS_CHARS);
         }
         // Security: wrap untrusted file content to prevent prompt injection
-        const wrappedContent = wrapUntrustedFileContent(
-          agentsMdPath,
-          agentsContent,
-        );
+        const wrappedContent = wrapUntrustedFileContent(agentsMdPath, agentsContent);
         messages.push(`<session-restore>
 
 [ROOT AGENTS.md LOADED]
@@ -1776,27 +946,6 @@ Please continue working on these tasks.
 `);
   }
 
-  // Bedrock/Vertex/proxy override: tell the LLM not to pass model on Task calls.
-  // This prevents the LLM from following the static CLAUDE.md instruction
-  // "Pass model on Task calls: haiku, sonnet, opus" which produces invalid
-  // model IDs on non-standard providers. (issues #1135, #1201)
-  try {
-    const sessionConfig = loadConfig();
-    if (sessionConfig.routing?.forceInherit) {
-      messages.push(`<system-reminder>
-
-[MODEL ROUTING OVERRIDE — NON-STANDARD PROVIDER DETECTED]
-
-This environment uses a non-standard model provider (AWS Bedrock, Google Vertex AI, or a proxy).
-Do NOT pass the \`model\` parameter on Task/Agent calls. Omit it entirely so agents inherit the parent session's model.
-The CLAUDE.md instruction "Pass model on Task calls: haiku, sonnet, opus" does NOT apply here.
-
-</system-reminder>`);
-    }
-  } catch {
-    // Non-blocking: config load failure must never break session start
-  }
-
   if (messages.length > 0) {
     return {
       continue: true,
@@ -1817,30 +966,18 @@ export function dispatchAskUserQuestionNotification(
   directory: string,
   toolInput: unknown,
 ): void {
-  const input = toolInput as
-    | { questions?: Array<{ question?: string }> }
-    | undefined;
+  const input = toolInput as { questions?: Array<{ question?: string }> } | undefined;
   const questions = input?.questions || [];
-  const questionText =
-    questions
-      .map((q) => q.question || "")
-      .filter(Boolean)
-      .join("; ") || "User input requested";
+  const questionText = questions.map(q => q.question || "").filter(Boolean).join("; ") || "User input requested";
 
-  const logAskUserQuestionNotifyFailure = createSwallowedErrorLogger(
-    'hooks.bridge ask-user-question notification failed',
-  );
-
-  import("../notifications/index.js")
-    .then(({ notify }) =>
-      notify("ask-user-question", {
-        sessionId,
-        projectPath: directory,
-        question: questionText,
-        profileName: process.env.OMC_NOTIFY_PROFILE,
-      }).catch(logAskUserQuestionNotifyFailure),
-    )
-    .catch(logAskUserQuestionNotifyFailure);
+  import("../notifications/index.js").then(({ notify }) =>
+    notify("ask-user-question", {
+      sessionId,
+      projectPath: directory,
+      question: questionText,
+      profileName: process.env.OMC_NOTIFY_PROFILE,
+    }).catch(() => {})
+  ).catch(() => {});
 }
 
 /** @internal Object wrapper so tests can spy on the dispatch call. */
@@ -1857,17 +994,11 @@ export const _notify = {
  * never blocks hooks or surfaces errors.
  */
 export const _openclaw = {
-  wake: (
-    event: import("../openclaw/types.js").OpenClawHookEvent,
-    context: import("../openclaw/types.js").OpenClawContext,
-  ) => {
+  wake: (event: import("../openclaw/types.js").OpenClawHookEvent, context: import("../openclaw/types.js").OpenClawContext) => {
     if (process.env.OMC_OPENCLAW !== "1") return;
-    const logOpenClawWakeFailure = createSwallowedErrorLogger(
-      `hooks.bridge openclaw wake failed for ${event}`,
-    );
-    import("../openclaw/index.js")
-      .then(({ wakeOpenClaw }) => wakeOpenClaw(event, context).catch(logOpenClawWakeFailure))
-      .catch(logOpenClawWakeFailure);
+    import("../openclaw/index.js").then(({ wakeOpenClaw }) =>
+      wakeOpenClaw(event, context).catch(() => {})
+    ).catch(() => {});
   },
 };
 
@@ -1878,7 +1009,6 @@ export const _openclaw = {
 function processPreToolUse(input: HookInput): HookOutput {
   const directory = resolveToWorktreeRoot(input.directory);
   const teamWorkerIdentity = teamWorkerIdentityFromEnv();
-  const promptPrerequisiteConfig = getPromptPrerequisiteConfig(loadConfig());
 
   if (teamWorkerIdentity) {
     if (input.toolName === "Task") {
@@ -1899,8 +1029,7 @@ function processPreToolUse(input: HookInput): HookOutput {
     }
 
     if (input.toolName === "Bash") {
-      const command =
-        (input.toolInput as { command?: string } | undefined)?.command ?? "";
+      const command = (input.toolInput as { command?: string } | undefined)?.command ?? "";
       const reason = workerBashBlockReason(command);
       if (reason) {
         return {
@@ -1929,123 +1058,16 @@ function processPreToolUse(input: HookInput): HookOutput {
     };
   }
 
-  const preToolMessages = enforcementResult.message
-    ? [enforcementResult.message]
-    : [];
-  let modifiedToolInput: Record<string, unknown> | undefined;
-
-  // Check blocking BEFORE recording progress — otherwise a denied tool
-  // (e.g. Edit) that also matches a prerequisite would have its progress
-  // persisted even though the tool never actually executed.
-  const promptPrerequisiteState = readPromptPrerequisiteState(directory, input.sessionId);
-  if (
-    promptPrerequisiteState?.active
-    && isPromptPrerequisiteBlockingTool(input.toolName, promptPrerequisiteConfig)
-  ) {
-    return {
-      continue: true,
-      hookSpecificOutput: {
-        hookEventName: "PreToolUse",
-        permissionDecision: "deny",
-        permissionDecisionReason: buildPromptPrerequisiteDenyReason(promptPrerequisiteState, input.toolName),
-      },
-    } as HookOutput & { hookSpecificOutput: Record<string, unknown> };
-  }
-
-  const promptPrerequisiteProgress = recordPromptPrerequisiteProgress(
-    directory,
-    input.sessionId,
-    input.toolName,
-    input.toolInput,
-  );
-
-  if (promptPrerequisiteProgress?.isComplete) {
-    preToolMessages.push(
-      "[PROMPT PREREQUISITES COMPLETE] Required context tools/files were read. Editing and agent delegation are unblocked.",
-    );
-  }
-
-  // Force-inherit: deny Task/Agent calls that carry a `model` parameter when
-  // forceInherit is enabled (Bedrock, Vertex, CC Switch, etc.).
-  // Claude Code's hook protocol does not support modifiedInput, so we cannot
-  // silently strip the model. Instead, deny the call so Claude retries without
-  // the model param, letting agents inherit the parent session's model.
-  // (issues #1135, #1201, #1415)
-  if (isDelegationToolName(input.toolName)) {
-    const originalInput = input.toolInput as
-      | Record<string, unknown>
-      | undefined;
-    const inputModel = originalInput?.model;
-
-    if (inputModel) {
+  // Force-inherit: strip `model` parameter from Task calls so agents inherit
+  // the user's Claude Code model setting instead of OMC per-agent routing (issue #1135)
+  let forceInheritInput: Record<string, unknown> | undefined;
+  if (input.toolName === "Task") {
+    const taskInput = input.toolInput as Record<string, unknown> | undefined;
+    if (taskInput?.model) {
       const config = loadConfig();
       if (config.routing?.forceInherit) {
-        // Use permissionDecision:"deny" — the only PreToolUse mechanism
-        // Claude Code supports for blocking a specific tool call with
-        // feedback. modifiedInput is NOT supported by the hook protocol.
-        const denyReason = `[MODEL ROUTING] This environment uses a non-standard provider (Bedrock/Vertex/proxy). Do NOT pass the \`model\` parameter on ${input.toolName} calls — remove \`model\` and retry so agents inherit the parent session's model. The model "${inputModel}" is not valid for this provider.`;
-        return {
-          continue: true,
-          hookSpecificOutput: {
-            hookEventName: "PreToolUse",
-            permissionDecision: "deny",
-            permissionDecisionReason: denyReason,
-          },
-        } as HookOutput & { hookSpecificOutput: Record<string, unknown> };
-      }
-    }
-  }
-
-  if (input.toolName === "Task") {
-    const originalTaskInput = input.toolInput as
-      | Record<string, unknown>
-      | undefined;
-
-    if (originalTaskInput?.run_in_background === true) {
-      const subagentType =
-        typeof originalTaskInput.subagent_type === "string"
-          ? originalTaskInput.subagent_type
-          : undefined;
-      const permissionFallback = getBackgroundTaskPermissionFallback(
-        directory,
-        subagentType,
-      );
-
-      if (permissionFallback.shouldFallback) {
-        const reason = `[BACKGROUND PERMISSIONS] ${subagentType || "This background agent"} may need ${permissionFallback.missingTools.join(", ")} permissions, but background agents cannot request interactive approval. Re-run without \`run_in_background=true\` or pre-approve ${permissionFallback.missingTools.join(", ")} in Claude Code settings.`;
-        return {
-          continue: false,
-          reason,
-          message: reason,
-        };
-      }
-    }
-  }
-
-  if (input.toolName === "Bash") {
-    const originalBashInput = input.toolInput as
-      | Record<string, unknown>
-      | undefined;
-    const nextBashInput = originalBashInput ? { ...originalBashInput } : {};
-
-    if (nextBashInput.run_in_background === true) {
-      const command =
-        typeof nextBashInput.command === "string"
-          ? nextBashInput.command
-          : undefined;
-      const permissionFallback = getBackgroundBashPermissionFallback(
-        directory,
-        command,
-      );
-
-      if (permissionFallback.shouldFallback) {
-        const reason =
-          "[BACKGROUND PERMISSIONS] This Bash command is not auto-approved for background execution. Re-run without `run_in_background=true` or pre-approve the command in Claude Code settings.";
-        return {
-          continue: false,
-          reason,
-          message: reason,
-        };
+        const { model: _stripped, ...rest } = taskInput;
+        forceInheritInput = rest;
       }
     }
   }
@@ -2059,15 +1081,8 @@ function processPreToolUse(input: HookInput): HookOutput {
       sessionId: input.sessionId,
       projectPath: directory,
       question: (() => {
-        const ti = input.toolInput as
-          | { questions?: Array<{ question?: string }> }
-          | undefined;
-        return (
-          ti?.questions
-            ?.map((q) => q.question || "")
-            .filter(Boolean)
-            .join("; ") || ""
-        );
+        const ti = input.toolInput as { questions?: Array<{ question?: string }> } | undefined;
+        return ti?.questions?.map(q => q.question || "").filter(Boolean).join("; ") || "";
       })(),
     });
   }
@@ -2075,38 +1090,16 @@ function processPreToolUse(input: HookInput): HookOutput {
   // Activate skill state when Skill tool is invoked (issue #1033)
   // This writes skill-active-state.json so the Stop hook can prevent premature
   // session termination while a skill is executing.
-  // Pass rawSkillName so writeSkillActiveState can distinguish OMC built-in
-  // skills from project custom skills with the same name (issue #1581).
   if (input.toolName === "Skill") {
     const skillName = getInvokedSkillName(input.toolInput);
     if (skillName) {
-      const rawSkillName = getRawSkillName(input.toolInput);
       // Use the statically-imported synchronous write so it completes before
       // the Stop hook can fire. The previous fire-and-forget .then() raced with
       // the Stop hook in short-lived processes.
       try {
-        writeSkillActiveState(directory, skillName, input.sessionId, rawSkillName);
-        confirmSkillModeStates(directory, skillName, input.sessionId);
-        if (isConsensusPlanningSkillInvocation(skillName, input.toolInput)) {
-          activateRalplanState(directory, input.sessionId);
-        }
-        // Workflow-slot ledger: when the Skill tool is invoked for one of the
-        // 8 canonical workflow skills, ensure the slot is present and freshly
-        // confirmed. Seed first (idempotent — preserves existing fields when
-        // the slot was already armed during UserPromptSubmit), then refresh
-        // `last_confirmed_at` so stop-hook reconciliation can distinguish a
-        // truly idle workflow from an in-flight one.
-        if (isCanonicalWorkflowSkill(skillName)) {
-          seedWorkflowSlotForSkill(
-            directory,
-            skillName,
-            input.sessionId,
-            "pre-tool:skill",
-          );
-          confirmWorkflowSlot(directory, skillName, input.sessionId);
-        }
+        writeSkillActiveState(directory, skillName, input.sessionId);
       } catch {
-        // Skill-state/state-sync writes are best-effort; don't fail the hook on error.
+        // Skill-state write is best-effort; don't fail the hook on error.
       }
     }
   }
@@ -2114,39 +1107,29 @@ function processPreToolUse(input: HookInput): HookOutput {
   // Notify when a new agent is spawned via Task tool (issue #761)
   // Fire-and-forget: verbosity filtering is handled inside notify()
   if (input.toolName === "Task" && input.sessionId) {
-    const taskInput = input.toolInput as
-      | {
-          subagent_type?: string;
-          description?: string;
-        }
-      | undefined;
+    const taskInput = input.toolInput as {
+      subagent_type?: string;
+      description?: string;
+    } | undefined;
     const agentType = taskInput?.subagent_type;
     const agentName = agentType?.includes(":")
       ? agentType.split(":").pop()
       : agentType;
-    const logAgentCallNotifyFailure = createSwallowedErrorLogger(
-      'hooks.bridge agent-call notification failed',
-    );
-    import("../notifications/index.js")
-      .then(({ notify }) =>
-        notify("agent-call", {
-          sessionId: input.sessionId!,
-          projectPath: directory,
-          agentName,
-          agentType,
-          profileName: process.env.OMC_NOTIFY_PROFILE,
-        }).catch(logAgentCallNotifyFailure),
-      )
-      .catch(logAgentCallNotifyFailure);
+    import("../notifications/index.js").then(({ notify }) =>
+      notify("agent-call", {
+        sessionId: input.sessionId!,
+        projectPath: directory,
+        agentName,
+        agentType,
+        profileName: process.env.OMC_NOTIFY_PROFILE,
+      }).catch(() => {})
+    ).catch(() => {});
   }
 
   // Warn about pkill -f self-termination risk (issue #210)
   // Matches: pkill -f, pkill -9 -f, pkill --full, etc.
   if (input.toolName === "Bash") {
-    const effectiveBashInput = (modifiedToolInput ?? input.toolInput) as
-      | { command?: string }
-      | undefined;
-    const command = effectiveBashInput?.command ?? "";
+    const command = (input.toolInput as { command?: string })?.command ?? "";
     if (
       PKILL_F_FLAG_PATTERN.test(command) ||
       PKILL_FULL_FLAG_PATTERN.test(command)
@@ -2160,7 +1143,6 @@ function processPreToolUse(input: HookInput): HookOutput {
           '  - `kill $(pgrep -f "pattern")` (pgrep does not kill itself)',
           "Proceeding anyway, but the command may kill this shell session.",
         ].join("\n"),
-        ...(modifiedToolInput ? { modifiedInput: modifiedToolInput } : {}),
       };
     }
   }
@@ -2168,7 +1150,7 @@ function processPreToolUse(input: HookInput): HookOutput {
   // Background process guard - prevent forkbomb (issue #302)
   // Block new background tasks if limit is exceeded
   if (input.toolName === "Task" || input.toolName === "Bash") {
-    const toolInput = (modifiedToolInput ?? input.toolInput) as
+    const toolInput = input.toolInput as
       | {
           description?: string;
           subagent_type?: string;
@@ -2180,7 +1162,7 @@ function processPreToolUse(input: HookInput): HookOutput {
     if (toolInput?.run_in_background) {
       const config = loadConfig();
       const maxBgTasks = config.permissions?.maxBackgroundTasks ?? 5;
-      const runningCount = getRunningTaskCount(directory, input.sessionId);
+      const runningCount = getRunningTaskCount(directory);
 
       if (runningCount >= maxBgTasks) {
         return {
@@ -2194,9 +1176,9 @@ function processPreToolUse(input: HookInput): HookOutput {
     }
   }
 
-  // Track Task tool invocations for HUD display
+  // Track Task tool invocations for HUD background tasks display
   if (input.toolName === "Task") {
-    const toolInput = (modifiedToolInput ?? input.toolInput) as
+    const toolInput = input.toolInput as
       | {
           description?: string;
           subagent_type?: string;
@@ -2205,15 +1187,12 @@ function processPreToolUse(input: HookInput): HookOutput {
       | undefined;
 
     if (toolInput?.description) {
-      const taskId =
-        getHookToolUseId(input)
-        ?? `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       addBackgroundTask(
         taskId,
         toolInput.description,
         toolInput.subagent_type,
         directory,
-        input.sessionId,
       );
     }
   }
@@ -2237,36 +1216,33 @@ function processPreToolUse(input: HookInput): HookOutput {
   if (input.toolName === "Task") {
     const dashboard = getAgentDashboard(directory);
     if (dashboard) {
-      const combined = [...preToolMessages, dashboard]
-        .filter(Boolean)
-        .join("\n\n");
+      const combined = enforcementResult.message
+        ? `${enforcementResult.message}\n\n${dashboard}`
+        : dashboard;
       return {
         continue: true,
-        ...(combined ? { message: combined } : {}),
-        ...(modifiedToolInput ? { modifiedInput: modifiedToolInput } : {}),
+        message: combined,
+        ...(forceInheritInput ? { modifiedInput: forceInheritInput } : {}),
       };
     }
   }
 
-  // Wake OpenClaw gateway for pre-tool-use (non-blocking, fires only for allowed tools).
-  // AskUserQuestion already has a dedicated high-signal OpenClaw event.
-  if (input.sessionId && input.toolName !== "AskUserQuestion") {
+  // Wake OpenClaw gateway for pre-tool-use (non-blocking, fires only for allowed tools)
+  if (input.sessionId) {
     _openclaw.wake("pre-tool-use", {
       sessionId: input.sessionId,
       projectPath: directory,
       toolName: input.toolName,
-      toolInput: input.toolInput,
     });
   }
 
   return {
     continue: true,
-    ...(preToolMessages.length > 0
-      ? { message: preToolMessages.join("\n\n") }
-      : {}),
-    ...(modifiedToolInput ? { modifiedInput: modifiedToolInput } : {}),
+    ...(enforcementResult.message ? { message: enforcementResult.message } : {}),
+    ...(forceInheritInput ? { modifiedInput: forceInheritInput } : {}),
   };
 }
+
 
 /**
  * Process post-tool-use hook
@@ -2278,7 +1254,11 @@ function getInvokedSkillName(toolInput: unknown): string | null {
 
   const input = toolInput as Record<string, unknown>;
   const rawSkill =
-    input.skill ?? input.skill_name ?? input.skillName ?? input.command ?? null;
+    input.skill ??
+    input.skill_name ??
+    input.skillName ??
+    input.command ??
+    null;
 
   if (typeof rawSkill !== "string" || rawSkill.trim().length === 0) {
     return null;
@@ -2291,19 +1271,6 @@ function getInvokedSkillName(toolInput: unknown): string | null {
   return namespaced?.toLowerCase() || null;
 }
 
-/**
- * Extract the raw (un-normalized) skill name from Skill tool input.
- * Used to distinguish OMC built-in skills (prefixed with 'oh-my-claudecode:')
- * from project custom skills or other plugin skills with the same bare name.
- * See: https://github.com/Yeachan-Heo/oh-my-claudecode/issues/1581
- */
-function getRawSkillName(toolInput: unknown): string | undefined {
-  if (!toolInput || typeof toolInput !== "object") return undefined;
-  const input = toolInput as Record<string, unknown>;
-  const raw = input.skill ?? input.skill_name ?? input.skillName ?? input.command ?? null;
-  return typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : undefined;
-}
-
 async function processPostToolUse(input: HookInput): Promise<HookOutput> {
   const directory = resolveToWorktreeRoot(input.directory);
   const messages: string[] = [];
@@ -2314,51 +1281,34 @@ async function processPostToolUse(input: HookInput): Promise<HookOutput> {
   if (toolName === "skill") {
     const skillName = getInvokedSkillName(input.toolInput);
     if (skillName === "ralph") {
-      const {
-        createRalphLoopHook,
-        detectCriticModeFlag,
-        stripCriticModeFlag,
-      } = await import("./ralph/index.js");
+      const { createRalphLoopHook, findPrdPath: findPrd, initPrd: initPrdFn, initProgress: initProgressFn, detectNoPrdFlag: detectNoPrd, stripNoPrdFlag: stripNoPrd } = await import("./ralph/index.js");
       const rawPrompt =
         typeof input.prompt === "string" && input.prompt.trim().length > 0
           ? input.prompt
           : "Ralph loop activated via Skill tool";
 
-      const criticMode = detectCriticModeFlag(rawPrompt) ?? undefined;
-      const cleanPrompt = stripCriticModeFlag(rawPrompt);
+      // Handle --no-prd flag
+      const noPrd = detectNoPrd(rawPrompt);
+      const cleanPrompt = noPrd ? stripNoPrd(rawPrompt) : rawPrompt;
+
+      // Auto-generate scaffold PRD if none exists and --no-prd not set
+      const existingPrd = findPrd(directory);
+      if (!noPrd && !existingPrd) {
+        const { basename } = await import("path");
+        const { execSync } = await import("child_process");
+        const projectName = basename(directory);
+        let branchName = 'ralph/task';
+        try {
+          branchName = execSync('git rev-parse --abbrev-ref HEAD', { cwd: directory, encoding: 'utf-8', timeout: 5000 }).trim();
+        } catch {
+          // Not a git repo or git not available — use fallback
+        }
+        initPrdFn(directory, projectName, branchName, cleanPrompt);
+        initProgressFn(directory);
+      }
 
       const hook = createRalphLoopHook(directory);
-      hook.startLoop(
-        input.sessionId,
-        cleanPrompt,
-        {
-          ...(criticMode ? { criticMode } : {}),
-        },
-      );
-    }
-
-    // Clear skill-active state on skill completion to prevent false-blocking.
-    // Without this, every non-'none' skill falsely blocks stops until TTL expires.
-    // Guard: only clear if the completing skill owns the active state.
-    // When a parent skill (e.g. omc-setup) invokes a child skill (e.g. mcp-setup),
-    // the child's PostToolUse fires first — we must not delete the parent's state.
-    const { clearSkillActiveState, readSkillActiveState } = await import("./skill-state/index.js");
-    const currentState = readSkillActiveState(directory, input.sessionId);
-    const completingSkill = (getInvokedSkillName(input.toolInput) ?? "")
-      .toLowerCase()
-      .replace(/^oh-my-claudecode:/, "");
-    if (!currentState || !currentState.active || currentState.skill_name === completingSkill) {
-      clearSkillActiveState(directory, input.sessionId);
-    }
-    // Workflow-slot ledger: tombstone the canonical workflow slot when its
-    // Skill invocation completes. Soft-tombstoning (rather than hard delete)
-    // preserves the slot until the TTL pruner removes it — late-arriving
-    // stop hooks see consistent state instead of a missing slot.
-    if (skillName && isCanonicalWorkflowSkill(skillName)) {
-      tombstoneWorkflowSlot(directory, skillName, input.sessionId);
-    }
-    if (isConsensusPlanningSkillInvocation(skillName, input.toolInput)) {
-      deactivateRalplanState(directory, input.sessionId);
+      hook.startLoop(input.sessionId, cleanPrompt);
     }
   }
 
@@ -2376,80 +1326,21 @@ async function processPostToolUse(input: HookInput): Promise<HookOutput> {
   if (orchestratorResult.message) {
     messages.push(orchestratorResult.message);
   }
-  if (orchestratorResult.modifiedOutput) {
-    messages.push(orchestratorResult.modifiedOutput);
-  }
 
+  // After Task completion, show updated agent dashboard
   if (input.toolName === "Task") {
-    const toolInput = input.toolInput as
-      | {
-          description?: string;
-          subagent_type?: string;
-          run_in_background?: boolean;
-        }
-      | undefined;
-    const toolUseId = getHookToolUseId(input);
-    const asyncAgentId = extractAsyncAgentId(input.toolOutput);
-    const description = toolInput?.description;
-    const agentType = toolInput?.subagent_type;
-
-    if (asyncAgentId) {
-      if (toolUseId) {
-        remapBackgroundTaskId(toolUseId, asyncAgentId, directory, input.sessionId);
-      } else if (description) {
-        remapMostRecentMatchingBackgroundTaskId(
-          description,
-          asyncAgentId,
-          directory,
-          agentType,
-          input.sessionId,
-        );
-      }
-    } else {
-      const failed = taskLaunchDidFail(input.toolOutput);
-      if (toolUseId) {
-        completeBackgroundTask(toolUseId, directory, failed, input.sessionId);
-      } else if (description) {
-        completeMostRecentMatchingBackgroundTask(
-          description,
-          directory,
-          failed,
-          agentType,
-          input.sessionId,
-        );
-      }
-    }
-  }
-
-  // After delegation completion, show updated agent dashboard
-  if (isDelegationToolName(input.toolName)) {
     const dashboard = getAgentDashboard(directory);
     if (dashboard) {
       messages.push(dashboard);
     }
   }
 
-  if (input.toolName === "TaskOutput") {
-    const taskOutput = parseTaskOutputLifecycle(input.toolOutput);
-    if (taskOutput) {
-    completeBackgroundTask(
-      taskOutput.taskId,
-      directory,
-      taskOutputDidFail(taskOutput.status),
-      input.sessionId,
-    );
-  }
-  }
-
-  // Wake OpenClaw gateway for post-tool-use (non-blocking, fires for all tools).
-  // AskUserQuestion already emitted a dedicated question.requested signal.
-  if (input.sessionId && input.toolName !== "AskUserQuestion") {
+  // Wake OpenClaw gateway for post-tool-use (non-blocking, fires for all tools)
+  if (input.sessionId) {
     _openclaw.wake("post-tool-use", {
       sessionId: input.sessionId,
       projectPath: directory,
       toolName: input.toolName,
-      toolInput: input.toolInput,
-      toolOutput: input.toolOutput,
     });
   }
 
@@ -2471,8 +1362,7 @@ async function processAutopilot(input: HookInput): Promise<HookOutput> {
   const directory = resolveToWorktreeRoot(input.directory);
 
   // Lazy-load autopilot module
-  const { readAutopilotState, getPhasePrompt } =
-    await import("./autopilot/index.js");
+  const { readAutopilotState, getPhasePrompt } = await import("./autopilot/index.js");
 
   const state = readAutopilotState(directory, input.sessionId);
 
@@ -2481,22 +1371,18 @@ async function processAutopilot(input: HookInput): Promise<HookOutput> {
   }
 
   // Check phase and inject appropriate prompt
-  const config = loadConfig();
   const context = {
     idea: state.originalIdea,
     specPath: state.expansion.spec_path || ".omc/autopilot/spec.md",
-    planPath: state.planning.plan_path || resolveAutopilotPlanPath(config),
-    openQuestionsPath: resolveOpenQuestionsPlanPath(config),
+    planPath: state.planning.plan_path || ".omc/plans/autopilot-impl.md",
   };
 
   const phasePrompt = getPhasePrompt(state.phase, context);
-  const runtimeInsight = formatAutopilotRuntimeInsight(directory, input.sessionId);
 
-  if (phasePrompt || runtimeInsight) {
-    const detailParts = [runtimeInsight, phasePrompt].filter(Boolean);
+  if (phasePrompt) {
     return {
       continue: true,
-      message: `[AUTOPILOT - Phase: ${state.phase.toUpperCase()}]\n\n${detailParts.join("\n\n")}`,
+      message: `[AUTOPILOT - Phase: ${state.phase.toUpperCase()}]\n\n${phasePrompt}`,
     };
   }
 
@@ -2573,13 +1459,7 @@ export async function processHook(
 
       // Lazy-loaded async hook types
       case "session-end": {
-        if (
-          !validateHookInput<SessionEndInput>(
-            input,
-            requiredKeysForHook("session-end"),
-            "session-end",
-          )
-        ) {
+        if (!validateHookInput<SessionEndInput>(input, requiredKeysForHook("session-end"), "session-end")) {
           return { continue: true };
         }
         const { handleSessionEnd } = await import("./session-end/index.js");
@@ -2595,27 +1475,16 @@ export async function processHook(
           hook_event_name: "SessionEnd",
           reason: (rawSE.reason as SessionEndInput["reason"]) ?? "other",
         };
-        const result = await handleSessionEnd(sessionEndInput);
-        _openclaw.wake("session-end", {
-          sessionId: sessionEndInput.session_id,
-          projectPath: sessionEndInput.cwd,
-          reason: sessionEndInput.reason,
-        });
-        return result;
+        return await handleSessionEnd(sessionEndInput);
       }
 
       case "subagent-start": {
         if (
-          !validateHookInput<SubagentStartInput>(
-            input,
-            requiredKeysForHook("subagent-start"),
-            "subagent-start",
-          )
+          !validateHookInput<SubagentStartInput>(input, requiredKeysForHook("subagent-start"), "subagent-start")
         ) {
           return { continue: true };
         }
-        const { processSubagentStart } =
-          await import("./subagent-tracker/index.js");
+        const { processSubagentStart } = await import("./subagent-tracker/index.js");
         // Reconstruct snake_case fields from normalized camelCase input.
         // normalizeHookInput maps cwd→directory and session_id→sessionId,
         // but SubagentStartInput expects the original snake_case field names.
@@ -2638,23 +1507,17 @@ export async function processHook(
 
       case "subagent-stop": {
         if (
-          !validateHookInput<SubagentStopInput>(
-            input,
-            requiredKeysForHook("subagent-stop"),
-            "subagent-stop",
-          )
+          !validateHookInput<SubagentStopInput>(input, requiredKeysForHook("subagent-stop"), "subagent-stop")
         ) {
           return { continue: true };
         }
-        const { processSubagentStop } =
-          await import("./subagent-tracker/index.js");
+        const { processSubagentStop } = await import("./subagent-tracker/index.js");
         // Reconstruct snake_case fields from normalized camelCase input.
         // Same normalization mismatch as subagent-start: cwd→directory, session_id→sessionId.
         const normalizedStop = input as unknown as Record<string, unknown>;
         const stopInput: SubagentStopInput = {
           cwd: (normalizedStop.directory ?? normalizedStop.cwd) as string,
-          session_id: (normalizedStop.sessionId ??
-            normalizedStop.session_id) as string,
+          session_id: (normalizedStop.sessionId ?? normalizedStop.session_id) as string,
           agent_id: normalizedStop.agent_id as string,
           agent_type: normalizedStop.agent_type as string,
           transcript_path: normalizedStop.transcript_path as string,
@@ -2669,13 +1532,7 @@ export async function processHook(
       }
 
       case "pre-compact": {
-        if (
-          !validateHookInput<PreCompactInput>(
-            input,
-            requiredKeysForHook("pre-compact"),
-            "pre-compact",
-          )
-        ) {
+        if (!validateHookInput<PreCompactInput>(input, requiredKeysForHook("pre-compact"), "pre-compact")) {
           return { continue: true };
         }
         const { processPreCompact } = await import("./pre-compact/index.js");
@@ -2695,13 +1552,7 @@ export async function processHook(
 
       case "setup-init":
       case "setup-maintenance": {
-        if (
-          !validateHookInput<SetupInput>(
-            input,
-            requiredKeysForHook(hookType),
-            hookType,
-          )
-        ) {
+        if (!validateHookInput<SetupInput>(input, requiredKeysForHook(hookType), hookType)) {
           return { continue: true };
         }
         const { processSetup } = await import("./setup/index.js");
@@ -2720,16 +1571,11 @@ export async function processHook(
 
       case "permission-request": {
         if (
-          !validateHookInput<PermissionRequestInput>(
-            input,
-            requiredKeysForHook("permission-request"),
-            "permission-request",
-          )
+          !validateHookInput<PermissionRequestInput>(input, requiredKeysForHook("permission-request"), "permission-request")
         ) {
           return { continue: true };
         }
-        const { handlePermissionRequest } =
-          await import("./permission-handler/index.js");
+        const { handlePermissionRequest } = await import("./permission-handler/index.js");
         // De-normalize: PermissionRequestInput expects snake_case fields
         // (session_id, cwd, tool_name, tool_input).
         const rawPR = input as unknown as Record<string, unknown>;
@@ -2737,8 +1583,7 @@ export async function processHook(
           session_id: (rawPR.sessionId ?? rawPR.session_id) as string,
           cwd: (rawPR.directory ?? rawPR.cwd) as string,
           tool_name: (rawPR.toolName ?? rawPR.tool_name) as string,
-          tool_input: (rawPR.toolInput ??
-            rawPR.tool_input) as PermissionRequestInput["tool_input"],
+          tool_input: (rawPR.toolInput ?? rawPR.tool_input) as PermissionRequestInput["tool_input"],
           transcript_path: rawPR.transcript_path as string,
           permission_mode: (rawPR.permission_mode ?? "default") as string,
           hook_event_name: "PermissionRequest",
@@ -2749,13 +1594,8 @@ export async function processHook(
 
       case "code-simplifier": {
         const directory = input.directory ?? process.cwd();
-        const stateDir = join(
-          resolveToWorktreeRoot(directory),
-          ".omc",
-          "state",
-        );
-        const { processCodeSimplifier } =
-          await import("./code-simplifier/index.js");
+        const stateDir = join(resolveToWorktreeRoot(directory), ".omc", "state");
+        const { processCodeSimplifier } = await import("./code-simplifier/index.js");
         const result = processCodeSimplifier(directory, stateDir);
         if (result.shouldBlock) {
           return { continue: false, message: result.message };
@@ -2812,7 +1652,7 @@ export async function main(): Promise<void> {
   const output = await processHook(hookType, input);
 
   // Write output to stdout
-  console.log(JSON.stringify(sanitizeHookOutputForSerialization(output)));
+  console.log(JSON.stringify(output));
 }
 
 // Run if called directly (works in both ESM and bundled CJS)

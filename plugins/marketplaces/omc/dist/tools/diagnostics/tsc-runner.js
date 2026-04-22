@@ -3,7 +3,7 @@
  *
  * Executes `tsc --noEmit` to get project-level type checking diagnostics.
  */
-import { execFileSync } from 'child_process';
+import { execSync } from 'child_process';
 import { existsSync } from 'fs';
 import { join } from 'path';
 /**
@@ -22,7 +22,7 @@ export function runTscDiagnostics(directory) {
         };
     }
     try {
-        execFileSync('tsc', ['--noEmit', '--pretty', 'false'], {
+        execSync('tsc --noEmit --pretty false', {
             cwd: directory,
             encoding: 'utf-8',
             stdio: 'pipe'

@@ -3,7 +3,6 @@
  * Main orchestrator for auto-detecting and injecting project context
  */
 
-import path from "path";
 import { contextCollector } from "../../features/context-injector/collector.js";
 import { findProjectRoot } from "../rules-injector/finder.js";
 import {
@@ -15,26 +14,34 @@ import { detectProjectEnvironment } from "./detector.js";
 import { formatContextSummary } from "./formatter.js";
 
 /**
- * Session caches to prevent duplicate injection.
- * Map<sessionId, Set<projectRoot:scopeKey>>
+ * Session caches to prevent duplicate injection
+ * Map<sessionId, Set<projectRoot>>
  * Bounded to MAX_SESSIONS entries to prevent memory leaks in long-running MCP processes.
  */
 const sessionCaches = new Map<string, Set<string>>();
 const MAX_SESSIONS = 100;
 
+/**
+ * Register project memory context for a session
+ * Called from SessionStart hook
+ *
+ * @param sessionId - Current session ID
+ * @param workingDirectory - Current working directory
+ * @returns true if context was registered, false otherwise
+ */
 export async function registerProjectMemoryContext(
   sessionId: string,
   workingDirectory: string,
 ): Promise<boolean> {
+  // Find project root
   const projectRoot = findProjectRoot(workingDirectory);
   if (!projectRoot) {
     return false;
   }
 
-  const scopeKey = getScopeKey(projectRoot, workingDirectory);
-  const cacheKey = `${projectRoot}:${scopeKey}`;
-
+  // Check session cache (avoid duplicate injection)
   if (!sessionCaches.has(sessionId)) {
+    // Evict oldest entry if cache is at capacity
     if (sessionCaches.size >= MAX_SESSIONS) {
       const firstKey = sessionCaches.keys().next().value;
       if (firstKey !== undefined) {
@@ -43,87 +50,78 @@ export async function registerProjectMemoryContext(
     }
     sessionCaches.set(sessionId, new Set());
   }
-
   const cache = sessionCaches.get(sessionId)!;
-  if (cache.has(cacheKey)) {
+  if (cache.has(projectRoot)) {
     return false;
   }
 
   try {
+    // Load or detect memory
     let memory = await loadProjectMemory(projectRoot);
 
+    // Rescan if memory doesn't exist or is stale
     if (!memory || shouldRescan(memory)) {
-      const existing = memory;
       memory = await detectProjectEnvironment(projectRoot);
-      if (existing) {
-        memory.customNotes = existing.customNotes;
-        memory.userDirectives = existing.userDirectives;
-        memory.hotPaths = existing.hotPaths;
-      }
       await saveProjectMemory(projectRoot, memory);
     }
 
-    const content = formatContextSummary(memory, {
-      workingDirectory: path.relative(projectRoot, workingDirectory),
-      scopeKey,
-    });
+    // Only inject if we have useful information
+    const hasUsefulInfo =
+      memory.techStack.languages.length > 0 ||
+      memory.techStack.frameworks.length > 0 ||
+      memory.build.buildCommand !== null;
 
-    if (!content.trim()) {
+    if (!hasUsefulInfo) {
       return false;
     }
 
+    // Register context with high priority
     contextCollector.register(sessionId, {
       id: "project-environment",
       source: "project-memory",
-      content,
+      content: formatContextSummary(memory),
       priority: "high",
       metadata: {
         projectRoot,
-        scopeKey,
         languages: memory.techStack.languages.map((l) => l.name),
         lastScanned: memory.lastScanned,
       },
     });
 
-    cache.add(cacheKey);
+    // Mark as injected for this session
+    cache.add(projectRoot);
     return true;
   } catch (error) {
+    // Silently fail - we don't want to break the session
     console.error("Error registering project memory context:", error);
     return false;
   }
 }
 
+/**
+ * Clear project memory session cache
+ * Called when session ends
+ *
+ * @param sessionId - Session ID to clear
+ */
 export function clearProjectMemorySession(sessionId: string): void {
   sessionCaches.delete(sessionId);
 }
 
+/**
+ * Force rescan of project environment
+ * Useful for manual refresh
+ *
+ * @param projectRoot - Project root directory
+ */
 export async function rescanProjectEnvironment(
   projectRoot: string,
 ): Promise<void> {
-  const existing = await loadProjectMemory(projectRoot);
   const memory = await detectProjectEnvironment(projectRoot);
-  if (existing) {
-    memory.customNotes = existing.customNotes;
-    memory.userDirectives = existing.userDirectives;
-    memory.hotPaths = existing.hotPaths;
-  }
   await saveProjectMemory(projectRoot, memory);
 }
 
-function getScopeKey(projectRoot: string, workingDirectory: string): string {
-  const relative = path.relative(projectRoot, workingDirectory);
-  if (!relative || relative === "") {
-    return ".";
-  }
-
-  const normalized = relative.replace(/\\/g, "/");
-  if (normalized.startsWith("..")) {
-    return ".";
-  }
-
-  return normalized;
-}
-
+// Re-export utilities for use in other modules
 export {
   loadProjectMemory,
   saveProjectMemory,

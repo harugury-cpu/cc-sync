@@ -9,10 +9,8 @@
 
 import { z } from "zod";
 import { readFileSync, readdirSync, statSync, writeFileSync } from "fs";
-import { join, extname, resolve, normalize, relative, isAbsolute } from "path";
+import { join, extname, resolve } from "path";
 import { createRequire } from "module";
-import { getWorktreeRoot } from "../lib/worktree-paths.js";
-import { isToolPathRestricted } from "../lib/security-config.js";
 
 // Dynamic import for @ast-grep/napi
 // Graceful degradation: if the module is not available (e.g., in bundled/plugin context),
@@ -47,37 +45,6 @@ async function getSgModule(): Promise<typeof import("@ast-grep/napi") | null> {
     }
   }
   return sgModule;
-}
-
-/**
- * Validate that a tool path is within the project root boundary.
- * Only enforced when OMC_RESTRICT_TOOL_PATHS=true.
- *
- * @param inputPath - The path parameter from tool invocation
- * @returns The resolved absolute path
- * @throws Error if path is outside project root when restriction is enabled
- */
-export function validateToolPath(inputPath: string): string {
-  const resolved = resolve(inputPath);
-
-  if (!isToolPathRestricted()) {
-    return resolved;
-  }
-
-  const projectRoot = getWorktreeRoot() || process.cwd();
-  const normalizedRoot = normalize(projectRoot);
-  const normalizedPath = normalize(resolved);
-
-  const rel = relative(normalizedRoot, normalizedPath);
-
-  if (rel.startsWith("..") || isAbsolute(rel)) {
-    throw new Error(
-      `Path restricted: '${inputPath}' is outside the project root '${projectRoot}'. ` +
-        `Disable via security.restrictToolPaths in .claude/omc.jsonc or unset OMC_SECURITY.`,
-    );
-  }
-
-  return resolved;
 }
 
 /**
@@ -236,12 +203,7 @@ function getFilesForLanguage(
   }
 
   const resolvedPath = resolve(dirPath);
-  let stat: ReturnType<typeof statSync>;
-  try {
-    stat = statSync(resolvedPath);
-  } catch (err) {
-    throw new Error(`Cannot access path "${resolvedPath}": ${(err as Error).message}`);
-  }
+  const stat = statSync(resolvedPath);
 
   if (stat.isFile()) {
     return [resolvedPath];
@@ -336,8 +298,6 @@ Note: Patterns must be valid AST nodes for the language.`,
     } = args;
 
     try {
-      const validatedPath = validateToolPath(path);
-
       const sg = await getSgModule();
       if (!sg) {
         return {
@@ -349,7 +309,7 @@ Note: Patterns must be valid AST nodes for the language.`,
           ],
         };
       }
-      const files = getFilesForLanguage(validatedPath, language);
+      const files = getFilesForLanguage(path, language);
 
       if (files.length === 0) {
         return {
@@ -472,8 +432,6 @@ IMPORTANT: dryRun=true (default) only previews changes. Set dryRun=false to appl
     const { pattern, replacement, language, path = ".", dryRun = true } = args;
 
     try {
-      const validatedPath = validateToolPath(path);
-
       const sg = await getSgModule();
       if (!sg) {
         return {
@@ -485,7 +443,7 @@ IMPORTANT: dryRun=true (default) only previews changes. Set dryRun=false to appl
           ],
         };
       }
-      const files = getFilesForLanguage(validatedPath, language);
+      const files = getFilesForLanguage(path, language);
 
       if (files.length === 0) {
         return {
@@ -545,12 +503,9 @@ IMPORTANT: dryRun=true (default) only previews changes. Set dryRun=false to appl
                 const varName = metaVar.replace(/^\$+/, "");
                 const captured = match.getMatch(varName);
                 if (captured) {
-                  // Escape $ in captured text to prevent JS replacement patterns
-                  // ($&, $', $`, $$) from being interpreted by replaceAll
-                  const safeText = captured.text().replace(/\$/g, '$$$$');
                   finalReplacement = finalReplacement.replaceAll(
                     metaVar,
-                    safeText,
+                    captured.text(),
                   );
                 }
               }

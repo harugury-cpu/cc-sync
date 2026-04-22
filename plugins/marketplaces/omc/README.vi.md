@@ -7,7 +7,6 @@
 [![GitHub stars](https://img.shields.io/github/stars/Yeachan-Heo/oh-my-claudecode?style=flat&color=yellow)](https://github.com/Yeachan-Heo/oh-my-claudecode/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Sponsor](https://img.shields.io/badge/Sponsor-❤️-red?style=flat&logo=github)](https://github.com/sponsors/Yeachan-Heo)
-[![Discord](https://img.shields.io/discord/1452487457085063218?color=5865F2&logo=discord&logoColor=white&label=Discord)](https://discord.gg/PUwSMR9XNk)
 
 > **Dành cho người dùng Codex:** Hãy xem [oh-my-codex](https://github.com/Yeachan-Heo/oh-my-codex) — cùng trải nghiệm điều phối cho OpenAI Codex CLI.
 
@@ -15,7 +14,7 @@
 
 *Đừng học Claude Code. Cứ dùng OMC.*
 
-[Bắt đầu nhanh](#bắt-đầu-nhanh) • [Tài liệu](https://yeachan-heo.github.io/oh-my-claudecode-website) • [Tham chiếu CLI](https://yeachan-heo.github.io/oh-my-claudecode-website/docs.html#cli-reference) • [Quy trình](https://yeachan-heo.github.io/oh-my-claudecode-website/docs.html#workflows) • [Hướng dẫn di chuyển](docs/MIGRATION.md) • [Discord](https://discord.gg/PUwSMR9XNk)
+[Bắt đầu nhanh](#bắt-đầu-nhanh) • [Tài liệu](https://yeachan-heo.github.io/oh-my-claudecode-website) • [Tham chiếu CLI](https://yeachan-heo.github.io/oh-my-claudecode-website/docs.html#cli-reference) • [Quy trình](https://yeachan-heo.github.io/oh-my-claudecode-website/docs.html#workflows) • [Hướng dẫn di chuyển](docs/MIGRATION.md)
 
 ---
 
@@ -31,10 +30,6 @@
 ```bash
 /omc-setup
 ```
-
-Nếu bạn chạy OMC qua `omc --plugin-dir <path>` hoặc `claude --plugin-dir <path>`, hãy thêm `--plugin-dir-mode` vào `omc setup` (hoặc xuất `OMC_PLUGIN_ROOT` trước) để tránh trùng lặp các kỹ năng/tác nhân mà plugin đã cung cấp trong thời gian chạy. Để xem ma trận quyết định đầy đủ và tất cả các cờ có sẵn, hãy xem [phần Plugin directory flags trong REFERENCE.md](./docs/REFERENCE.md#plugin-directory-flags).
-
-<!-- TODO(i18n): verify translation -->
 
 **Bước 3: Xây một thứ gì đó**
 ```
@@ -169,42 +164,8 @@ Nhiều chiến lược cho nhiều tình huống — từ điều phối dựa 
 
 - **Magic keywords** - `ralph`, `ulw`, `plan` để kiểm soát rõ ràng
 - **HUD statusline** - Chỉ số điều phối theo thời gian thực trong status bar
-  - Nếu bạn khởi chạy Claude Code trực tiếp bằng `claude --plugin-dir <path>` (bỏ qua shim `omc`), hãy xuất `OMC_PLUGIN_ROOT=<path>` trong shell của bạn để gói HUD phân giải thành cùng một checkout như trình tải plugin. Xem [phần Plugin directory flags trong REFERENCE.md](./docs/REFERENCE.md#plugin-directory-flags) để biết chi tiết.
-
-  <!-- TODO(i18n): verify translation -->
 - **Học kỹ năng** - Trích xuất các mẫu tái sử dụng từ các phiên làm việc
 - **Phân tích & theo dõi chi phí** - Hiểu mức sử dụng token trên mọi phiên
-
-### Đóng góp
-
-Bạn muốn đóng góp cho OMC? Xem [CONTRIBUTING.md](./CONTRIBUTING.md) để biết hướng dẫn nhà phát triển đầy đủ, bao gồm cách fork, thiết lập checkout cục bộ, liên kết nó làm plugin hoạt động, chạy các bài kiểm tra và gửi PR.
-
-<!-- TODO(i18n): verify translation -->
-
-### Kỹ năng Tùy chỉnh
-
-Học một lần, tái sử dụng mãi mãi. OMC trích xuất kiến thức gỡ lỗi thực chiến thành các tệp kỹ năng di động, tự động tiêm vào khi phù hợp.
-
-| | Phạm vi Dự án | Phạm vi Người dùng |
-|---|---|---|
-| **Đường dẫn** | `.omc/skills/` | `~/.omc/skills/` |
-| **Chia sẻ với** | Nhóm (quản lý phiên bản) | Tất cả dự án của bạn |
-| **Ưu tiên** | Cao (ghi đè phạm vi người dùng) | Thấp (dự phòng) |
-
-```yaml
-# .omc/skills/fix-proxy-crash.md
----
-name: Fix Proxy Crash
-description: aiohttp proxy crashes on ClientDisconnectedError
-triggers: ["proxy", "aiohttp", "disconnected"]
-source: extracted
----
-Bọc handler tại server.py:42 trong try/except ClientDisconnectedError...
-```
-
-**Quản lý kỹ năng:** `/skill list | add | remove | edit | search`
-**Tự động học:** `/learner` trích xuất các mẫu tái sử dụng với tiêu chuẩn chất lượng nghiêm ngặt
-**Tự động tiêm:** Các kỹ năng phù hợp được tải vào ngữ cảnh tự động — không cần gọi thủ công
 
 [Danh sách tính năng đầy đủ →](docs/REFERENCE.md)
 
@@ -267,66 +228,6 @@ Hành vi tag:
 - Discord: hỗ trợ `@here`, `@everyone`, user ID dạng số, và `role:<id>`
 - Slack: hỗ trợ `<@MEMBER_ID>`, `<!channel>`, `<!here>`, `<!everyone>`, `<!subteam^GROUP_ID>`
 - callbacks kiểu `file` bỏ qua các tùy chọn tag
-
-### Tích hợp OpenClaw
-
-Chuyển tiếp các sự kiện phiên Claude Code đến gateway [OpenClaw](https://openclaw.ai/) để kích hoạt phản hồi tự động và quy trình làm việc thông qua tác nhân OpenClaw của bạn.
-
-**Thiết lập nhanh (khuyến nghị):**
-
-```bash
-/oh-my-claudecode:configure-notifications
-# → Nhập "openclaw" khi được hỏi → chọn "OpenClaw Gateway"
-```
-
-**Thiết lập thủ công:** tạo `~/.claude/omc_config.openclaw.json`:
-
-```json
-{
-  "enabled": true,
-  "gateways": {
-    "my-gateway": {
-      "url": "https://your-gateway.example.com/wake",
-      "headers": { "Authorization": "Bearer YOUR_TOKEN" },
-      "method": "POST",
-      "timeout": 10000
-    }
-  },
-  "hooks": {
-    "session-start": { "gateway": "my-gateway", "instruction": "Session started for {{projectName}}", "enabled": true },
-    "stop":          { "gateway": "my-gateway", "instruction": "Session stopping for {{projectName}}", "enabled": true }
-  }
-}
-```
-
-**Biến môi trường:**
-
-| Biến | Mô tả |
-|------|-------|
-| `OMC_OPENCLAW=1` | Bật OpenClaw |
-| `OMC_OPENCLAW_DEBUG=1` | Bật ghi log gỡ lỗi |
-| `OMC_OPENCLAW_CONFIG=/path/to/config.json` | Thay đổi đường dẫn file cấu hình |
-
-**Các sự kiện hook được hỗ trợ (6 hoạt động trong bridge.ts):**
-
-| Sự kiện | Kích hoạt | Biến template chính |
-|---------|----------|-------------------|
-| `session-start` | Phiên bắt đầu | `{{sessionId}}`, `{{projectName}}`, `{{projectPath}}` |
-| `stop` | Phản hồi Claude hoàn tất | `{{sessionId}}`, `{{projectName}}` |
-| `keyword-detector` | Mỗi lần gửi prompt | `{{prompt}}`, `{{sessionId}}` |
-| `ask-user-question` | Claude yêu cầu nhập liệu từ người dùng | `{{question}}`, `{{sessionId}}` |
-| `pre-tool-use` | Trước khi gọi công cụ (tần suất cao) | `{{toolName}}`, `{{sessionId}}` |
-| `post-tool-use` | Sau khi gọi công cụ (tần suất cao) | `{{toolName}}`, `{{sessionId}}` |
-
-**Biến môi trường kênh phản hồi:**
-
-| Biến | Mô tả |
-|------|-------|
-| `OPENCLAW_REPLY_CHANNEL` | Kênh phản hồi (ví dụ: `discord`) |
-| `OPENCLAW_REPLY_TARGET` | ID kênh |
-| `OPENCLAW_REPLY_THREAD` | ID thread |
-
-Xem `scripts/openclaw-gateway-demo.mjs` để tham khảo gateway chuyển tiếp payload OpenClaw đến Discord qua ClawdBot.
 
 ---
 

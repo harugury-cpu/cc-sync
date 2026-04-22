@@ -6,11 +6,9 @@
 
 **Note**: If resuming and `lastCompletedStep >= 3`, skip to Step 2.2.
 
-The HUD shows real-time status in Claude Code's status bar. Delegate all HUD/statusLine setup to the `hud` skill:
+The HUD shows real-time status in Claude Code's status bar. Invoke the hud skill to set up and configure:
 
 Use the Skill tool to invoke: `hud` with args: `setup`
-
-Do not generate, normalize, or patch `statusLine` paths inline in this phase. This is especially important on Windows, where backslash path handling must stay inside the `hud` skill.
 
 This will:
 1. Install the HUD wrapper script to `~/.claude/hud/omc-hud.mjs`
@@ -80,7 +78,7 @@ Use the AskUserQuestion tool to prompt the user:
 Store the preference in `~/.claude/.omc-config.json`:
 
 ```bash
-CONFIG_FILE="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.omc-config.json"
+CONFIG_FILE="$HOME/.claude/.omc-config.json"
 mkdir -p "$(dirname "$CONFIG_FILE")"
 
 if [ -f "$CONFIG_FILE" ]; then
@@ -98,7 +96,7 @@ echo "Default execution mode set to: USER_CHOICE"
 
 ## Step 2.5: Install OMC CLI Tool
 
-The OMC CLI (`omc` command) provides standalone helper commands such as `omc hud`, `omc teleport`, and `omc team ...`.
+The OMC CLI (`omc` command) provides standalone monitoring and analytics commands.
 
 First, check if the CLI is already installed:
 
@@ -116,7 +114,7 @@ If `OMC_CLI_INSTALLED` is `"true"`, skip the rest of this step.
 
 If `OMC_CLI_INSTALLED` is `"false"`, use AskUserQuestion:
 
-**Question:** "Would you like to install the OMC CLI globally for standalone helper commands? (`omc`, `omc hud`, `omc teleport`)"
+**Question:** "Would you like to install the OMC CLI globally for standalone monitoring and analytics? (`omc`, `omc cost`, `omc sessions`)"
 
 **Options:**
 1. **Yes (Recommended)** - Install `oh-my-claude-sisyphus` via `npm install -g`
@@ -189,7 +187,7 @@ If beads or beads-rust is detected, use AskUserQuestion:
 Store the preference:
 
 ```bash
-CONFIG_FILE="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.omc-config.json"
+CONFIG_FILE="$HOME/.claude/.omc-config.json"
 mkdir -p "$(dirname "$CONFIG_FILE")"
 
 if [ -f "$CONFIG_FILE" ]; then

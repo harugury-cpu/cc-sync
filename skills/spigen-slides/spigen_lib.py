@@ -19,7 +19,7 @@ THEMES = {
         'TITLE_COLOR': c255(249, 250, 251),   # #F9FAFB
         'BODY_COLOR':  c255(107, 114, 128),   # #6B7280
         'CARD_BG':     c255( 14,  14,  14),   # #0E0E0E (Surface)
-        'CARD_BORDER': {"red": 1, "green": 1, "blue": 1},  # #FFFFFF 템플릿 기준
+        'CARD_BORDER': c255( 20,  20,  20),   # #141414
     },
     'light': {
         'SLIDE_BG':    {"red": 1,        "green": 1,        "blue": 1},        # #FFFFFF
@@ -45,7 +45,7 @@ def shape(oid, page, stype, x, y, w, h):
             "transform": {"scaleX":1,"scaleY":1,
                 "translateX": pt(x),"translateY": pt(y),"unit":"EMU"}}}}
 
-def fill(oid, fg, bg=None, wt=0.4):
+def fill(oid, fg, bg=None, wt=0.6):
     # bg 생략 시 fg와 동일색 — 테두리가 렌더되어도 도형색과 같아 시각적으로 무해함 (의도적 설계)
     bg = bg or fg
     props = {"shapeBackgroundFill": {"solidFill": {"color": {"rgbColor": fg}}}}
@@ -66,45 +66,35 @@ def clr(oid):
             "shapeBackgroundFill": {"propertyState": "NOT_RENDERED"},
             "outline": {"propertyState": "NOT_RENDERED"}}}}
 
-def txtstyle(oid, color, size, bold=False, ff="Noto Sans"):
+def txtstyle(oid, color, size, bold=False):
     return {"updateTextStyle": {"objectId": oid,
         "textRange": {"type": "ALL"},
         "style": {"foregroundColor": {"opaqueColor": {"rgbColor": color}},
                   "fontSize": {"magnitude": size, "unit": "PT"},
-                  "fontFamily": ff, "bold": bold},
+                  "fontFamily": "Noto Sans", "bold": bold},
         "fields": "foregroundColor,fontSize,fontFamily,bold"}}
 
 def txt(oid, text):
     return {"insertText": {"objectId": oid, "insertionIndex": 0, "text": text}}
 
 
-def slide_base(slide_oid, title_text, insert_index, reqs, theme='dark', page_label=''):
+def slide_base(slide_oid, title_text, insert_index, reqs, theme='dark'):
     T = THEMES[theme]
     reqs.append({"createSlide": {"objectId": slide_oid,
         "insertionIndex": insert_index,
         "slideLayoutReference": {"predefinedLayout": "BLANK"}}})
+    # 배경색 (테마에 따라 결정)
     reqs.append({"updatePageProperties": {"objectId": slide_oid,
         "fields": "pageBackgroundFill",
         "pageProperties": {"pageBackgroundFill": {
             "solidFill": {"color": {"rgbColor": T['SLIDE_BG']}}}}}})
+    # 상단 오렌지 바 (테마 불문 고정)
     bar = f"{slide_oid}_bar"
     reqs += [shape(bar, slide_oid, "RECTANGLE", 0, 0, 720, 3), fill(bar, ORANGE)]
-    if page_label:
-        # 템플릿 헤더: PAGE 라벨(fs=7 Poppins orange) + 큰 제목(fs=22 Poppins)
-        plid = f"{slide_oid}_pl"
-        reqs += [shape(plid, slide_oid, "TEXT_BOX", 36, 36, 257, 12),
-                 txt(plid, page_label.upper()),
-                 txtstyle(plid, ORANGE, 7, bold=True, ff="Poppins"),
-                 clr(plid)]
-        ttl = f"{slide_oid}_ttl"
-        reqs += [shape(ttl, slide_oid, "TEXT_BOX", 36, 54, 500, 26),
-                 txt(ttl, title_text),
-                 txtstyle(ttl, T['TITLE_COLOR'], 22, bold=True, ff="Poppins"),
-                 clr(ttl)]
-    else:
-        ttl = f"{slide_oid}_ttl"
-        reqs += [shape(ttl, slide_oid, "TEXT_BOX", 56, 44, 500, 22),
-                 txt(ttl, title_text), txtstyle(ttl, T['TITLE_COLOR'], 17, bold=True), clr(ttl)]
+    # 제목 (테마에 따라 글자색 결정)
+    ttl = f"{slide_oid}_ttl"
+    reqs += [shape(ttl, slide_oid, "TEXT_BOX", 56, 44, 500, 22),
+             txt(ttl, title_text), txtstyle(ttl, T['TITLE_COLOR'], 17, bold=True), clr(ttl)]
 
 
 # 열 색상 설정 — 테마별로 구분 (라벨 색·왼쪽 바 색)
@@ -172,63 +162,46 @@ def mk_flow(sid, steps, cost_map, reqs, theme='dark'):
     """
     T = THEMES[theme]
     N = len(steps)
-    BW, BH = 103, 84    # 템플릿 실측 103×83.9
-    GAP = 109           # 카드 x 간격 (템플릿 실측)
-    SX = 36             # 첫 카드 x (템플릿 실측)
-    FY = 111            # 카드 y (템플릿 실측 111.1)
+    BW, FH, AW = 108, 55, 14
+    FY = 50
+    SX = (720 - N*BW - (N-1)*AW) // 2
 
     for i, (step, name, svc, paid) in enumerate(steps):
-        bx = SX + i * GAP
+        bx  = SX + i*(BW+AW)
         bid = f"{sid}_s{i}"
-        fc = c255(13, 7, 0) if paid else T['CARD_BG']
-        bc = ORANGE if paid else T['CARD_BORDER']
-        reqs += [shape(bid, sid, "ROUND_RECTANGLE", bx, FY, BW, BH),
-                 fill(bid, fc, bc, 0.4)]
+        # 유료 스텝: 오렌지 테두리 강조 / 일반 스텝: 테마 카드색
+        fc  = c255(13,7,0) if paid else T['CARD_BG']
+        bc  = ORANGE       if paid else T['CARD_BORDER']
+        reqs += [shape(bid, sid, "ROUND_RECTANGLE", bx, FY, BW, FH),
+                 fill(bid, fc, bc, 0.8),
+                 txt(bid, f"{step}\n{name}\n{svc}"),
+                 txtstyle(bid, T['BODY_COLOR'], 6.5)]
 
-        # STEP# — JetBrains Mono fs=5, 유료 시 오렌지
-        snid = f"{sid}_sn{i}"
-        step_fg = ORANGE if paid else T['TITLE_COLOR']
-        reqs += [shape(snid, sid, "TEXT_BOX", bx+5, FY+6, BW-10, 9),
-                 txt(snid, step),
-                 txtstyle(snid, step_fg, 5, ff="JetBrains Mono"),
-                 clr(snid)]
-
-        # 이름 — Poppins bold fs=8
-        nmid = f"{sid}_nm{i}"
-        reqs += [shape(nmid, sid, "TEXT_BOX", bx+5, FY+18, BW-10, 13),
-                 txt(nmid, name),
-                 txtstyle(nmid, T['TITLE_COLOR'], 8, bold=True, ff="Poppins"),
-                 clr(nmid)]
-
-        # 서비스 — Poppins fs=5, 유료 시 오렌지
-        svid = f"{sid}_sv{i}"
-        svc_fg = ORANGE if paid else T['TITLE_COLOR']
-        reqs += [shape(svid, sid, "TEXT_BOX", bx+5, FY+33, BW-10, 9),
-                 txt(svid, svc),
-                 txtstyle(svid, svc_fg, 5, ff="Poppins"),
-                 clr(svid)]
-
-        # 화살표 "›" — 카드 우측 끝에 배치 (템플릿 실측 x+99)
         if i < N-1:
-            awid = f"{sid}_aw{i}"
-            reqs += [shape(awid, sid, "TEXT_BOX", bx+99, FY+33, 11, 8),
-                     txt(awid, "›"),
-                     txtstyle(awid, ORANGE, 5, ff="Poppins"),
-                     clr(awid)]
+            lid = f"{sid}_l{i}"
+            reqs += [
+                {"createLine": {"objectId": lid, "lineCategory": "STRAIGHT",
+                    "elementProperties": {"pageObjectId": sid,
+                        "size": {"width":{"magnitude":pt(AW),"unit":"EMU"},
+                                 "height":{"magnitude":pt(1),"unit":"EMU"}},
+                        "transform":{"scaleX":1,"scaleY":1,
+                            "translateX":pt(bx+BW),"translateY":pt(FY+FH//2),
+                            "unit":"EMU"}}}},
+                {"updateLineProperties": {"objectId": lid,
+                    "fields": "lineFill,weight,endArrow",
+                    "lineProperties": {
+                        "lineFill": {"solidFill": {"color": {"rgbColor": ORANGE}}},
+                        "weight": {"magnitude": pt(1), "unit": "EMU"},
+                        "endArrow": "OPEN_ARROW"}}},
+            ]
 
-        # 비용 라벨 + 금액 — 카드 아래
         if i in cost_map:
-            cv_fg = ORANGE if paid else T['TITLE_COLOR']
-            clid = f"{sid}_cl{i}"
-            reqs += [shape(clid, sid, "TEXT_BOX", bx+5, FY+BH+6, BW-10, 8),
-                     txt(clid, "월 예상"),
-                     txtstyle(clid, T['BODY_COLOR'], 4, ff="Poppins"),
-                     clr(clid)]
-            cvid = f"{sid}_cv{i}"
-            reqs += [shape(cvid, sid, "TEXT_BOX", bx+5, FY+BH+14, BW-10, 12),
-                     txt(cvid, cost_map[i]),
-                     txtstyle(cvid, cv_fg, 7, bold=True, ff="Poppins"),
-                     clr(cvid)]
+            cid = f"{sid}_cost{i}"
+            bx2 = SX + i*(BW+AW)
+            reqs += [shape(cid, sid, "ROUND_RECTANGLE", bx2, FY+FH+18, BW, 40),
+                     fill(cid, c255(13,7,0), ORANGE, 0.8),
+                     txt(cid, f"월 예상\n{cost_map[i]}"),
+                     txtstyle(cid, ORANGE, 7.5, bold=True)]
 
 
 def mk_text_block(sid, body_text, reqs, y_start=83, font_size=8.5, theme='light'):
@@ -252,26 +225,20 @@ def mk_section_divider(slide_oid, num, title, insert_index, reqs):
             "solidFill": {"color": {"rgbColor": T['SLIDE_BG']}}}}}})
     bar = f"{slide_oid}_bar"
     reqs += [shape(bar, slide_oid, "RECTANGLE", 0, 0, 720, 3), fill(bar, ORANGE)]
-    # 대형 번호 — 템플릿 실측 (51, 103) 134×140 fs=100
+    # 대형 번호 (105pt, 오렌지, 좌측)
     nid = f"{slide_oid}_num"
-    reqs += [shape(nid, slide_oid, "TEXT_BOX", 51, 103, 134, 140),
+    reqs += [shape(nid, slide_oid, "TEXT_BOX", 52, 83, 300, 130),
              txt(nid, num),
              {"updateTextStyle": {"objectId": nid,
                  "textRange": {"type": "ALL"},
                  "style": {"foregroundColor": {"opaqueColor": {"rgbColor": ORANGE}},
-                           "fontSize": {"magnitude": 100, "unit": "PT"},
+                           "fontSize": {"magnitude": 105, "unit": "PT"},
                            "fontFamily": "Proxima Nova", "bold": True},
                  "fields": "foregroundColor,fontSize,fontFamily,bold"}},
              clr(nid)]
-    # "Section" 레이블 — 템플릿 실측 (172, 163) 76×12 fs=11.5 #AAAAAA
-    slbl = f"{slide_oid}_slbl"
-    reqs += [shape(slbl, slide_oid, "TEXT_BOX", 172, 163, 76, 12),
-             txt(slbl, "Section"),
-             txtstyle(slbl, c255(170, 170, 170), 11.5, ff="Proxima Nova"),
-             clr(slbl)]
-    # 섹션 제목 — 템플릿 실측 (165, 174) 206×84 fs=21 Noto Sans
+    # 섹션 제목 (21pt, 흰색)
     tid = f"{slide_oid}_ttl"
-    reqs += [shape(tid, slide_oid, "TEXT_BOX", 165, 174, 206, 84),
+    reqs += [shape(tid, slide_oid, "TEXT_BOX", 56, 212, 600, 40),
              txt(tid, title),
              {"updateTextStyle": {"objectId": tid,
                  "textRange": {"type": "ALL"},

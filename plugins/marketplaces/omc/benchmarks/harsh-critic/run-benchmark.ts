@@ -94,9 +94,8 @@ function parseArgs(): CliArgs {
 
 // ============================================================
 // Agent prompt loading
-// Loads current prompts from agents/ and archived historical prompts from
-// benchmarks/harsh-critic/prompts/ when a benchmarked agent was removed from
-// the live registry.
+// Mirrors loadAgentPrompt from src/agents/utils.ts — reads directly
+// from agents/ at repo root, strips YAML frontmatter.
 // ============================================================
 
 function stripFrontmatter(content: string): string {
@@ -105,22 +104,17 @@ function stripFrontmatter(content: string): string {
 }
 
 function loadAgentPromptFromFile(agentName: string): string {
-  const candidatePaths = [
-    join(REPO_ROOT, 'agents', `${agentName}.md`),
-    join(REPO_ROOT, 'benchmarks', 'harsh-critic', 'prompts', `${agentName}.md`),
-  ];
-  for (const agentPath of candidatePaths) {
-    try {
-      const content = readFileSync(agentPath, 'utf-8');
-      return stripFrontmatter(content);
-    } catch {
-      // Try the next candidate path.
-    }
+  const agentsDir = join(REPO_ROOT, 'agents');
+  const agentPath = join(agentsDir, `${agentName}.md`);
+  try {
+    const content = readFileSync(agentPath, 'utf-8');
+    return stripFrontmatter(content);
+  } catch {
+    console.error(`Error: Could not load agent prompt for "${agentName}" from ${agentPath}`);
+    process.exit(1);
+    // process.exit() throws — TypeScript needs this to satisfy the return type
+    return '';
   }
-  console.error(`Error: Could not load agent prompt for "${agentName}" from any known prompt path`);
-  process.exit(1);
-  // process.exit() throws — TypeScript needs this to satisfy the return type
-  return '';
 }
 
 // ============================================================

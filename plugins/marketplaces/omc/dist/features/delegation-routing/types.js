@@ -31,12 +31,14 @@ export const ROLE_CATEGORY_DEFAULTS = {
     // Review roles
     'code-reviewer': 'code-reviewer',
     'security-reviewer': 'security-reviewer',
+    'quality-reviewer': 'quality-reviewer',
     // Specialized roles
     designer: 'designer',
     writer: 'writer',
     'qa-tester': 'qa-tester',
     debugger: 'debugger',
     scientist: 'scientist',
+    'build-fixer': 'build-fixer',
     'git-master': 'executor',
     'code-simplifier': 'executor',
 };
@@ -47,17 +49,10 @@ export const DEPRECATED_ROLE_ALIASES = {
     researcher: 'document-specialist',
     'tdd-guide': 'test-engineer',
     'api-reviewer': 'code-reviewer',
-    'performance-reviewer': 'code-reviewer',
+    'performance-reviewer': 'quality-reviewer',
     'dependency-expert': 'document-specialist',
-    'quality-strategist': 'code-reviewer',
+    'quality-strategist': 'quality-reviewer',
     vision: 'document-specialist',
-    // Consolidated agent aliases (agent consolidation PR)
-    'quality-reviewer': 'code-reviewer',
-    'deep-executor': 'executor',
-    'build-fixer': 'debugger',
-    'harsh-critic': 'critic',
-    // User-friendly short alias for /team role routing (plan AC-4)
-    reviewer: 'code-reviewer',
 };
 /**
  * Normalize legacy role aliases to canonical role names.

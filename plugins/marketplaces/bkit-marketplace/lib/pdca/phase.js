@@ -1,7 +1,7 @@
 /**
  * Phase Control Module
  * @module lib/pdca/phase
- * @version 2.0.0
+ * @version 1.4.7
  */
 
 const fs = require('fs');
@@ -20,15 +20,13 @@ function getCore() {
  * PDCA Phase definitions
  */
 const PDCA_PHASES = {
-  pm: { order: 0, name: 'PM', icon: '🎯' },
   plan: { order: 1, name: 'Plan', icon: '📋' },
   design: { order: 2, name: 'Design', icon: '📐' },
   do: { order: 3, name: 'Do', icon: '🔨' },
   check: { order: 4, name: 'Check', icon: '🔍' },
   act: { order: 5, name: 'Act', icon: '🔄' },
-  qa: { order: 6, name: 'QA', icon: '🧪' },
-  report: { order: 7, name: 'Report', icon: '📊' },
-  archived: { order: 8, name: 'Archived', icon: '📦' }
+  report: { order: 6, name: 'Report', icon: '📊' },
+  archived: { order: 7, name: 'Archived', icon: '📦' }
 };
 
 /**
@@ -58,7 +56,7 @@ function getPhaseName(phaseNumber) {
  * @returns {string|null}
  */
 function getPreviousPdcaPhase(currentPhase) {
-  const order = ['pm', 'plan', 'design', 'do', 'check', 'act', 'qa', 'report'];
+  const order = ['plan', 'design', 'do', 'check', 'act', 'report'];
   const index = order.indexOf(currentPhase);
   return index > 0 ? order[index - 1] : null;
 }
@@ -69,7 +67,7 @@ function getPreviousPdcaPhase(currentPhase) {
  * @returns {string|null}
  */
 function getNextPdcaPhase(currentPhase) {
-  const order = ['pm', 'plan', 'design', 'do', 'check', 'act', 'qa', 'report'];
+  const order = ['plan', 'design', 'do', 'check', 'act', 'report'];
   const index = order.indexOf(currentPhase);
   return index >= 0 && index < order.length - 1 ? order[index + 1] : null;
 }
@@ -80,8 +78,24 @@ function getNextPdcaPhase(currentPhase) {
  * @returns {string} Path to design doc or empty string
  */
 function findDesignDoc(feature) {
-  const { findDoc } = require('../core/paths');
-  return findDoc('design', feature);
+  if (!feature) return '';
+
+  const { PROJECT_DIR } = getCore();
+  const paths = [
+    path.join(PROJECT_DIR, 'docs', '02-design', 'features', `${feature}.design.md`),
+    path.join(PROJECT_DIR, 'docs', '02-design', `${feature}.design.md`),
+    path.join(PROJECT_DIR, 'docs', 'design', `${feature}.md`)
+  ];
+
+  for (const p of paths) {
+    try {
+      fs.accessSync(p, fs.constants.R_OK);
+      return p;
+    } catch (e) {
+      continue;
+    }
+  }
+  return '';
 }
 
 /**
@@ -90,8 +104,24 @@ function findDesignDoc(feature) {
  * @returns {string} Path to plan doc or empty string
  */
 function findPlanDoc(feature) {
-  const { findDoc } = require('../core/paths');
-  return findDoc('plan', feature);
+  if (!feature) return '';
+
+  const { PROJECT_DIR } = getCore();
+  const paths = [
+    path.join(PROJECT_DIR, 'docs', '01-plan', 'features', `${feature}.plan.md`),
+    path.join(PROJECT_DIR, 'docs', '01-plan', `${feature}.plan.md`),
+    path.join(PROJECT_DIR, 'docs', 'plan', `${feature}.md`)
+  ];
+
+  for (const p of paths) {
+    try {
+      fs.accessSync(p, fs.constants.R_OK);
+      return p;
+    } catch (e) {
+      continue;
+    }
+  }
+  return '';
 }
 
 /**
@@ -108,16 +138,32 @@ function checkPhaseDeliverables(phase, feature) {
 
   if (!feature) return { exists: false, path: null };
 
-  const { resolveDocPaths } = require('../core/paths');
+  const { PROJECT_DIR } = getCore();
 
-  // Map PDCA phase to doc phase (check → analysis)
-  const phaseMap = { check: 'analysis', qa: 'qa' };
-  const docPhase = phaseMap[phase] || phase;
+  const deliverablePaths = {
+    plan: [
+      `docs/01-plan/features/${feature}.plan.md`,
+      `docs/01-plan/${feature}.plan.md`
+    ],
+    design: [
+      `docs/02-design/features/${feature}.design.md`,
+      `docs/02-design/${feature}.design.md`
+    ],
+    check: [
+      `docs/03-analysis/${feature}.analysis.md`,
+      `docs/03-analysis/features/${feature}.analysis.md`
+    ],
+    report: [
+      `docs/04-report/features/${feature}.report.md`,
+      `docs/04-report/${feature}.report.md`
+    ]
+  };
 
-  const candidates = resolveDocPaths(docPhase, feature);
-  if (!candidates.length) return { exists: true, path: null }; // No deliverable required
+  const paths = deliverablePaths[phase];
+  if (!paths) return { exists: true, path: null }; // No deliverable required
 
-  for (const fullPath of candidates) {
+  for (const relPath of paths) {
+    const fullPath = path.join(PROJECT_DIR, relPath);
     if (fs.existsSync(fullPath)) {
       return { exists: true, path: fullPath };
     }
@@ -204,7 +250,7 @@ function validatePdcaTransition(feature, fromPhase, toPhase) {
 
   // Check deliverables for current phase
   const deliverable = checkPhaseDeliverables(fromPhase, feature);
-  if (!deliverable.exists && fromPhase !== 'do' && fromPhase !== 'act' && fromPhase !== 'qa') {
+  if (!deliverable.exists && fromPhase !== 'do' && fromPhase !== 'act') {
     return { valid: false, reason: `${fromPhase} deliverable not found` };
   }
 

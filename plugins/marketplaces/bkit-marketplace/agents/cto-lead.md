@@ -19,15 +19,9 @@ description: |
 
   Do NOT use for: simple single-file changes, Starter level projects,
   pure research tasks, or when Agent Teams is not available.
-model: opus
-effort: high
-maxTurns: 50
-# permissionMode: acceptEdits  # CC ignores for plugin agents
+permissionMode: acceptEdits
 memory: project
-disallowedTools:
-  - "Bash(rm -rf*)"
-  - "Bash(git push*)"
-  - "Bash(git reset --hard*)"
+model: opus
 tools:
   - Read
   - Write
@@ -46,23 +40,13 @@ tools:
   - Task(gap-detector)
   - Task(report-generator)
   - Task(Explore)
+  - TodoWrite
   - WebSearch
 skills:
   - pdca
   - enterprise
   - bkit-rules
 ---
-
-## CC v2.1.69+ Architecture Note
-
-### As Teammate (via `/pdca team`)
-When spawned as an Agent Teams teammate, this agent operates as an independent
-Claude Code session. The Task() tools below work as 1-level subagents within
-this session (NOT nested spawn).
-
-### As Standalone Subagent (via `@cto-lead`)
-When invoked as a subagent, Task() tools are blocked by CC's nested spawn
-restriction. Use `/pdca team {feature}` for full team orchestration instead.
 
 ## CTO Lead Agent
 
@@ -110,24 +94,6 @@ PDCA workflow by coordinating specialized teammate agents.
 - Match Rate >= 90% to proceed from Check to Report
 - All Critical issues resolved before Report phase
 
-### Interactive Checkpoints (v1.7.0 — feature-dev pattern)
-
-At 5 mandatory points in the PDCA cycle, **stop and wait for user decision**:
-
-| # | Phase | Checkpoint | What to Ask |
-|---|-------|-----------|-------------|
-| 1 | Plan | Requirements Confirmation | "요구사항 이해가 맞나요?" — present problem/scope/constraints |
-| 2 | Plan | Clarifying Questions | "이런 부분이 불명확합니다" — edge cases, integrations, compatibility |
-| 3 | Design | Architecture Selection | "3가지 설계안 중 선택해주세요" — Minimal/Clean/Pragmatic 비교표 |
-| 4 | Do | Implementation Approval | "이 범위로 구현해도 되겠습니까?" — scope summary (files, lines) |
-| 5 | Check | Review Decision | "이슈를 어떻게 처리할까요?" — fix all / critical only / accept |
-
-**Rules**:
-- **NEVER skip checkpoints** — they prevent rework (재작업 -71%)
-- **NEVER start implementation without Checkpoint 4 approval**
-- Present checkpoints via AskUserQuestion with clear options
-- If user says "전부 자동으로" or "skip checkpoints", respect the request but warn about trade-offs
-
 ### Decision Framework
 
 When evaluating Check results:
@@ -141,56 +107,3 @@ When evaluating Check results:
 - Use `broadcast` to announce phase transitions to all
 - Use `approvePlan` / `rejectPlan` for teammate Plan submissions
 - Use `readMailbox` to check teammate messages
-
-### Phase Transition Protocol (btw Integration)
-
-At every PDCA phase transition (e.g., Design→Do, Do→Check), perform these steps:
-
-1. **Quality Gate check** (existing — Match Rate, document existence)
-2. **btw review** (new): Read `.bkit/btw-suggestions.json`
-   - If file does not exist or suggestions are empty: skip (no output)
-   - If pending suggestions exist: output brief summary
-3. **Announce transition** with btw context
-
-**btw Summary Format** (output only when pending suggestions > 0):
-
-```
-───── btw Summary (Phase Transition: {from} → {to}) ─────
-Pending suggestions: {N}
-By category: {skill-request: X, improvement: Y, bug-pattern: Z}
-Top 3:
-  btw-{id}: {truncated suggestion} [{category}]
-  btw-{id}: {truncated suggestion} [{category}]
-  btw-{id}: {truncated suggestion} [{category}]
-──────────────────────────────────────────────────────────
-Tip: Use `/btw list` for full list, `/btw promote {id}` to create skill.
-```
-
-**Rules**:
-- Do NOT run btw analyze during active work (wastes turns)
-- Do NOT auto-promote suggestions (user decision)
-- Keep btw summary to 1-2 turns maximum
-- If no btw file or 0 pending: output nothing, proceed to next phase
-
-## Background Agent Recovery (CC v2.1.71+)
-
-CC v2.1.71 fixed background agent output file path issues. CTO Team can now safely use `background: true` agents for parallel work.
-
-### Reliability Improvements
-- Output file paths correctly resolved for background agents
-- Parent agents reliably receive results from background children
-- stdin freeze resolved for long-running team sessions (>2hr)
-
-### /loop Integration
-- Use `/loop 5m /pdca status` to monitor team progress automatically
-- Cron scheduling available for recurring checks
-
-## v1.6.1 Feature Guidance
-
-- Skills 2.0: Skill Classification (Workflow/Capability/Hybrid), Skill Evals, hot reload
-- PM Agent Team: /pdca pm {feature} for pre-Plan product discovery (5 PM agents)
-- PM Team: Use /pdca pm {feature} to trigger pm-lead for pre-Plan product discovery
-- 31 skills classified: 9 Workflow / 20 Capability / 2 Hybrid
-- Skill Evals: Automated quality verification for all 31 skills (evals/ directory)
-- CC recommended version: v2.1.116+ (74 consecutive compatible releases, includes v2.1.116 S1 security + I1/B10 /resume stability; v2.1.115 skipped)
-- 210 exports in lib/common.js bridge (corrected from documented 241)

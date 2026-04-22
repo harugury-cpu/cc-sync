@@ -2,9 +2,6 @@
 
 > Hook events triggered during Claude Code operations
 >
-> **v2.1.9**: CC v2.1.116 response — Hooks unchanged (21 events, 43 scripts). CC recommended: v2.1.116+ (74 consecutive compatible, v2.1.115 skipped).
-> **v2.0.4**: 18 hook events implemented (18/22 = 82% CC coverage), 6-Layer Hook System, 57 scripts, CC v2.1.81+
-> **v1.6.2**: PostCompact + StopFailure hooks added (10->12 events), hook source display (CC v2.1.75+)
 > **v1.5.0**: Claude Code Exclusive - Gemini CLI support removed
 > **v1.4.7**: Task Management Integration - triggerNextPdcaAction, Task Chain Auto-Creation
 > **v1.4.6**: Sub-agent call stability with `bkit:` prefix
@@ -24,13 +21,13 @@ Hooks are **scripts that automatically execute on specific Claude Code events**.
 
 ## Context Engineering Perspective (v1.4.1)
 
-Hooks are the core of bkit's **context injection system**, organized into 6 layers according to [[../../philosophy/context-engineering|Context Engineering]] principles.
+Hooks are the core of bkit's **context injection system**, organized into 5 layers according to [[../../philosophy/context-engineering|Context Engineering]] principles.
 
-### 6-Layer Hook System
+### 5-Layer Hook System
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    6-Layer Hook System (v2.0.4)                  │
+│                    5-Layer Hook System (v1.4.2)                  │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  Layer 1: hooks.json (Global)                                   │
@@ -46,7 +43,7 @@ Hooks are the core of bkit's **context injection system**, organized into 6 laye
 │  Layer 4: Description Triggers                                  │
 │           └── "Triggers:" keyword matching (8 languages)        │
 │                                                                  │
-│  Layer 5: Scripts (54 modules)                                  │
+│  Layer 5: Scripts (45 modules)                                  │
 │           └── Actual Node.js logic execution                    │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -63,7 +60,7 @@ Hooks are the core of bkit's **context injection system**, organized into 6 laye
 | **PreCompact** | Before context compaction (v1.4.2) | PDCA state snapshot, context preservation |
 | **Stop** | Agent termination | State transition, user choice prompt |
 
-## Hook Events (v2.0.4 - Claude Code Exclusive)
+## Hook Events (v1.5.3 - Claude Code Exclusive)
 
 | Hook Event | Description | Added |
 |------------|-------------|:-----:|
@@ -77,14 +74,6 @@ Hooks are the core of bkit's **context injection system**, organized into 6 laye
 | `SubagentStop` | Subagent completed | v1.5.3 |
 | `TaskCompleted` | Task completion | v1.5.1 |
 | `TeammateIdle` | Teammate idle detection | v1.5.1 |
-| `PostCompact` | After context compaction | v1.6.2 |
-| `StopFailure` | Agent failure handling | v1.6.2 |
-| `SessionEnd` | Session termination | v2.0.0 |
-| `PostToolUseFailure` | After tool execution failure | v2.0.0 |
-| `InstructionsLoaded` | Instructions/context loaded | v2.0.0 |
-| `ConfigChange` | Configuration change detected | v2.0.0 |
-| `PermissionRequest` | Permission request handling | v2.0.0 |
-| `Notification` | System notification handling | v2.0.0 |
 
 ## Hook Architecture (v1.4.2)
 
@@ -469,33 +458,3 @@ The SessionStart hook now includes:
 | TaskCompleted | `pdca-task-completed.js` | Auto-advance PDCA phases on task completion |
 | TeammateIdle | `team-idle-handler.js` | Assign work to idle Agent Team teammates |
 | Stop (team) | `team-stop.js` | Clean up team resources on session end |
-
----
-
-## v1.6.1 Hook Notes
-
-### PM Agent Team Hook Integration
-
-PM Team agents (5) use the existing hook infrastructure:
-- SessionStart announces PM Team availability for product discovery
-- SubagentStart/SubagentStop track PM Team agent lifecycle
-- TaskCompleted triggers transition from PM discovery to PDCA Plan
-
-### Skills 2.0 Compatibility
-
-bkit v2.0.4 continues using `command` type hooks exclusively (18 hook events).
-CC 2.1.0 adds `type: "http"`, `type: "prompt"`, and `type: "agent"` hook types — bkit may adopt these in future versions.
-
-### v2.0.4 Path Quoting Fix ([#53](https://github.com/popup-studio-ai/bkit-claude-code/issues/53))
-
-All hook commands now properly quote `${CLAUDE_PLUGIN_ROOT}` paths with double-quotes to prevent bash syntax errors when the path contains special characters (parentheses, spaces, etc.). This is critical for Windows users whose username may contain parentheses (e.g., `홍길동(HongGildong)`).
-
-**Pattern**: `node "${CLAUDE_PLUGIN_ROOT}/scripts/foo.js"` (not `node ${CLAUDE_PLUGIN_ROOT}/scripts/foo.js`)
-
-When adding new hook commands, always use the quoted pattern to maintain cross-platform compatibility.
-
-### CC v2.1.78 Hook Improvements
-
-- Fixed stdin freeze in long sessions (direct benefit for CTO Team + PM Team)
-- Background agent output recovery (ensures PM Team agents return results to pm-lead)
-- CC official hook events total: 22 (bkit uses 18/22 = 82%)

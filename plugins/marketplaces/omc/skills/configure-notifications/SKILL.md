@@ -13,7 +13,6 @@ triggers:
   - "configure slack"
   - "setup slack"
   - "slack webhook"
-level: 2
 ---
 
 # Configure Notifications
@@ -43,12 +42,12 @@ Set up Telegram notifications so OMC can message you when sessions end, need inp
 
 ### How This Skill Works
 
-This is an interactive, natural-language configuration skill. Walk the user through setup by asking questions with AskUserQuestion. Write the result to `${CLAUDE_CONFIG_DIR:-~/.claude}/.omc-config.json`.
+This is an interactive, natural-language configuration skill. Walk the user through setup by asking questions with AskUserQuestion. Write the result to `~/.claude/.omc-config.json`.
 
 ### Step 1: Detect Existing Configuration
 
 ```bash
-CONFIG_FILE="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.omc-config.json"
+CONFIG_FILE="$HOME/.claude/.omc-config.json"
 
 if [ -f "$CONFIG_FILE" ]; then
   HAS_TELEGRAM=$(jq -r '.notifications.telegram.enabled // false' "$CONFIG_FILE" 2>/dev/null)
@@ -151,7 +150,7 @@ Default selection: session-end + ask-user-question.
 Read the existing config, merge the new Telegram settings, and write back:
 
 ```bash
-CONFIG_FILE="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.omc-config.json"
+CONFIG_FILE="$HOME/.claude/.omc-config.json"
 mkdir -p "$(dirname "$CONFIG_FILE")"
 
 if [ -f "$CONFIG_FILE" ]; then
@@ -269,12 +268,12 @@ Set up Discord notifications so OMC can ping you when sessions end, need input, 
 
 ### How This Skill Works
 
-This is an interactive, natural-language configuration skill. Walk the user through setup by asking questions with AskUserQuestion. Write the result to `${CLAUDE_CONFIG_DIR:-~/.claude}/.omc-config.json`.
+This is an interactive, natural-language configuration skill. Walk the user through setup by asking questions with AskUserQuestion. Write the result to `~/.claude/.omc-config.json`.
 
 ### Step 1: Detect Existing Configuration
 
 ```bash
-CONFIG_FILE="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.omc-config.json"
+CONFIG_FILE="$HOME/.claude/.omc-config.json"
 
 if [ -f "$CONFIG_FILE" ]; then
   # Check for existing discord config
@@ -385,7 +384,7 @@ Use AskUserQuestion:
 Read the existing config, merge the new Discord settings, and write back:
 
 ```bash
-CONFIG_FILE="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.omc-config.json"
+CONFIG_FILE="$HOME/.claude/.omc-config.json"
 mkdir -p "$(dirname "$CONFIG_FILE")"
 
 if [ -f "$CONFIG_FILE" ]; then
@@ -519,12 +518,12 @@ Set up Slack notifications so OMC can message you when sessions end, need input,
 
 ### How This Skill Works
 
-This is an interactive, natural-language configuration skill. Walk the user through setup by asking questions with AskUserQuestion. Write the result to `${CLAUDE_CONFIG_DIR:-~/.claude}/.omc-config.json`.
+This is an interactive, natural-language configuration skill. Walk the user through setup by asking questions with AskUserQuestion. Write the result to `~/.claude/.omc-config.json`.
 
 ### Step 1: Detect Existing Configuration
 
 ```bash
-CONFIG_FILE="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.omc-config.json"
+CONFIG_FILE="$HOME/.claude/.omc-config.json"
 
 if [ -f "$CONFIG_FILE" ]; then
   HAS_SLACK=$(jq -r '.notifications.slack.enabled // false' "$CONFIG_FILE" 2>/dev/null)
@@ -645,7 +644,7 @@ Use AskUserQuestion:
 Read the existing config, merge the new Slack settings, and write back:
 
 ```bash
-CONFIG_FILE="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.omc-config.json"
+CONFIG_FILE="$HOME/.claude/.omc-config.json"
 mkdir -p "$(dirname "$CONFIG_FILE")"
 
 if [ -f "$CONFIG_FILE" ]; then
@@ -792,7 +791,7 @@ If the trigger or argument contains "hook", "template", or "customize messages" 
 
 ### Step 1: Detect Existing Hook Config
 
-Check if `${CLAUDE_CONFIG_DIR:-~/.claude}/omc_config.hook.json` exists. If it does, show the current configuration. If not, explain what it does.
+Check if `~/.claude/omc_config.hook.json` exists. If it does, show the current configuration. If not, explain what it does.
 
 ```
 Hook event templates let you customize the notification messages sent to each platform.
@@ -879,7 +878,7 @@ If per-platform: ask for each enabled platform's template separately.
 
 ### Step 6: Write Configuration
 
-Read or create `${CLAUDE_CONFIG_DIR:-~/.claude}/omc_config.hook.json` and merge the new settings:
+Read or create `~/.claude/omc_config.hook.json` and merge the new settings:
 
 ```json
 {
@@ -953,7 +952,7 @@ If `~/.claude/omc_config.openclaw.json` exists, detect and offer migration:
 
 **Step 1: Detect Legacy Config**
 ```bash
-LEGACY_CONFIG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/omc_config.openclaw.json"
+LEGACY_CONFIG="$HOME/.claude/omc_config.openclaw.json"
 if [ -f "$LEGACY_CONFIG" ]; then
   echo "LEGACY_FOUND=true"
   # Check if already migrated

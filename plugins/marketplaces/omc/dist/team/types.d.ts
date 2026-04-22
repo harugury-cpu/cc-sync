@@ -5,8 +5,6 @@
  */
 import type { TeamTaskStatus } from './contracts.js';
 import type { TeamPhase } from './phase-controller.js';
-import type { TeamLeaderNextAction } from './leader-nudge-guidance.js';
-import type { CanonicalTeamRole, RoleAssignment } from '../shared/types.js';
 /** Bridge daemon configuration — passed via --config file to bridge-entry.ts */
 export interface BridgeConfig {
     teamName: string;
@@ -120,7 +118,7 @@ export interface TaskFailureSidecar {
     lastFailedAt: string;
 }
 /** Worker backend type */
-export type WorkerBackend = 'claude-native' | 'mcp-codex' | 'mcp-gemini' | 'tmux-claude' | 'tmux-codex' | 'tmux-gemini' | 'tmux-cursor';
+export type WorkerBackend = 'claude-native' | 'mcp-codex' | 'mcp-gemini' | 'tmux-claude' | 'tmux-codex' | 'tmux-gemini';
 /** Worker capability tag */
 export type WorkerCapability = 'code-edit' | 'code-review' | 'security-review' | 'architecture' | 'testing' | 'documentation' | 'ui-design' | 'refactoring' | 'research' | 'general';
 /** Team task with required version for optimistic concurrency */
@@ -158,23 +156,18 @@ export interface TeamLeader {
     worker_id: string;
     role: string;
 }
-/** Team transport/runtime policy configuration */
-export interface TeamTransportPolicy {
+/** Team-level policy configuration */
+export interface TeamPolicy {
     display_mode: 'split_pane' | 'auto';
     worker_launch_mode: 'interactive' | 'prompt';
     dispatch_mode: 'hook_preferred_with_fallback' | 'transport_direct';
     dispatch_ack_timeout_ms: number;
-}
-/** Team governance controls independent from transport/runtime policy */
-export interface TeamGovernance {
     delegation_only: boolean;
     plan_approval_required: boolean;
     nested_teams_allowed: boolean;
     one_team_per_leader_session: boolean;
     cleanup_requires_all_workers_inactive: boolean;
 }
-/** Legacy alias kept for backwards compatibility when reading old manifests */
-export type TeamPolicy = TeamTransportPolicy & Partial<TeamGovernance>;
 /** Permissions snapshot captured at team creation */
 export interface PermissionsSnapshot {
     approval_mode: string;
@@ -187,8 +180,7 @@ export interface TeamManifestV2 {
     name: string;
     task: string;
     leader: TeamLeader;
-    policy: TeamTransportPolicy;
-    governance: TeamGovernance;
+    policy: TeamPolicy;
     permissions_snapshot: PermissionsSnapshot;
     tmux_session: string;
     worker_count: number;
@@ -198,7 +190,6 @@ export interface TeamManifestV2 {
     leader_cwd?: string;
     team_state_root?: string;
     workspace_mode?: 'single' | 'worktree';
-    lifecycle_profile?: 'default' | 'linked_ralph';
     leader_pane_id: string | null;
     hud_pane_id: string | null;
     resize_hook_name: string | null;
@@ -210,7 +201,7 @@ export interface WorkerInfo {
     name: string;
     index: number;
     role: string;
-    worker_cli?: 'codex' | 'claude' | 'gemini' | 'cursor';
+    worker_cli?: 'codex' | 'claude';
     assigned_tasks: string[];
     pid?: number;
     pane_id?: string;
@@ -219,12 +210,6 @@ export interface WorkerInfo {
     worktree_branch?: string;
     worktree_detached?: boolean;
     team_state_root?: string;
-    /**
-     * Verdict-output file path for CLI-worker output contract (AC-7).
-     * Set when the worker was spawned for a reviewer role on codex/gemini.
-     * Consumed by the worker-completion handler in runtime-v2.
-     */
-    output_file?: string;
 }
 /** Team configuration (V1 compat) */
 export interface TeamConfig {
@@ -232,33 +217,20 @@ export interface TeamConfig {
     task: string;
     agent_type: string;
     worker_launch_mode: 'interactive' | 'prompt';
-    policy?: TeamTransportPolicy;
-    governance?: TeamGovernance;
     worker_count: number;
     max_workers: number;
     workers: WorkerInfo[];
     created_at: string;
     tmux_session: string;
-    tmux_window_owned?: boolean;
     next_task_id: number;
     leader_cwd?: string;
     team_state_root?: string;
     workspace_mode?: 'single' | 'worktree';
-    lifecycle_profile?: 'default' | 'linked_ralph';
     leader_pane_id: string | null;
     hud_pane_id: string | null;
     resize_hook_name: string | null;
     resize_hook_target: string | null;
     next_worker_index?: number;
-    /**
-     * Per-team resolved routing snapshot (Option E).
-     * Populated at team creation by `buildResolvedRoutingSnapshot()`; read by
-     * `scaleUp`, worker restart, and spawn paths. Immutable for the team's lifetime.
-     */
-    resolved_routing?: Record<CanonicalTeamRole, {
-        primary: RoleAssignment;
-        fallback: RoleAssignment;
-    }>;
 }
 /** Dispatch request kinds */
 export type TeamDispatchRequestKind = 'inbox' | 'mailbox' | 'nudge';
@@ -308,8 +280,6 @@ export interface TeamEvent {
     task_id?: string;
     message_id?: string | null;
     reason?: string;
-    next_action?: TeamLeaderNextAction;
-    message?: string;
     created_at: string;
 }
 /** Mailbox message between workers */

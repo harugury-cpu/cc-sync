@@ -1,7 +1,7 @@
 /**
  * Team Orchestration Engine
  * @module lib/team/orchestrator
- * @version 2.0.0
+ * @version 1.5.1
  *
  * Core engine for PDCA phase-based team orchestration.
  * Selects orchestration patterns, composes teams, and generates
@@ -13,10 +13,10 @@ const { TEAM_STRATEGIES, getTeammateRoles } = require('./strategy');
 const { debugLog } = require('../core/debug');
 
 /**
- * Default orchestration pattern mapping (fallback when config unavailable)
+ * PDCA phase-to-orchestration pattern mapping per level
  * @type {Object<string, Object<string, string>>}
  */
-const DEFAULT_PHASE_PATTERN_MAP = {
+const PHASE_PATTERN_MAP = {
   Dynamic: {
     plan: 'leader',
     design: 'leader',
@@ -35,27 +35,13 @@ const DEFAULT_PHASE_PATTERN_MAP = {
 
 /**
  * Select orchestration pattern for a PDCA phase
- * Config is Single Source of Truth; hardcoded map is fallback.
  * @param {string} phase - Current PDCA phase ('plan'|'design'|'do'|'check'|'act')
  * @param {string} level - Project level ('Starter'|'Dynamic'|'Enterprise')
  * @returns {'leader'|'council'|'swarm'|'pipeline'|'watchdog'|'single'}
  */
 function selectOrchestrationPattern(phase, level) {
-  if (level === 'Starter') return 'single';
-
-  // 1. Try config first (Single Source of Truth)
-  try {
-    const { getConfig } = require('../core');
-    const configPattern = getConfig(`team.orchestrationPatterns.${level}.${phase}`);
-    if (configPattern) return configPattern;
-  } catch (e) {
-    // Config unavailable — use fallback
-  }
-
-  // 2. Fallback to default map
-  const map = DEFAULT_PHASE_PATTERN_MAP[level];
-  if (!map) return 'single';
-  return map[phase] || 'leader';
+  if (!PHASE_PATTERN_MAP[level]) return 'single';
+  return PHASE_PATTERN_MAP[level][phase] || 'leader';
 }
 
 /**
@@ -172,12 +158,11 @@ function generateSpawnTeamCommand(phase, level, feature) {
   if (!team || !team.teammates || team.teammates.length === 0) return null;
 
   const command = {
-    operation: 'TeamCreate',
-    teamName: `bkit-cto-${feature}`,
+    operation: 'spawnTeam',
     teammates: team.teammates.map(t => ({
       name: t.name,
       agentType: t.agentType,
-      prompt: t.task,
+      task: t.task,
       planModeRequired: t.planModeRequired,
     })),
     metadata: {
@@ -189,7 +174,7 @@ function generateSpawnTeamCommand(phase, level, feature) {
     },
   };
 
-  debugLog('Orchestrator', 'TeamCreate command generated', {
+  debugLog('Orchestrator', 'SpawnTeam command generated', {
     phase,
     level,
     feature,
@@ -276,41 +261,11 @@ function shouldRecomposeTeam(currentPhase, nextPhase, level) {
   return currentRoles !== nextRoles;
 }
 
-/**
- * Generate spawn prompt for subagent (fallback when Agent Teams unavailable)
- * @param {Object} agentInfo - Agent information
- * @param {Object} context - Execution context
- * @returns {string} Spawn prompt
- */
-function generateSubagentSpawnPrompt(agentInfo, context) {
-  const { feature, phase, level, pattern, previousOutput } = context;
-  const fileList = agentInfo.files && agentInfo.files.length > 0
-    ? agentInfo.files.map(f => `- ${f}`).join('\n')
-    : '- (no specific file restriction)';
-  const previousContext = previousOutput
-    ? `\n## Previous Phase Output:\n${previousOutput}\n` : '';
-
-  return [
-    `## Task: ${phase} phase — ${agentInfo.description}`,
-    `## Feature: ${feature}`,
-    `## Project Level: ${level}`,
-    `## Orchestration Pattern: ${pattern}`,
-    ``, `## File Ownership:`, fileList, previousContext,
-    `## Constraints:`,
-    `- Follow bkit conventions (English code, Korean docs/)`,
-    `- Do NOT modify files outside your ownership scope`,
-    `- Output must be actionable`,
-    ``, `## Specific Task:`, agentInfo.task,
-  ].join('\n');
-}
-
 module.exports = {
-  PHASE_PATTERN_MAP: DEFAULT_PHASE_PATTERN_MAP,
-  DEFAULT_PHASE_PATTERN_MAP,
+  PHASE_PATTERN_MAP,
   selectOrchestrationPattern,
   composeTeamForPhase,
   generateSpawnTeamCommand,
-  generateSubagentSpawnPrompt,
   createPhaseContext,
   shouldRecomposeTeam,
 };

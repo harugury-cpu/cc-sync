@@ -50,7 +50,6 @@ export {
   formatSessionIdle,
   formatAskUserQuestion,
   formatAgentCall,
-  parseTmuxTail,
 } from "./formatter.js";
 export {
   getCurrentTmuxSession,
@@ -63,7 +62,6 @@ export {
   isEventEnabled,
   getEnabledPlatforms,
   getVerbosity,
-  getTmuxTailLines,
   isEventAllowedByVerbosity,
   shouldIncludeTmuxTail,
 } from "./config.js";
@@ -103,16 +101,15 @@ import {
   getNotificationConfig,
   isEventEnabled,
   getVerbosity,
-  getTmuxTailLines,
   isEventAllowedByVerbosity,
   shouldIncludeTmuxTail,
 } from "./config.js";
-import { formatNotification, parseTmuxTail } from "./formatter.js";
+import { formatNotification } from "./formatter.js";
 import { dispatchNotifications } from "./dispatcher.js";
 import { getCurrentTmuxSession } from "./tmux.js";
 import { getHookConfig, resolveEventTemplate } from "./hook-config.js";
 import { interpolateTemplate } from "./template-engine.js";
-import { basename, join } from "path";
+import { basename } from "path";
 
 /**
  * High-level notification function.
@@ -188,16 +185,9 @@ export async function notify(
         const { capturePaneContent } = await import(
           "../features/rate-limit-wait/tmux-detector.js"
         );
-        const { getNewPaneTail } = await import(
-          "../features/rate-limit-wait/pane-fresh-capture.js"
-        );
-        const tailLines = getTmuxTailLines(config);
-        const rawTail = payload.projectPath
-          ? getNewPaneTail(payload.tmuxPaneId, join(payload.projectPath, ".omc", "state"), tailLines)
-          : capturePaneContent(payload.tmuxPaneId, tailLines);
-        if (rawTail) {
-          payload.tmuxTail = rawTail;
-          payload.maxTailLines = tailLines;
+        const tail = capturePaneContent(payload.tmuxPaneId, 15);
+        if (tail) {
+          payload.tmuxTail = tail;
         }
       } catch {
         // Non-blocking: tmux capture is best-effort

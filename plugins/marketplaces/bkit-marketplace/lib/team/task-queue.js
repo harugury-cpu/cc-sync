@@ -1,7 +1,7 @@
 /**
  * Team Task Queue Module
  * @module lib/team/task-queue
- * @version 2.0.0
+ * @version 1.5.1
  *
  * PDCA phase-based team task management with Task System integration.
  */

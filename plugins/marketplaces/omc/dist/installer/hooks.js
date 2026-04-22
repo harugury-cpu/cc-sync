@@ -11,8 +11,7 @@
 import { join, dirname } from "path";
 import { readFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
-import { homedir } from "os";
-import { getClaudeConfigDir } from '../utils/config-dir.js';
+import { getConfigDir } from '../utils/config-dir.js';
 // =============================================================================
 // TEMPLATE LOADER (loads hook scripts from templates/hooks/)
 // =============================================================================
@@ -62,6 +61,17 @@ export const MIN_NODE_VERSION = 20;
 export function isWindows() {
     return process.platform === "win32";
 }
+/**
+ * Check if Node.js hooks should be used.
+ * @deprecated Always returns true. Bash hooks were removed in v3.9.0.
+ */
+export function shouldUseNodeHooks() {
+    return true;
+}
+/** Get the Claude config directory path (cross-platform) */
+export function getClaudeConfigDir() {
+    return getConfigDir();
+}
 /** Get the hooks directory path */
 export function getHooksDir() {
     return join(getClaudeConfigDir(), "hooks");
@@ -72,27 +82,6 @@ export function getHooksDir() {
  */
 export function getHomeEnvVar() {
     return isWindows() ? "%USERPROFILE%" : "$HOME";
-}
-function normalizePath(value) {
-    return value.replace(/\\/g, '/').replace(/\/+$/, '');
-}
-function isDefaultClaudeConfigDir() {
-    return normalizePath(getClaudeConfigDir()) === normalizePath(join(homedir(), '.claude'));
-}
-function quoteCommandPath(path) {
-    return `"${path.replace(/"/g, '\\"')}"`;
-}
-function buildHookCommand(filename) {
-    if (isWindows()) {
-        if (isDefaultClaudeConfigDir()) {
-            return `node "\${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/${filename}"`;
-        }
-        return `node ${quoteCommandPath(join(getClaudeConfigDir(), 'hooks', filename).replace(/\\/g, '/'))}`;
-    }
-    if (isDefaultClaudeConfigDir()) {
-        return `node "\${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/${filename}"`;
-    }
-    return `node ${quoteCommandPath(join(getClaudeConfigDir(), 'hooks', filename).replace(/\\/g, '/'))}`;
 }
 /**
  * Ultrawork message - injected when ultrawork/ulw keyword detected
@@ -118,7 +107,6 @@ TELL THE USER WHAT AGENTS YOU WILL LEVERAGE NOW TO SATISFY USER'S REQUEST.
 - **TODO**: Track EVERY step. Mark complete IMMEDIATELY after each.
 - **PARALLEL**: Fire independent agent calls simultaneously via Task(run_in_background=true) - NEVER wait sequentially.
 - **BACKGROUND FIRST**: Use Task tool for exploration/document-specialist agents (10+ concurrent if needed).
-- **CONCISE OUTPUTS**: Every Task/Agent result must return ONLY a short execution summary (target: under 100 words) covering what changed, files touched, verification status, and blockers. Do not paste long logs into the main session; put bulky details in files/artifacts and reference them briefly.
 - **VERIFY**: Re-read request after completion. Check ALL requirements met before reporting done.
 - **DELEGATE**: Don't do everything yourself - orchestrate specialized agents for their strengths.
 
@@ -249,57 +237,6 @@ SYNTHESIZE findings before proceeding.
 
 `;
 /**
- * Code review mode message
- * Replaces skills/code-review/SKILL.md after skill deletion
- */
-export const CODE_REVIEW_MESSAGE = `<code-review-mode>
-[CODE REVIEW MODE ACTIVATED]
-Perform a comprehensive code review of the relevant changes or target area. Focus on correctness, maintainability, edge cases, regressions, and test adequacy before recommending changes.
-</code-review-mode>
-
----
-
-`;
-/**
- * Security review mode message
- * Replaces skills/security-review/SKILL.md after skill deletion
- */
-export const SECURITY_REVIEW_MESSAGE = `<security-review-mode>
-[SECURITY REVIEW MODE ACTIVATED]
-Perform a focused security review of the relevant changes or target area. Check trust boundaries, auth/authz, data exposure, input validation, command/file access, secrets handling, and escalation risks before recommending changes.
-</security-review-mode>
-
----
-
-`;
-/**
- * TDD mode message
- * Replaces skills/tdd/SKILL.md after skill deletion
- */
-export const TDD_MESSAGE = `<tdd-mode>
-[TDD MODE ACTIVATED]
-
-THE IRON LAW: NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST.
-Write code before test? DELETE IT. Start over. No exceptions.
-
-RED-GREEN-REFACTOR CYCLE:
-1. RED: Write failing test for NEXT functionality. Run it - MUST FAIL.
-2. GREEN: Write ONLY enough code to pass. No extras. Run test - MUST PASS.
-3. REFACTOR: Clean up. Run tests after EVERY change. Must stay green.
-4. REPEAT with next failing test.
-
-ENFORCEMENT:
-- Code written before test → STOP. Delete code. Write test first.
-- Test passes on first run → Test is wrong. Fix it to fail first.
-- Multiple features in one cycle → STOP. One test, one feature.
-
-Delegate to test-engineer agent for test strategy. The discipline IS the value.
-</tdd-mode>
-
----
-
-`;
-/**
  * Todo continuation prompt
  * Ported from oh-my-opencode's todo-continuation-enforcer
  */
@@ -367,7 +304,11 @@ export const HOOKS_SETTINGS_CONFIG_NODE = {
                 hooks: [
                     {
                         type: "command",
-                        command: buildHookCommand('keyword-detector.mjs'),
+                        // Note: On Windows, %USERPROFILE% is expanded by cmd.exe
+                        // On Unix with node hooks, $HOME is expanded by the shell
+                        command: isWindows()
+                            ? 'node "%USERPROFILE%\\.claude\\hooks\\keyword-detector.mjs"'
+                            : 'node "$HOME/.claude/hooks/keyword-detector.mjs"',
                     },
                 ],
             },
@@ -377,7 +318,9 @@ export const HOOKS_SETTINGS_CONFIG_NODE = {
                 hooks: [
                     {
                         type: "command",
-                        command: buildHookCommand('session-start.mjs'),
+                        command: isWindows()
+                            ? 'node "%USERPROFILE%\\.claude\\hooks\\session-start.mjs"'
+                            : 'node "$HOME/.claude/hooks/session-start.mjs"',
                     },
                 ],
             },
@@ -387,7 +330,9 @@ export const HOOKS_SETTINGS_CONFIG_NODE = {
                 hooks: [
                     {
                         type: "command",
-                        command: buildHookCommand('pre-tool-use.mjs'),
+                        command: isWindows()
+                            ? 'node "%USERPROFILE%\\.claude\\hooks\\pre-tool-use.mjs"'
+                            : 'node "$HOME/.claude/hooks/pre-tool-use.mjs"',
                     },
                 ],
             },
@@ -397,7 +342,9 @@ export const HOOKS_SETTINGS_CONFIG_NODE = {
                 hooks: [
                     {
                         type: "command",
-                        command: buildHookCommand('post-tool-use.mjs'),
+                        command: isWindows()
+                            ? 'node "%USERPROFILE%\\.claude\\hooks\\post-tool-use.mjs"'
+                            : 'node "$HOME/.claude/hooks/post-tool-use.mjs"',
                     },
                 ],
             },
@@ -407,7 +354,9 @@ export const HOOKS_SETTINGS_CONFIG_NODE = {
                 hooks: [
                     {
                         type: "command",
-                        command: buildHookCommand('post-tool-use-failure.mjs'),
+                        command: isWindows()
+                            ? 'node "%USERPROFILE%\\.claude\\hooks\\post-tool-use-failure.mjs"'
+                            : 'node "$HOME/.claude/hooks/post-tool-use-failure.mjs"',
                     },
                 ],
             },
@@ -417,7 +366,9 @@ export const HOOKS_SETTINGS_CONFIG_NODE = {
                 hooks: [
                     {
                         type: "command",
-                        command: buildHookCommand('persistent-mode.mjs'),
+                        command: isWindows()
+                            ? 'node "%USERPROFILE%\\.claude\\hooks\\persistent-mode.mjs"'
+                            : 'node "$HOME/.claude/hooks/persistent-mode.mjs"',
                     },
                 ],
             },
@@ -425,7 +376,9 @@ export const HOOKS_SETTINGS_CONFIG_NODE = {
                 hooks: [
                     {
                         type: "command",
-                        command: buildHookCommand('code-simplifier.mjs'),
+                        command: isWindows()
+                            ? 'node "%USERPROFILE%\\.claude\\hooks\\code-simplifier.mjs"'
+                            : 'node "$HOME/.claude/hooks/code-simplifier.mjs"',
                     },
                 ],
             },
@@ -441,5 +394,31 @@ export const HOOKS_SETTINGS_CONFIG_NODE = {
  */
 export function getHooksSettingsConfig() {
     return HOOKS_SETTINGS_CONFIG_NODE;
+}
+// =============================================================================
+// HOOK SCRIPTS EXPORTS
+// =============================================================================
+/**
+ * Get Node.js hook scripts (Cross-platform)
+ * Returns a record of filename -> content for all Node.js hooks
+ *
+ * @deprecated Hook scripts are no longer installed to ~/.claude/hooks/.
+ * All hooks are delivered via the plugin's hooks/hooks.json + scripts/.
+ * Kept for test compatibility only.
+ */
+export function getHookScripts() {
+    return {
+        "keyword-detector.mjs": loadTemplate("keyword-detector.mjs"),
+        "stop-continuation.mjs": loadTemplate("stop-continuation.mjs"),
+        "persistent-mode.mjs": loadTemplate("persistent-mode.mjs"),
+        "session-start.mjs": loadTemplate("session-start.mjs"),
+        "pre-tool-use.mjs": loadTemplate("pre-tool-use.mjs"),
+        "post-tool-use.mjs": loadTemplate("post-tool-use.mjs"),
+        "post-tool-use-failure.mjs": loadTemplate("post-tool-use-failure.mjs"),
+        "code-simplifier.mjs": loadTemplate("code-simplifier.mjs"),
+        // Shared library modules (in lib/ subdirectory)
+        "lib/stdin.mjs": loadTemplate("lib/stdin.mjs"),
+        "lib/atomic-write.mjs": loadTemplate("lib/atomic-write.mjs"),
+    };
 }
 //# sourceMappingURL=hooks.js.map

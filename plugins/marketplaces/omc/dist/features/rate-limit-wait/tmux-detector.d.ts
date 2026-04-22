@@ -10,8 +10,7 @@
  */
 import type { TmuxPane, PaneAnalysisResult, BlockedPane } from './types.js';
 /**
- * Check if tmux is installed and available.
- * On Windows, a tmux-compatible binary such as psmux may provide tmux.
+ * Check if tmux is installed and available
  */
 export declare function isTmuxAvailable(): boolean;
 /**
@@ -22,18 +21,6 @@ export declare function isInsideTmux(): boolean;
  * List all tmux panes across all sessions
  */
 export declare function listTmuxPanes(): TmuxPane[];
-/**
- * Check whether a tmux pane is alive (not in the dead/exited state).
- *
- * tmux sets #{pane_dead} to "1" once the child process in the pane exits.
- * Capturing content from a dead pane returns stale scrollback and can
- * trigger spurious keyword alerts — callers should skip capture when this
- * returns false.
- *
- * Returns false for dead panes, invalid pane IDs, and when tmux is unavailable.
- * Intentionally synchronous so it can be used in fire-and-forget hook paths.
- */
-export declare function isPaneAlive(paneId: string): boolean;
 /**
  * Capture the content of a specific tmux pane
  *
@@ -46,16 +33,11 @@ export declare function capturePaneContent(paneId: string, lines?: number): stri
  */
 export declare function analyzePaneContent(content: string): PaneAnalysisResult;
 /**
- * Scan all tmux panes for blocked Claude Code sessions.
+ * Scan all tmux panes for blocked Claude Code sessions
  *
- * @param lines    - Number of lines to capture from each pane
- * @param stateDir - When provided, use cursor-tracked capture (getNewPaneTail) so
- *                   repeated daemon polls only surface lines written since the last
- *                   scan. Panes with no new output are skipped, preventing stale
- *                   rate-limit messages from re-alerting after blockers are resolved.
- *                   When omitted, falls back to a plain capturePaneContent call.
+ * @param lines - Number of lines to capture from each pane
  */
-export declare function scanForBlockedPanes(lines?: number, stateDir?: string): BlockedPane[];
+export declare function scanForBlockedPanes(lines?: number): BlockedPane[];
 /**
  * Send resume sequence to a tmux pane
  *
