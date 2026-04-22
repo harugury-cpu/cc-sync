@@ -15,6 +15,58 @@ metadata:
 - 담당자: `한원진 담당`
 - 부서: `디자인부문ㅣ패키지디자인팀`
 - 템플릿 ID: `1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk`
+- 콘텐츠 템플릿 ID: `1rh_2NNwM2CeZxFaZFfgoK3s1RAU2SyzZd794480hrVo`
+- 로컬 디자인 레퍼런스: `/Users/harugury/Downloads/구글챗봇 ppt`
+
+
+## Google Slides 생성 정책
+
+### 기본 선택
+
+제안서·시안·CrossCheck Bot·Google Chat Bot류 자료는 **콘텐츠 템플릿 방식**을 우선 사용한다.
+
+```
+콘텐츠 템플릿 복사 → 필요한 완성형 슬라이드 유지/복제 → 텍스트 교체 → 부족한 페이지만 ccbot_lib/spigen_lib로 추가
+```
+
+완성형 템플릿은 이미 디자인이 잡힌 Google Slides이므로, 새로 그리기보다 **복사 후 텍스트만 교체**하는 것이 1순위다.  
+동적 생성이 필요할 때만 `ccbot_lib.py` 또는 `spigen_lib.py`를 사용한다.
+
+### 콘텐츠 템플릿 1~6번 인벤토리
+
+Google Slides `1rh_2NNwM2CeZxFaZFfgoK3s1RAU2SyzZd794480hrVo` 기준:
+
+| 번호 | objectId 예시 | 용도 | 사용 기준 |
+|-----|---------------|------|----------|
+| 1 | `g9001df85b1_0_0` | 표지 | 제목·부제·담당자·날짜 교체 |
+| 2 | `sl_sec01` | 섹션 구분 | 섹션 번호·섹션명 교체 |
+| 3 | `g3e018b790e1_0_0` | 현행 vs 도입 후 비교 | Before/After 비교 제안 |
+| 4 | `g3e018b790e1_0_197` | 일정·목표·확장 계획 | Roadmap / KPI / Next steps |
+| 5 | `g3e018b790e1_0_73` | 프로세스 & 비용 | Flow + 비용 상세 + Summary |
+| 6 | `sl_qte1` | Quote / closing callout | 핵심 한 문장 / 비전 문구 |
+
+### CrossCheck Bot류 덱 권장 순서
+
+기본 6장 구성:
+
+```
+1. Cover
+2. Section Divider
+3. 현행 vs 도입 후 비교
+4. 일정 · 목표 · 확장 계획
+5. 프로세스 & 비용
+6. Quote / Closing
+```
+
+3장 압축 보고서가 필요하면:
+
+```
+1. 현행 vs 도입 후 비교
+2. 프로세스 & 비용
+3. 일정 · 목표 · 확장 계획
+```
+
+이때는 `ccbot_lib.py`의 `ccbot_compare()`, `ccbot_flow()`, `ccbot_roadmap()`을 사용한다.
 
 
 ## 디자인 시스템
@@ -30,49 +82,118 @@ metadata:
 - 영문/숫자 전용 텍스트 → `Proxima Nova`
 - 혼합 콘텐츠 → `Noto Sans` (한글 우선)
 
-### 테마별 색상 토큰
+### 현재 템플릿 색상 토큰
 
-슬라이드 배경이 **검정(다크)**이냐 **흰색(라이트)**이냐에 따라 텍스트·카드 색상이 달라진다.
+이 스킬은 기존 라이트/웜 혼합 디자인을 사용하지 않는다.  
+모든 신규 생성 슬라이드는 사용자가 만든 Google Slides 템플릿과 같은 **다크 기반**으로 생성한다.
 
-| 토큰 | 다크 테마 (Black 배경) | 라이트 테마 (White 배경) | 웜 테마 (Beige 배경) | 용도 |
-|-----|---------------------|----------------------|--------------------|-----|
-| `SLIDE_BG` | `#000000` | `#FFFFFF` | `#F5F0E8` | 슬라이드 배경 |
-| `TITLE_COLOR` | `#F9FAFB` | `#1A1A1A` | `#1A1A1A` | 제목 텍스트 |
-| `BODY_COLOR` | `#6B7280` | `#4A4A4A` | `#4A4A4A` | 본문·카드 텍스트 |
-| `CARD_BG` | `#0A0A0A` | `#F5F5F5` | `#FFFFFF` | 카드·아이템 배경 |
-| `CARD_BORDER` | `#141414` | `#E5E5E5` | `#E5E5E5` | 카드 테두리 |
-| `ACCENT` | `#FF6B1A` | `#FF6B1A` | `#FF6B1A` | 강조·바·화살표 (테마 불문 동일) |
+| 토큰 | 값 | 용도 |
+|-----|----|------|
+| `BG` | `#000000` | 슬라이드 배경 |
+| `SURFACE` | `#0E0E0E` | 카드·표·단계 박스 |
+| `SURFACE_HI` | `#161616` | 강조 카드 |
+| `BORDER` | `#202020` | 카드 테두리 |
+| `TEXT` | `#F0F0F0` | 제목·주요 본문 |
+| `TEXT_DIM` | `#AAAAAA` | 보조 설명 |
+| `TEXT_FAINT` | `#6E6E6E` | 페이지 번호·푸터·라벨 |
+| `ACCENT` | `#FF6B1A` | 강조선·번호·도입 후·화살표 |
+| `ACCENT_DIM` | `#3D1A05` | 오렌지 틴트 카드 |
 
-**슬라이드 유형별 기본 테마:**
+**출력 원칙:**
 
-| 유형 | 기본 테마 | 이유 |
-|-----|---------|-----|
-| cover | 다크 | Spigen 브랜드 커버 |
-| section-divider | 다크 | 포스터 스타일 |
-| content | 라이트 | 가독성 우선 |
-| statistics / 3-col | 라이트 | 데이터 가독성 |
-| 3col-cards | 라이트 | 카드별 색상 변형 (light·dark·accent) |
-| toc | 웜 | 베이지 배경 + 메타 라벨 |
-| split-cards | 라이트 | 좌측 텍스트 + 우측 카드 스택 |
-| closing | 다크 | 브랜드 마감 |
+| 유형 | 기본 스타일 |
+|-----|------------|
+| cover | 템플릿 복사 후 텍스트 교체 |
+| section-divider | 다크 배경 + 대형 오렌지 번호 |
+| compare | 좌측 어두운 카드 / 중앙 화살표 / 우측 오렌지 틴트 카드 |
+| flow | 6단계 카드 + 비용 영역 |
+| roadmap | 3단계 Phase 카드 + KPI |
+| quote | 다크 배경 + 큰 인용문 |
+| 추가 content | `spigen_lib.py` 다크 컴포넌트 사용 |
 
 ### 색상 비율 원칙 (60-30-10)
 
 | 비율 | 역할 | 적용 토큰 |
 |-----|-----|---------|
-| 60% | 슬라이드 배경 | 다크: `#000000` / 라이트: `#FFFFFF` / 웜: `#F5F0E8` |
-| 30% | 중립 텍스트·카드 | `TITLE_COLOR`, `BODY_COLOR`, `CARD_BG` |
-| 10% | 강조 포인트 | `#FF6B1A` — 상단 바, 번호, 화살표, 배지 |
+| 60% | 슬라이드 배경 | `BG #000000` |
+| 30% | 중립 텍스트·카드 | `SURFACE`, `TEXT`, `TEXT_DIM` |
+| 10% | 강조 포인트 | `ACCENT #FF6B1A` — 번호, 화살표, 현재 지점, 개선 영역 |
 
 > `#FF6B1A`은 한 슬라이드당 **3개 이하** 요소에 사용한다. 과용하면 브랜드 강조 효과가 희석된다.
 
-### 테마 교차 원칙
+### 테마 원칙
 
-동일 테마가 3장 이상 연속되면 시각적 단조로움이 생긴다. 다크↔라이트를 교차 배치한다.
+현재 템플릿은 다크 테마 하나로 통일한다. 단조로움은 배경색 교차가 아니라 아래 요소로 해결한다.
 
+- 카드 밀도 조절
+- 오렌지 틴트 카드 수 제한
+- 섹션 구분 / 비교 / 플로우 / 로드맵 / Quote 레이아웃 교차
+- 푸터와 페이지 라벨 일관 유지
+
+### 의미 구조별 형태 차별화 원칙
+
+구성요소의 **내용 역할이 같으면** 같은 형태와 비율을 반복해도 된다.
+
+예:
+
+```txt
+KPI 4개 → 같은 크기의 KPI 카드
+월별 수치 6개 → 같은 폭의 bar
+Phase 3개 → 같은 Phase 카드
+비교 row 5개 → 같은 표 row
 ```
-cover(dark) → contents(dark) → section-divider(dark) → content(light) → statistics(light) → section-divider(dark) → ...
+
+하지만 구성요소의 **의미 역할이 다르면** 같은 카드 형태를 반복하지 않는다.
+
+예:
+
+```txt
+분석 → 결론
+문제 → 해결
+근거 → 액션
+현황 → 제안
+수치 → 해석
 ```
+
+이런 경우에는 아래처럼 형태를 분리한다.
+
+| 의미 역할 | 권장 형태 | 색상/비율 |
+|----------|----------|----------|
+| 분석·근거 | 표, 그래프, 어두운 surface 카드 | `SURFACE` 중심 |
+| 핵심 수치 | 큰 숫자 카드, metric panel | 숫자만 크게, 오렌지 강조 |
+| 결론·판단 | 독립 callout, 필요 시 100% 오렌지 카드 | `ACCENT #FF6B1A` |
+| 액션·다음 단계 | 단계 카드, roadmap 카드 | 기본은 surface, 필요 시 보조 강조 |
+| 보조 설명 | 작은 캡션 또는 생략 | 과도한 보조문구 금지 |
+
+**금지:** 분석 카드와 결론 카드를 같은 크기·같은 색·같은 밀도로 나란히 배치하지 않는다.  
+**권장:** 분석은 차분하게, 결론은 명확하게 다르게 보이게 한다.
+
+### 100% 오렌지 카드 사용 제한
+
+`ACCENT #FF6B1A`로 꽉 찬 카드는 **모든 페이지에 넣지 않는다.**
+
+이 카드는 "페이지의 결론/요약 카드"가 명확할 때만 사용한다.  
+단순히 `hot`, `accent`, `paid`인 항목은 100% 오렌지가 아니라 보조 강조로 처리한다.
+
+사용 대상:
+
+```txt
+그 페이지에서 가장 중요한 결론
+그 페이지를 요약하는 한 문장
+여러 카드 중 사용자가 명시한 최우선 카드
+```
+
+사용 금지:
+
+```txt
+모든 페이지마다 습관적으로 100% 오렌지 카드를 넣기
+한 페이지에서 KPI 카드 2개 이상을 100% 오렌지로 칠하기
+여러 step을 동시에 100% 오렌지로 칠하기
+단순 유료/중요/강조 항목을 자동으로 100% 오렌지로 칠하기
+분석 카드와 결론 카드를 둘 다 100% 오렌지로 칠하기
+```
+
+두 번째로 중요한 요소는 `ACCENT_DIM`, 오렌지 라인, 오렌지 텍스트만 사용한다.
 
 
 ## 컴포넌트 선택
@@ -83,15 +204,16 @@ cover(dark) → contents(dark) → section-divider(dark) → content(light) → 
 |-----|---------|-----|---------|
 | 표지 / 섹션 구분 | slide-base + section-divider | `slide_base()` / `mk_section_divider()` | dark |
 | 목차 (다크 스타일) | contents | `mk_contents()` | dark |
-| 목차 (베이지, 메타 라벨) | toc | `mk_toc()` | warm |
-| 현재→문제→기대효과 3열 비교 | 3-col | `mk_3col()` | light |
-| 핵심 개념 3가지 카드 | 3col-cards | `mk_3col_cards()` | light |
+| 목차 | toc | `mk_toc()` | dark |
+| 현재→문제→기대효과 3열 비교 | 3-col | `mk_3col()` | dark |
+| 핵심 개념 3가지 카드 | 3col-cards | `mk_3col_cards()` | dark |
 | 프로세스 / 흐름도 | flow | `mk_flow()` | dark |
-| 텍스트 중심 설명 | text-block | `mk_text_block()` | light |
-| 좌우 비교 / 병렬 | split-layout | `mk_split()` | light |
-| 텍스트 + 우측 카드 스택 | split-cards | `mk_split_cards()` | light |
+| 마지막 요약 / 결론→근거 | conclusion-detail | `mk_conclusion_detail()` | dark |
+| 텍스트 중심 설명 | text-block | `mk_text_block()` | dark |
+| 좌우 비교 / 병렬 | split-layout | `mk_split()` | dark |
+| 텍스트 + 우측 카드 스택 | split-cards | `mk_split_cards()` | dark |
 | 임팩트 한 줄 메시지 | quote | `mk_quote()` | dark |
-| 오렌지+테마색 2색 제목 | title-accent | `mk_title_accent()` | light |
+| 오렌지+테마색 2색 제목 | title-accent | `mk_title_accent()` | dark |
 
 
 ## 제작 원칙
@@ -137,10 +259,53 @@ cover (1장) + 내지 3~4장 + closing (1장) = 총 5~6장
 - [ ] 섹션 구분 슬라이드가 포스터처럼 간결한가?
 - [ ] `#FF6B1A`이 한 슬라이드에 3개 이하 요소에만 사용됐는가?
 - [ ] 폰트는 Proxima Nova(영문) / Noto Sans(한글) 두 가지만 사용됐는가?
-- [ ] 동일 테마가 3장 이상 연속 배치되지 않았는가? (다크↔라이트 교차 권장)
-- [ ] 슬라이드 유형에 맞는 기본 테마가 적용됐는가? (cover·section-divider → dark, content·statistics → light)
+- [ ] 모든 슬라이드가 현재 템플릿의 다크 배경·오렌지 강조 체계를 따르는가?
+- [ ] 섹션 구분 / 비교 / 플로우 / 로드맵 / Quote 등 레이아웃 유형이 적절히 교차되는가?
 
 구성을 사용자에게 보여주고 확인받는다. 
+
+
+---
+
+## 생성 후 검증 (필수 — 완료 선언 전 반드시 실행)
+
+슬라이드를 생성한 직후, 사용자에게 "완료"를 보고하기 **전에** 반드시 아래 검증 루프를 실행한다.
+
+### 검증 명령
+
+```bash
+python3 /Users/harugury/.agents/skills/spigen-slides/spigen_verify.py <PRESENTATION_ID>
+```
+
+특정 슬라이드만 검증할 경우:
+
+```bash
+python3 /Users/harugury/.agents/skills/spigen-slides/spigen_verify.py <PRESENTATION_ID> <slide_index>
+```
+
+### 검증 루프
+
+```
+1. 슬라이드 생성 (spigen_lib.py → gws API 실행)
+2. spigen_verify.py 실행
+3. 결과 확인
+   ├─ 모든 체크 PASS → "완료" 보고 가능
+   └─ FAIL / MISS 존재 → spigen_lib.py 수정 → 슬라이드 재생성 → 2번으로 돌아감
+```
+
+### 검증 기준 (template_spec.json)
+
+- 위치(x, y): ±2.5pt 허용
+- 크기(w, h): ±2.5pt 허용
+- 폰트 크기: ±0.6pt 허용
+- 폰트 패밀리: 정확히 일치
+- 감지 컴포넌트: `section_divider`, `flow`, `3col`, `kpi_dashboard`, `quote`, `slide_base`
+
+### 절대 규칙
+
+- `spigen_verify.py` 실행 결과 FAIL/MISS가 하나라도 있으면 **"완료"라고 말하지 않는다.**
+- 수정 후 반드시 재생성 + 재검증한다.
+- SKIP은 데이터 부재로 건너뜀이므로 FAIL로 취급하지 않는다.
 
 
 ---
@@ -150,6 +315,8 @@ cover (1장) + 내지 3~4장 + closing (1장) = 총 5~6장
 | 파일 | 내용 | 호출 시점 |
 |-----|-----|---------|
 | `spigen_lib.py` | 컴포넌트 A~L Python 코드 | 슬라이드 생성 시 `cp` 후 import |
+| `template_spec.json` | 컴포넌트별 위치·크기·폰트 기준값 | 검증 기준 참조 |
+| `spigen_verify.py` | 생성된 슬라이드 자동 검증 스크립트 | 슬라이드 생성 직후 실행 |
 | `spigen_planning.md` | Step 1~2 기획·구성 계획 | 전체 PPT 제작 시작 시 |
 | `spigen_execution.md` | Step 3 API 실행 코드 | 실제 Google Slides 생성 시 |
 | `spigen_design_spec.md` | 슬라이드 유형별 시각 규격 | HTML 디자인 생성 시 |
