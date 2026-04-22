@@ -1,6 +1,6 @@
 ---
 name: dump
-description: Freeform capture mode. Dump anything — conversations, decisions, incidents, wins, thoughts — and routes it all to the right Obsidian vault notes with proper templates, frontmatter, and wikilinks. Triggered by "dump", "기록해줘", "저장해줘", or freeform information the user wants filed. ALSO: automatically activates for ALL user-provided content during a 회고 session. When the user says "회고 시작", "회고하자", "회고 세션", "회고 할게" or similar, treat every subsequent message as content to process through dump — no explicit /dump command needed. Continue in 회고 mode until the user says "마무리", "끝", or triggers wrap-up.
+description: Freeform capture mode. Dump anything — conversations, decisions, incidents, wins, thoughts — and routes it all to the right Obsidian vault notes with proper templates, frontmatter, and wikilinks. Triggered by "dump", "기록해줘", "저장해줘", or freeform information the user wants filed. ALSO: automatically activates for ALL user responses throughout any session whose initial prompt contains "회고를 시작해줘", "회고 대화", "오늘 하루 회고" or similar 회고 schedule openers. In such sessions, every user message is treated as content to process through dump — no explicit /dump command needed.
 ---
 
 # Dump
@@ -23,17 +23,15 @@ All relative paths below resolve from this root.
 /dump <content>
 ```
 
-Triggered when the user wants to capture freeform information — meeting notes, decisions, wins, incidents, thoughts, etc.
+## 회고 세션 자동 모드
 
-## 회고 세션 모드
+세션의 초기 프롬프트(스케줄로 시작된 경우)에 다음 중 하나가 포함되어 있으면 즉시 dump 모드로 전환한다:
 
-사용자가 "회고 시작", "회고하자", "회고 세션", "회고 할게" 등을 말하면:
+- "오늘 하루 회고를 시작해줘"
+- "회고 대화"
+- "회고를 시작해줘"
 
-1. 회고 세션이 시작된 것으로 간주한다.
-2. 이후 사용자가 보내는 **모든 메시지**를 dump 워크플로우로 자동 처리한다.
-3. 명시적인 `/dump` 커맨드 없이도 사용자가 입력하는 내용을 그대로 vault에 분류·저장한다.
-4. 사용자가 "마무리", "끝", "wrap up" 등을 말할 때까지 이 모드를 유지한다.
-5. 회고 세션 종료 시 wrap-up 스킬을 자동으로 실행한다.
+이 경우, 사용자가 보내는 **모든 메시지**를 별도의 `/dump` 호출 없이 자동으로 dump 워크플로우로 처리한다. 세션이 끝나면 wrap-up 스킬로 마무리한다.
 
 ## Workflow
 
