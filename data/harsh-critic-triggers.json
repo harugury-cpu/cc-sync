@@ -166,7 +166,7 @@
       ],
       "context": "이미 수정 지시를 받은 행동을 반복하여 강한 불만(!!!, 욕설)을 유발함",
       "level": "HARD",
-      "hit_count": 426,
+      "hit_count": 429,
       "source": "user_frustration",
       "created_at": "2026-04-09T11:03:21Z"
     },
@@ -220,7 +220,7 @@
       ],
       "context": "사용자: '직접 할 수 있는 것을 못한다고 하지마라. 진행할지는 당연히 물어봐.'",
       "level": "HARD",
-      "hit_count": 4,
+      "hit_count": 5,
       "source": "user_frustration",
       "created_at": "2026-04-16T09:30:00Z"
     }
