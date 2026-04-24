@@ -26,3 +26,8 @@ video/*/node_modules/
 # Temp files
 *.tmp
 /tmp/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
