@@ -1,6 +1,6 @@
 ---
 name: spigen-slides
-description: Spigen 슬라이드에서 섹션 구분자·도표·TOC·카드 등 특정 컴포넌트가 필요할 때 참조. 전체 PPT 제작 기획 → spigen_planning.md | Google Slides 실행 → spigen_execution.md | 디자인 사양 → spigen_design_spec.md | 렌더링 규칙 → spigen_render_rules.md | 컴포넌트 코드 → spigen_lib.py
+description: "PPT 만들어줘 / 피피티 만들어줘 / 장표 만들어줘 / 슬라이드 만들어줘" 등 슬라이드 생성 요청 시 발동. Spigen 슬라이드에서 섹션 구분자·도표·TOC·카드 등 특정 컴포넌트가 필요할 때도 참조. 전체 PPT 제작 기획 → spigen_planning.md | Google Slides 실행 → spigen_execution.md | 디자인 사양 → spigen_design_spec.md | 렌더링 규칙 → spigen_render_rules.md | 컴포넌트 코드 → spigen_lib.py
 license: MIT
 metadata:
   category: productivity

@@ -26,7 +26,7 @@
 cover·closing·toc·section-divider는 카운트에서 제외한다.
 
 ```
-cover (1장, 고정) + 내지 3~4장 + closing (1장, 고정) = 총 5~6장
+cover (1장, 고정) + 내지 3~4장 + closing (선택) = 총 4~6장
 ```
 
 slides-grab의 내러티브 시퀀스를 내지 3~4장에 압축한다:
@@ -37,9 +37,14 @@ slides-grab의 내러티브 시퀀스를 내지 3~4장에 압축한다:
 | **Problem / Context** | 현황·문제·배경 | `mk_3col()` 또는 `mk_split()` | 1장 |
 | **Solution / Proof** | 핵심 근거·메커니즘·데이터 | `mk_flow()` 또는 `mk_3col_cards()` | 1~2장 |
 | **Impact / Detail** | 구체적 결과·수치·기대효과 | `mk_text_block()` 또는 `mk_split_cards()` | 0~1장 |
-| **Close / CTA** | 결론·권고·다음 액션 | closing (고정) | 카운트 제외 |
+| **Close / CTA** | 결론·권고·다음 액션 | closing (선택) | 카운트 제외 |
 
 섹션 구분(section-divider)은 내지 4장 이상일 때만 사용한다. 3장 이하면 생략.
+
+**closing(요약 페이지) 포함 여부:**
+아웃라인 제시 전에 반드시 사용자에게 묻는다: "요약 페이지가 필요한가요?"
+- 필요하다 → closing 포함, Spigen 템플릿 마지막 2페이지 사용
+- 필요 없다 → closing 생략, 내지 마지막 장으로 마무리
 
 ### 1-4. 아웃라인 초안 제시
 
@@ -77,7 +82,7 @@ slides-grab의 내러티브 시퀀스를 내지 3~4장에 압축한다:
 | 3열 항목 | `statistics` 또는 `split-layout` | 3개 병렬 항목 나열 시 |
 | 인용·강조 | `quote` | 임팩트 있는 한 줄 메시지 |
 | 변경이력 | `content` | 변경이력 있을 때만 추가 |
-| 마지막 | `closing` | Spigen 분위기 마감 |
+| 마지막 | `closing` | 요약 필요 시만 추가 (사용자 확인 후) |
 
 ### 컴포넌트 빠른 선택 가이드
 
