@@ -166,7 +166,7 @@
       ],
       "context": "이미 수정 지시를 받은 행동을 반복하여 강한 불만(!!!, 욕설)을 유발함",
       "level": "HARD",
-      "hit_count": 429,
+      "hit_count": 431,
       "source": "user_frustration",
       "created_at": "2026-04-09T11:03:21Z"
     },
@@ -181,7 +181,7 @@
       ],
       "context": "Claude가 동일한 회피 응답(맥락 질문, 경고)을 반복하여 실제 요청에 응답하지 않은 상황",
       "level": "HARD",
-      "hit_count": 141,
+      "hit_count": 282,
       "source": "user_frustration",
       "created_at": "2026-04-13T04:31:59Z"
     },
@@ -223,6 +223,22 @@
       "hit_count": 5,
       "source": "user_frustration",
       "created_at": "2026-04-16T09:30:00Z"
+    },
+    {
+      "id": "auto_1776916738",
+      "description": "사용자가 이미 스케줄링 중이라고 밝혔을 때 스케줄링을 다시 제안하거나 중복으로 설정하지 않는다",
+      "keywords": [
+        "스케쥴",
+        "schedule",
+        "scheduling",
+        "cron",
+        "예약"
+      ],
+      "context": "사용자가 이미 진행 중인 스케줄링 작업을 Claude가 파악하지 못하고 중복 설정을 시도하여 강한 불만 표현",
+      "level": "HARD",
+      "hit_count": 11,
+      "source": "user_frustration",
+      "created_at": "2026-04-23T03:58:58Z"
     }
   ]
 }

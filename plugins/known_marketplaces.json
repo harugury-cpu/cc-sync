@@ -5,7 +5,7 @@
       "repo": "anthropics/claude-plugins-official"
     },
     "installLocation": "/Users/harugury/.claude/plugins/marketplaces/claude-plugins-official",
-    "lastUpdated": "2026-04-22T08:36:13.655Z"
+    "lastUpdated": "2026-04-23T10:53:57.926Z"
   },
   "bkit-marketplace": {
     "source": {
@@ -37,7 +37,7 @@
       "url": "https://github.com/jung-wan-kim/memory-bank.git"
     },
     "installLocation": "/Users/harugury/.claude/plugins/marketplaces/memory-bank-dev",
-    "lastUpdated": "2026-04-22T08:28:04.936Z"
+    "lastUpdated": "2026-04-24T00:01:12.369Z"
   },
   "addy-agent-skills": {
     "source": {
