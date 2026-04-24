@@ -45,7 +45,7 @@ BAD = c255(255, 122, 122)
 BLACK = c255(0, 0, 0)
 
 W, H, M = 720, 405, 36
-CONTENT_TOP = 128
+CONTENT_TOP = 112
 CONTENT_BOTTOM = 381
 
 # 모든 출력은 dark 단일 테마. theme= 인자는 API 호환용으로만 남겨둔다.
@@ -262,7 +262,37 @@ def paragraph_bullets(oid, preset="BULLET_DISC_CIRCLE_SQUARE"):
     }
 
 
+def _type_scale(size):
+    """
+    Remap small / mid typography tiers so the minimum readable size becomes 7pt
+    while preserving relative hierarchy.
+
+    Display titles are kept mostly stable; body / caption / label tiers are
+    proportionally lifted.
+    """
+    if size <= 5.5:
+        return 7
+    if size <= 6:
+        return 7.5
+    if size <= 6.5:
+        return 8
+    if size <= 7:
+        return 7.5
+    if size <= 8:
+        return 9.5
+    if size <= 8.5:
+        return 10
+    if size <= 9:
+        return 10.5
+    if size <= 11:
+        return 12.5
+    if size <= 13:
+        return 14.5
+    return size
+
+
 def txtstyle(oid, color, size, bold=False, ff="Noto Sans"):
+    size = _type_scale(size)
     return {
         "updateTextStyle": {
             "objectId": oid,
@@ -285,6 +315,17 @@ def align(oid, alignment="CENTER"):
             "textRange": {"type": "ALL"},
             "style": {"alignment": alignment},
             "fields": "alignment",
+        }
+    }
+
+
+def bring_to_front(oids):
+    if isinstance(oids, str):
+        oids = [oids]
+    return {
+        "updatePageElementsZOrder": {
+            "pageElementObjectIds": oids,
+            "operation": "BRING_TO_FRONT",
         }
     }
 
@@ -448,6 +489,101 @@ def _center_group_start(card_y, card_h, group_h, min_pad=8):
     return card_y + min_pad
 
 
+def _top_weighted_group_start(card_y, card_h, group_h, top_pad=14, bottom_bias=10):
+    """
+    For larger / hero-style cards:
+      keep top padding smaller than bottom padding.
+    Use when the card should read from the upper area downward.
+    """
+    max_start = card_y + max(0, card_h - group_h - bottom_bias)
+    return min(card_y + top_pad, max_start)
+
+
+def _face_center(x, y, w, h, side):
+    """
+    Return the center point of a card face.
+    side: left | right | top | bottom
+    """
+    if side == "left":
+        return x, y + h / 2
+    if side == "right":
+        return x + w, y + h / 2
+    if side == "top":
+        return x + w / 2, y
+    if side == "bottom":
+        return x + w / 2, y + h
+    return x + w / 2, y + h / 2
+
+
+def _face_pair_between(src, dst):
+    """
+    Pick source/destination faces so both endpoints land on face centers.
+
+    src, dst: (x, y, w, h)
+    Rule:
+      - if horizontal delta dominates, connect left/right face centers
+      - if vertical delta dominates, connect top/bottom face centers
+    """
+    sx, sy, sw, sh = src
+    dx, dy, dw, dh = dst
+    scx, scy = sx + sw / 2, sy + sh / 2
+    dcx, dcy = dx + dw / 2, dy + dh / 2
+    vx, vy = dcx - scx, dcy - scy
+
+    if abs(vx) >= abs(vy):
+        s_face = "right" if vx >= 0 else "left"
+        d_face = "left" if vx >= 0 else "right"
+    else:
+        s_face = "bottom" if vy >= 0 else "top"
+        d_face = "top" if vy >= 0 else "bottom"
+    return _face_center(sx, sy, sw, sh, s_face), _face_center(dx, dy, dw, dh, d_face)
+
+
+def connect_boxes(reqs, sid, oid, src, dst, color=ORANGE, weight=1.0,
+                  start_arrow="NONE", end_arrow="FILL_ARROW", category="STRAIGHT"):
+    (x1, y1), (x2, y2) = _face_pair_between(src, dst)
+    connector(
+        reqs, sid, oid,
+        x1, y1, x2, y2,
+        color=color, weight=weight,
+        start_arrow=start_arrow, end_arrow=end_arrow, category=category,
+    )
+
+
+def orth_connector(reqs, sid, oid, x1, y1, x2, y2, color=ORANGE, weight=1.0,
+                   lead=28, start_arrow="NONE", end_arrow="FILL_ARROW"):
+    """
+    Manual orthogonal connector composed from straight line segments.
+
+    Use when Google Slides native BENT connectors visually detach from the
+    exact face-center start/end points.
+    """
+    if abs(y2 - y1) < 0.5:
+        connector(reqs, sid, oid, x1, y1, x2, y2,
+                  color=color, weight=weight,
+                  start_arrow=start_arrow, end_arrow=end_arrow,
+                  category="STRAIGHT")
+        return
+
+    if x2 >= x1:
+        elbow_x = min(x2 - 12, x1 + lead)
+    else:
+        elbow_x = max(x2 + 12, x1 - lead)
+
+    connector(reqs, sid, f"{oid}_h1", x1, y1, elbow_x, y1,
+              color=color, weight=weight,
+              start_arrow=start_arrow, end_arrow="NONE",
+              category="STRAIGHT")
+    connector(reqs, sid, f"{oid}_v", elbow_x, y1, elbow_x, y2,
+              color=color, weight=weight,
+              start_arrow="NONE", end_arrow="NONE",
+              category="STRAIGHT")
+    connector(reqs, sid, f"{oid}_h2", elbow_x, y2, x2, y2,
+              color=color, weight=weight,
+              start_arrow="NONE", end_arrow=end_arrow,
+              category="STRAIGHT")
+
+
 # ─────────────────────────────────────────────────────────────────────
 # Public components — current template direction
 # ─────────────────────────────────────────────────────────────────────
@@ -517,9 +653,9 @@ def mk_contents(slide_oid, sections, insert_index, reqs):
                   TEXT_DIM, 8, False, "Noto Sans")
 
 
-def mk_3col(sid, cols, reqs, theme="dark"):
+def mk_3col(sid, cols, reqs, theme="dark", align_mode="top_weighted"):
     """Template-style 3-column card grid."""
-    card_w, gap, x0, y0 = 206, 12, M, 128
+    card_w, gap, x0, y0 = 206, 12, M, 116
     visible_cols = cols[:3]
     primary = _primary_index(
         visible_cols,
@@ -549,13 +685,16 @@ def mk_3col(sid, cols, reqs, theme="dark"):
         group_h = label_h + label_gap + title_h
         if items:
             group_h += title_gap + item_h * min(5, len(items)) + body_gap * max(0, min(5, len(items)) - 1)
-        start_y = _center_group_start(y0, 190, group_h, min_pad=outer_pad)
+        if align_mode == "balanced":
+            start_y = _center_group_start(y0, 190, group_h, min_pad=outer_pad)
+        else:
+            start_y = _top_weighted_group_start(y0, 190, group_h, top_pad=16, bottom_bias=16)
         cursor_y = start_y
         _text(reqs, sid, f"{sid}_cl{i}", x + 18, cursor_y, card_w - 36, label_h,
-              str(label).upper(), BLACK if hot else (ORANGE if dim_hot else TEXT_FAINT), 7, True, "Proxima Nova")
+              str(label).upper(), BLACK if hot else (ORANGE if dim_hot else TEXT_FAINT), 7, True, "Proxima Nova", valign=True)
         cursor_y += label_h + label_gap
         _text(reqs, sid, f"{sid}_ct{i}", x + 18, cursor_y, card_w - 36, title_h,
-              title, BLACK if hot else TEXT, 13, True, "Noto Sans")
+              title, BLACK if hot else TEXT, 13, True, "Noto Sans", valign=True)
         cursor_y += title_h + title_gap
         if items:
             line_y = cursor_y
@@ -581,7 +720,7 @@ def mk_3col_cards(sid, cards, reqs, theme="dark"):
     mk_3col(sid, normalized, reqs, theme=theme)
 
 
-def mk_rule_grid(sid, cards, reqs, x=M, y=128, w=None, cols=2, gap_x=12, gap_y=12, card_h=96):
+def mk_rule_grid(sid, cards, reqs, x=M, y=CONTENT_TOP, w=None, cols=2, gap_x=12, gap_y=12, card_h=96):
     """
     Equal-ratio rule/guide cards.
 
@@ -675,7 +814,7 @@ def mk_rule_grid(sid, cards, reqs, x=M, y=128, w=None, cols=2, gap_x=12, gap_y=1
                 reqs, sid, f"{sid}_rulegrid_line_{i}_{j}",
                 xx + 16, cursor_y, card_w - 32, bullet_h, line,
                 BLACK if card.get("primary") else TEXT_DIM,
-                6.5, False, "Noto Sans", valign=True
+                7, False, "Noto Sans", valign=True
             )
             cursor_y += bullet_h + body_gap
 
@@ -759,14 +898,22 @@ def mk_flow_focus(sid, steps, reqs, x=54, y=136, w=612, cols=3):
     cols = len(visible_steps)
     gap_x = 8
     card_w = (w - gap_x * (cols - 1)) / cols
-    max_title_lines = 1
+    max_group_h = 0
     for step in visible_steps:
         if isinstance(step, dict):
             name = step.get("name", step.get("title", ""))
+            svc = step.get("service", step.get("infra", ""))
         else:
             name = step[1] if len(step) > 1 else ""
-        max_title_lines = max(max_title_lines, _estimate_lines(name, card_w))
-    card_h = 96 if max_title_lines >= 2 else 84
+            svc = step[2] if len(step) > 2 else ""
+        title_lines = _estimate_lines(name, card_w - 24, chars_per_line_at_100=8)
+        svc_lines = _estimate_lines(svc, card_w - 24, chars_per_line_at_100=10) if svc else 0
+        num_h = 18
+        title_h = 16 * title_lines
+        svc_h = 14 * svc_lines if svc else 0
+        group_h = num_h + 8 + title_h + (8 + svc_h if svc else 0)
+        max_group_h = max(max_group_h, group_h)
+    card_h = max(96, max_group_h + 28)
     card_h = _fit_height_to_content(y, card_h, min_h=72)
     primary = _primary_index(
         visible_steps,
@@ -790,25 +937,40 @@ def mk_flow_focus(sid, steps, reqs, x=54, y=136, w=612, cols=3):
         hot = i == primary
         dim_hot = marked and not hot
         title_size = 10
-        title_lines = _estimate_lines(name, card_w)
-        title_h = 22 if title_lines >= 2 else 14
-        heights = [10, title_h] + ([10] if svc else [])
-        group_h = _stack_group_height(heights, gap=6)
-        start_y = _center_group_start(yy, card_h, group_h, min_pad=10)
+        title_lines = _estimate_lines(name, card_w - 24, chars_per_line_at_100=8)
+        title_h = 16 * title_lines
+        svc_lines = _estimate_lines(svc, card_w - 24, chars_per_line_at_100=10) if svc else 0
+        svc_h = 14 * svc_lines if svc else 0
+        num_h = 18
+        heights = [num_h, title_h] + ([svc_h] if svc else [])
+        group_h = _stack_group_height(heights, gap=8)
+        start_y = _top_weighted_group_start(yy, card_h, group_h, top_pad=14, bottom_bias=14)
         num_y = start_y
-        title_y = num_y + 16
-        svc_y = title_y + title_h + 6
+        title_y = num_y + num_h + 8
+        svc_y = title_y + title_h + 8
         _rect(reqs, sid, f"{sid}_focus_bg{i}", xx, yy, card_w, card_h,
               ORANGE if hot else (ORANGE_DIM if dim_hot else SURFACE),
               ORANGE if marked else BORDER, 0.5)
-        _text(reqs, sid, f"{sid}_focus_num{i}", xx + 12, num_y, 44, 10,
+        _text(reqs, sid, f"{sid}_focus_num{i}", xx + 12, num_y, 56, num_h,
               f"STEP {num}", BLACK if hot else (ORANGE if dim_hot else TEXT_FAINT),
-              6, True, "JetBrains Mono")
+              7, True, "JetBrains Mono", valign=True)
         _text(reqs, sid, f"{sid}_focus_title{i}", xx + 12, title_y, card_w - 24, title_h,
-              name, BLACK if hot else TEXT, title_size, True, "Noto Sans")
+              name, BLACK if hot else TEXT, title_size, True, "Noto Sans", valign=True)
         if svc:
-            _text(reqs, sid, f"{sid}_focus_svc{i}", xx + 12, svc_y, card_w - 24, 10,
-                  svc, BLACK if hot else TEXT_DIM, 5.5, False, "Noto Sans")
+            _text(reqs, sid, f"{sid}_focus_svc{i}", xx + 12, svc_y, card_w - 24, svc_h,
+                  svc, BLACK if hot else TEXT_DIM, 7, False, "Noto Sans", valign=True)
+        if i < len(visible_steps) - 1:
+            nx = x + (i + 1) * (card_w + gap_x)
+            x1, y1 = _face_center(xx, yy, card_w, card_h, "right")
+            x2, y2 = _face_center(nx, yy, card_w, card_h, "left")
+            connector(
+                reqs, sid, f"{sid}_focus_arrow{i}",
+                x1, y1, x2, y2,
+                color=ORANGE if (marked or i + 1 == primary) else BORDER_HI,
+                weight=1.0,
+                start_arrow="NONE",
+                end_arrow="FILL_ARROW",
+            )
 
 
 def mk_text_block(sid, body_text, reqs, y_start=128, font_size=10, theme="dark"):
@@ -950,7 +1112,7 @@ def mk_kpi_dashboard(sid, kpis, reqs, y=128):
               ORANGE if hot else (ORANGE_DIM if dim_hot else SURFACE),
               ORANGE if marked else BORDER, 0.5)
         _text(reqs, sid, f"{sid}_kpi_label{i}", x + 14, y + 18, card_w - 28, 12,
-              k.get("label", ""), BLACK if hot else (ORANGE if dim_hot else TEXT_FAINT), 6, True, "Noto Sans")
+              k.get("label", ""), BLACK if hot else (ORANGE if dim_hot else TEXT_FAINT), 7, True, "Noto Sans")
         _text(reqs, sid, f"{sid}_kpi_value{i}", x + 14, y + 46, card_w - 28, 40,
               k.get("value", ""), BLACK if hot else TEXT, 26, True, "Proxima Nova")
         _text(reqs, sid, f"{sid}_kpi_sub{i}", x + 14, y + 91, card_w - 28, 20,
@@ -985,9 +1147,9 @@ def mk_bar_chart(sid, bars, reqs, x=M, y=144, w=420, h=150,
               ORANGE if hot else SURFACE_HI, ORANGE if hot else BORDER, 0.3)
         _text(reqs, sid, f"{prefix}_val{i}", bx - 6, by - 17, bw + 12, 12,
               f"{int(val) if val.is_integer() else val:g}{value_suffix}",
-              ORANGE if hot else TEXT_DIM, 6, True, "Proxima Nova", center=True)
+              ORANGE if hot else TEXT_DIM, 7, True, "Proxima Nova", center=True)
         _text(reqs, sid, f"{prefix}_lab{i}", bx - 6, y + h + 8, bw + 12, 12,
-              b.get("label", ""), TEXT_FAINT, 5.5, False, "Noto Sans", center=True)
+              b.get("label", ""), TEXT_FAINT, 7, False, "Noto Sans", center=True)
 
 
 def mk_report_table(sid, rows, reqs, x=M, y=138, w=648):
@@ -1009,7 +1171,7 @@ def mk_report_table(sid, rows, reqs, x=M, y=138, w=648):
     _rect(reqs, sid, f"{sid}_tbl_head_bg", x, y, w, header_h, SURFACE_HI, BORDER_HI, 0.5)
     for i, head in enumerate(headers):
         _text(reqs, sid, f"{sid}_tbl_head{i}", xs[i] + 10, y + 7, ws[i] - 20, 10,
-              head, TEXT_FAINT, 5.5, True, "Noto Sans")
+              head, TEXT_FAINT, 7, True, "Noto Sans", valign=True)
     visible_rows = rows[:5]
     primary = _primary_index(
         visible_rows,
@@ -1031,7 +1193,7 @@ def mk_report_table(sid, rows, reqs, x=M, y=138, w=648):
             color = BLACK if hot else (TEXT if c in (0, 2, 3) else TEXT_DIM)
             bold = c in (0, 3)
             _text(reqs, sid, f"{sid}_tbl_{r}_{c}", xs[c] + 10, ry + 11, ws[c] - 20, 13,
-                  val, color, 7, bold, "Noto Sans")
+                  val, color, 7, bold, "Noto Sans", valign=True)
 
 
 def mk_callout_message(sid, message, reqs, sub="", x=84, y=148, w=552, h=126):
@@ -1103,7 +1265,7 @@ def mk_conclusion_detail(sid, conclusion, details, reqs, eyebrow="SUMMARY", titl
         _rect(reqs, sid, f"{sid}_summary_detail_bg{i}", box_x, y, box_w, box_h,
               SURFACE, BORDER, 0.4)
         _text(reqs, sid, f"{sid}_summary_detail_no{i}", box_x + 16, y + max(10, (box_h - 11) / 2), 24, 11,
-              label, ORANGE, 6.5, True, "JetBrains Mono")
+              label, ORANGE, 7, True, "JetBrains Mono")
         _text(reqs, sid, f"{sid}_summary_detail_text{i}", box_x + 50, y + max(8, (box_h - 20) / 2), box_w - 68, 20,
               text, TEXT, 9, True, "Noto Sans")
 
@@ -1132,12 +1294,12 @@ def mk_metric_bar_summary(sid, metric, bars, reqs,
     # Left metric card
     _rect(reqs, sid, f"{sid}_metric_bg", x, y, metric_w, h, SURFACE, BORDER, 0.5)
     _text(reqs, sid, f"{sid}_metric_label", x + 18, y + 24, metric_w - 36, 12,
-          metric.get("label", "").upper(), TEXT_FAINT, 5.5, True, "Proxima Nova")
+          metric.get("label", "").upper(), TEXT_FAINT, 7, True, "Proxima Nova", valign=True)
     _text(reqs, sid, f"{sid}_metric_value", x + 18, y + 50, metric_w - 36, 48,
-          metric.get("value", ""), ORANGE, 30, True, "Proxima Nova")
+          metric.get("value", ""), ORANGE, 30, True, "Proxima Nova", valign=True)
     if metric.get("caption"):
         _text(reqs, sid, f"{sid}_metric_caption", x + 18, y + 106, metric_w - 36, 14,
-              metric.get("caption", ""), TEXT_DIM, 6.5, False, "Noto Sans")
+              metric.get("caption", ""), TEXT_DIM, 7, False, "Noto Sans", valign=True)
 
     # Right chart panel
     _rect(reqs, sid, f"{sid}_chart_bg", chart_x, y, chart_w, h, SURFACE, BORDER, 0.5)
@@ -1164,9 +1326,9 @@ def mk_metric_bar_summary(sid, metric, bars, reqs,
               bar_color, border_color, 0.4)
         _text(reqs, sid, f"{sid}_metric_bar_val{i}", bx - 4, by - 15, bar_w + 8, 10,
               f"{int(val) if val.is_integer() else val:g}",
-              TEXT if not hot else WHITE, 5.5, True, "Proxima Nova", center=True)
+              TEXT if not hot else WHITE, 7, True, "Proxima Nova", center=True, valign=True)
         _text(reqs, sid, f"{sid}_metric_bar_lab{i}", bx - 4, y + h - 24, bar_w + 8, 10,
-              b.get("label", ""), TEXT_FAINT, 5.5, False, "Noto Sans", center=True)
+              b.get("label", ""), TEXT_FAINT, 7, False, "Noto Sans", center=True, valign=True)
 
 
 def mk_arch_layers(sid, layers, reqs, x=54, y=148, w=612, spine_w=72, gap=20,
@@ -1254,16 +1416,18 @@ def mk_arch_orchestrator(sid, nodes, reqs, eyebrow="", title="", x=54, y=146):
         output_y -= delta
 
     _rect(reqs, sid, f"{sid}_orc_in", x, input_y, 120, 44, SURFACE, BORDER, 0.4)
-    _text(reqs, sid, f"{sid}_orc_in_cap", x, input_y + 12, 120, 10, "입력",
-          TEXT_FAINT, 7, True, "Proxima Nova", center=True)
-    _text(reqs, sid, f"{sid}_orc_in_txt", x, input_y + 25, 120, 12, input_text,
-          TEXT, 8, True, "Noto Sans", center=True)
+    in_group_h = 10 + 2 + 12
+    in_top = _center_group_start(input_y, 44, in_group_h, min_pad=8) - input_y
+    _text(reqs, sid, f"{sid}_orc_in_cap", x, input_y + in_top, 120, 10, "입력",
+          TEXT_FAINT, 7, True, "Proxima Nova", center=True, valign=True)
+    _text(reqs, sid, f"{sid}_orc_in_txt", x, input_y + in_top + 12, 120, 12, input_text,
+          TEXT, 8, True, "Noto Sans", center=True, valign=True)
 
     _rect(reqs, sid, f"{sid}_orc_main", x + 200, main_y, 160, 64, ORANGE_DIM, ORANGE, 0.5)
     _text(reqs, sid, f"{sid}_orc_main_cap", x + 200, main_y + 15, 160, 10, "ORCHESTRATOR",
-          ORANGE, 7, True, "Proxima Nova", center=True)
+          ORANGE, 7, True, "Proxima Nova", center=True, valign=True)
     _text(reqs, sid, f"{sid}_orc_main_txt", x + 200, main_y + 31, 160, 16, main_text,
-          TEXT, 13, True, "Noto Sans", center=True)
+          TEXT, 13, True, "Noto Sans", center=True, valign=True)
 
     for i, item in enumerate(right_nodes[:3]):
         yy = right0_y + i * 54
@@ -1271,22 +1435,37 @@ def mk_arch_orchestrator(sid, nodes, reqs, eyebrow="", title="", x=54, y=146):
         _rect(reqs, sid, f"{sid}_orc_rbox{i}", x + 428, yy, 184, 36,
               SURFACE, ORANGE if accent else BORDER, 0.4)
         _text(reqs, sid, f"{sid}_orc_rtxt{i}", x + 444, yy + 12, 152, 12,
-              item.get("label", ""), TEXT, 8.5, True, "Noto Sans")
+              item.get("label", ""), TEXT, 7.5, True, "Noto Sans", valign=True)
 
     _rect(reqs, sid, f"{sid}_orc_engine", x + 200, engine_y, 160, 40, SURFACE, BORDER, 0.4)
     _text(reqs, sid, f"{sid}_orc_engine_txt", x + 200, engine_y + 14, 160, 12, engine_text,
-          TEXT, 9, True, "Noto Sans", center=True)
+          TEXT, 9, True, "Noto Sans", center=True, valign=True)
 
     _rect(reqs, sid, f"{sid}_orc_out", x + 428, output_y, 184, 36, SURFACE, BORDER, 0.4)
     _text(reqs, sid, f"{sid}_orc_out_txt", x + 444, output_y + 12, 152, 12, output_text,
-          TEXT, 8.5, True, "Noto Sans")
+          TEXT, 7.5, True, "Noto Sans", valign=True)
 
-    connector(reqs, sid, f"{sid}_orc_c0", x + 120, input_y + 22, x + 200, main_y + 32, color=BORDER_HI, weight=1.0)
-    connector(reqs, sid, f"{sid}_orc_c1", x + 360, main_y + 32, x + 428, right0_y + 18, color=BORDER_HI, weight=1.0)
-    connector(reqs, sid, f"{sid}_orc_c2", x + 360, main_y + 32, x + 428, right0_y + 72, color=ORANGE, weight=1.0)
-    connector(reqs, sid, f"{sid}_orc_c3", x + 360, main_y + 32, x + 428, right0_y + 126, color=BORDER_HI, weight=1.0)
-    connector(reqs, sid, f"{sid}_orc_c4", x + 280, main_y + 64, x + 280, engine_y, color=BORDER_HI, weight=1.0)
-    connector(reqs, sid, f"{sid}_orc_c5", x + 360, engine_y + 20, x + 428, output_y + 18, color=ORANGE, weight=1.0)
+    in_rect = (x, input_y, 120, 44)
+    main_rect = (x + 200, main_y, 160, 64)
+    r0_rect = (x + 428, right0_y, 184, 36)
+    r1_rect = (x + 428, right0_y + 54, 184, 36)
+    r2_rect = (x + 428, right0_y + 108, 184, 36)
+    eng_rect = (x + 200, engine_y, 160, 40)
+    out_rect = (x + 428, output_y, 184, 36)
+
+    main_rx, main_ry = _face_center(*main_rect, "right")
+    r0_lx, r0_ly = _face_center(*r0_rect, "left")
+    r1_lx, r1_ly = _face_center(*r1_rect, "left")
+    r2_lx, r2_ly = _face_center(*r2_rect, "left")
+    eng_rx, eng_ry = _face_center(*eng_rect, "right")
+    out_lx, out_ly = _face_center(*out_rect, "left")
+
+    connect_boxes(reqs, sid, f"{sid}_orc_c0", in_rect, main_rect, color=BORDER_HI, weight=1.0)
+    orth_connector(reqs, sid, f"{sid}_orc_c1", main_rx, main_ry, r0_lx, r0_ly, color=BORDER_HI, weight=1.0)
+    orth_connector(reqs, sid, f"{sid}_orc_c2", main_rx, main_ry, r1_lx, r1_ly, color=ORANGE, weight=1.0)
+    orth_connector(reqs, sid, f"{sid}_orc_c3", main_rx, main_ry, r2_lx, r2_ly, color=BORDER_HI, weight=1.0)
+    connect_boxes(reqs, sid, f"{sid}_orc_c4", main_rect, eng_rect, color=BORDER_HI, weight=1.0)
+    orth_connector(reqs, sid, f"{sid}_orc_c5", eng_rx, eng_ry, out_lx, out_ly, color=ORANGE, weight=1.0)
 
 
 def mk_decision_tree(sid, nodes, reqs, eyebrow="", title="", x=54, y=170):
@@ -1373,11 +1552,11 @@ def mk_swimlane_mapping(sid, rows, reqs, eyebrow="", title="", x=54, y=148):
     _rect(reqs, sid, f"{sid}_map_mid_lane", mid_x, y, mid_w, total_h, SURFACE_HI, BORDER, 0.4)
     _rect(reqs, sid, f"{sid}_map_right_lane", right_x, y, right_w, total_h, SURFACE, BORDER, 0.4)
     _text(reqs, sid, f"{sid}_map_head_left", x + 18, y + 16, 100, 10, "실행 모듈",
-          ORANGE, 7, True, "Proxima Nova")
+          ORANGE, 7, True, "Proxima Nova", valign=True)
     _text(reqs, sid, f"{sid}_map_head_mid", mid_x + 16, y + 16, mid_w - 32, 10, "관계",
-          TEXT_FAINT, 7, True, "Proxima Nova", center=True)
+          TEXT_FAINT, 7, True, "Proxima Nova", center=True, valign=True)
     _text(reqs, sid, f"{sid}_map_head_right", right_x + 18, y + 16, 100, 10, "설정 / 데이터",
-          ORANGE, 7, True, "Proxima Nova")
+          ORANGE, 7, True, "Proxima Nova", valign=True)
     base_y = y + 40
     for i, row in enumerate(visible):
         yy = base_y + i * (row_h + row_gap)
@@ -1387,14 +1566,8 @@ def mk_swimlane_mapping(sid, rows, reqs, eyebrow="", title="", x=54, y=148):
             _divider(reqs, sid, f"{sid}_map_sep_m{i}", mid_x + 14, yy + row_h + 4, mid_w - 28)
             _divider(reqs, sid, f"{sid}_map_sep_r{i}", right_x + 14, yy + row_h + 4, right_w - 28)
         _text(reqs, sid, f"{sid}_map_left{i}", x + 18, yy + 8, left_w - 36, 16,
-              row.get("left", ""), TEXT, 13, True, "Noto Sans")
+              row.get("left", ""), TEXT, 13, True, "Noto Sans", valign=True)
         _text(reqs, sid, f"{sid}_map_mid{i}", mid_x + 16, yy + 10, mid_w - 32, 12,
-              row.get("middle", ""), ORANGE if accent else TEXT_DIM, 7, accent, "Noto Sans", center=True)
+              row.get("middle", ""), ORANGE if accent else TEXT_DIM, 7, accent, "Noto Sans", center=True, valign=True)
         _text(reqs, sid, f"{sid}_map_right{i}", right_x + 18, yy + 8, right_w - 36, 16,
-              row.get("right", ""), TEXT, 13, True, "Noto Sans")
-        connector(reqs, sid, f"{sid}_map_link_l{i}", x + left_w, yy + row_h / 2,
-                  mid_x, yy + row_h / 2, color=ORANGE if accent else BORDER_HI,
-                  weight=0.9, start_arrow="NONE", end_arrow="NONE")
-        connector(reqs, sid, f"{sid}_map_link_r{i}", mid_x + mid_w, yy + row_h / 2,
-                  right_x, yy + row_h / 2, color=ORANGE if accent else BORDER_HI,
-                  weight=0.9, start_arrow="NONE", end_arrow="NONE")
+              row.get("right", ""), TEXT, 13, True, "Noto Sans", valign=True)

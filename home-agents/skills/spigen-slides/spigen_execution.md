@@ -152,6 +152,12 @@ cp ~/.agents/skills/spigen-slides/spigen_lib.py /tmp/spigen_lib.py
 
 **상수**: `BG`, `SURFACE`, `BORDER`, `ORANGE` (#FF6B1A), `TEXT`, `TEXT_DIM`, `TEXT_FAINT`
 
+폰트 최소값:
+
+```txt
+모든 생성 텍스트는 7pt 이상으로 clamp 한다.
+```
+
 선 사용 원칙:
 
 ```txt
@@ -203,6 +209,57 @@ y + height <= 405
 ```txt
 card component = bullet 제거
 bullet 필요 = wide text block 에서만 native paragraph bullets 우선
+```
+
+최신 실행 원칙:
+
+```txt
+단순 font floor 적용으로 끝내지 않는다.
+작은 / 중간 텍스트 계층은 type scale remap 으로 같이 조정한다.
+```
+
+현재 기준:
+
+```txt
+5.5 → 7
+6.0 → 7.5
+6.5 → 8
+7.0 → 7.5
+8.0 → 9.5
+8.5 → 10
+9.0 → 10.5
+11.0 → 12.5
+13.0 → 14.5
+```
+
+flow 카드 실행 규칙:
+
+```txt
+step label / title / service 가 multiline 이 되면
+카드 높이와 내부 간격을 같이 다시 계산한다.
+텍스트만 커지고 카드 높이가 그대로인 상태로 납품하지 않는다.
+```
+
+structure 페이지 실행 규칙:
+
+```txt
+native BENT connector 를 기본값으로 쓰지 않는다.
+필요 시 manual orthogonal routing 또는 connector 최소화 방향을 사용한다.
+모든 관계를 선으로 설명하려 하지 않는다.
+```
+
+mapping 페이지 실행 규칙:
+
+```txt
+divider / 기준선 / bar 는 카드 내부에만 존재해야 한다.
+카드 밖 gutter 영역에 남아 있으면 FAIL 이다.
+```
+
+강조 row / 강조 card 실행 규칙:
+
+```txt
+오렌지 보더 / 오렌지 라인이 있는 강조 요소는
+반드시 BRING_TO_FRONT 로 일반 요소보다 위에 와야 한다.
 ```
 
 > 현재 `spigen_lib.py`는 사용자가 만든 콘텐츠 템플릿 기준으로 교체됐다.  

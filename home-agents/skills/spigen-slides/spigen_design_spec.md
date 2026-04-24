@@ -81,6 +81,12 @@
 | `BODY` | 7~10 | Regular | 본문·설명 |
 | `CAPTION` | 4~7 | Regular/Bold | 단계 번호·푸터·라벨 |
 
+실행 규칙:
+
+```txt
+생성 시 실제 적용 font size는 7pt 미만으로 내려가지 않는다.
+```
+
 ### 3.2 폰트 패밀리
 
 | 폰트 | 용도 |
@@ -97,6 +103,30 @@
 - 검정 배경 위 긴 문장을 오렌지 계열로 표기 금지
 - 보조 설명을 `ACCENT` 색상으로 표기 금지
 - `ACCENT_DIM`을 텍스트 색으로 사용 금지
+
+### 3.4 최신 타입 스케일 규칙
+
+현재 스킬은 단순 minimum floor 가 아니라 **type scale remap** 을 사용한다.
+
+| 입력 크기 | 출력 크기 |
+|----------|----------|
+| 5.5 | 7 |
+| 6.0 | 7.5 |
+| 6.5 | 8 |
+| 7.0 | 7.5 |
+| 8.0 | 9.5 |
+| 8.5 | 10 |
+| 9.0 | 10.5 |
+| 11.0 | 12.5 |
+| 13.0 | 14.5 |
+
+원칙:
+
+```txt
+최소값만 강제로 올려서 계층 비율을 깨지 않는다.
+작은 / 중간 텍스트 계층을 같이 재매핑한다.
+큰 디스플레이 타이틀은 과도하게 키우지 않는다.
+```
 
 ---
 
@@ -220,6 +250,35 @@ bullet centerY = first-line text area centerY
 - 카드 계열에서는 plain text stack 사용
 - bullet semantics 가 꼭 필요한 넓은 본문 영역에서만 native paragraph bullets 사용
 
+### 4.7 최신 spacing hierarchy
+
+슬라이드 전체:
+
+```txt
+outer margin > block gap > card gap > body line gap
+```
+
+카드 내부:
+
+```txt
+outer padding > title/body gap > body/body gap
+```
+
+대형 카드(대표 카드 / 구조 다이어그램 메인 노드)는
+균등 여백이 아니라 아래 기준을 우선 적용한다.
+
+```txt
+top-weighted:
+top padding < bottom padding
+```
+
+반복형 작은 카드(rule grid / compact info card)는:
+
+```txt
+balanced:
+top padding ≈ bottom padding
+```
+
 ---
 
 ## 5. 컴포넌트 카탈로그
@@ -256,6 +315,68 @@ bullet centerY = first-line text area centerY
 | 근거 → 액션 | 근거는 data/table, 액션은 roadmap/step card |
 | 수치 → 해석 | 수치는 metric/chart, 해석은 짧은 callout |
 | 현황 → 제안 | 현황은 muted card, 제안은 accent card |
+
+### 5.2 최신 컴포넌트 규칙
+
+#### Flow card
+
+`mk_flow_focus()` 는 아래를 자동 계산해야 한다.
+
+```txt
+- step label 줄수 / 높이
+- title 줄수 / 높이
+- service 줄수 / 높이
+- max group height
+- card height
+- 내부 상하 여백
+```
+
+금지:
+
+```txt
+폰트가 커졌는데 카드 높이와 내부 간격을 그대로 두는 것
+step label 이 2줄로 접히는데 1줄 높이 박스를 유지하는 것
+```
+
+#### Structure diagram
+
+구조 페이지는 diagram only 이지만, 관계선을 과도하게 남발하지 않는다.
+
+```txt
+배치 / 그룹핑 / 근접성으로 구조를 먼저 읽히게 한다.
+선은 핵심 흐름만 제한적으로 사용한다.
+```
+
+Google Slides native connector 관련:
+
+```txt
+native BENT connector 는 정밀 제어가 약하므로 기본값으로 채택하지 않는다.
+필요 시 manual orthogonal routing 또는 connector 최소화 전략을 사용한다.
+```
+
+#### Mapping page
+
+mapping page 의 divider / bar / 기준선은:
+
+```txt
+카드 내부에만 존재해야 한다.
+카드 밖 gutter 영역에 의미 있는 선 / 바를 두지 않는다.
+```
+
+#### Emphasis z-order
+
+강조 row / 강조 card / 오렌지 보더가 있는 surface 는:
+
+```txt
+같은 페이지의 일반 카드보다 항상 위에 있어야 한다.
+```
+
+적용 이유:
+
+```txt
+accent border / accent line 이 다른 row 경계선에 가려지면 안 된다.
+보더는 끊김 없이 보여야 한다.
+```
 
 ### 5.2 완성형 슬라이드 유형 (1~6)
 
