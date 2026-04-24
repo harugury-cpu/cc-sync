@@ -1,6 +1,6 @@
 ---
 name: spigen-slides
-description: Spigen 슬라이드에서 섹션 구분자·도표·TOC·카드 등 특정 컴포넌트가 필요할 때 참조. 전체 PPT 제작 기획 → spigen_planning.md | Google Slides 실행 → spigen_execution.md | 디자인 사양 → spigen_design_spec.md | 컴포넌트 코드 → spigen_lib.py
+description: "PPT 만들어줘 / 피피티 만들어줘 / 장표 만들어줘 / 슬라이드 만들어줘" 등 슬라이드 생성 요청 시 발동. Spigen 슬라이드에서 섹션 구분자·도표·TOC·카드 등 특정 컴포넌트가 필요할 때도 참조. 전체 PPT 제작 기획 → spigen_planning.md | Google Slides 실행 → spigen_execution.md | 디자인 사양 → spigen_design_spec.md | 렌더링 규칙 → spigen_render_rules.md | 컴포넌트 코드 → spigen_lib.py
 license: MIT
 metadata:
   category: productivity
@@ -15,132 +15,94 @@ metadata:
 - 담당자: `한원진 담당`
 - 부서: `디자인부문ㅣ패키지디자인팀`
 - 템플릿 ID: `1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk`
+- 콘텐츠 템플릿 ID: `1rh_2NNwM2CeZxFaZFfgoK3s1RAU2SyzZd794480hrVo`
+- 로컬 디자인 레퍼런스: `/Users/harugury/Downloads/구글챗봇 ppt`
 
 
-## 디자인 시스템
+## Google Slides 생성 정책
 
-| 항목 | 값 |
-|-----|---|
-| 포인트 컬러 | `#FF6B1A` (RGB: 1.0 / 0.420 / 0.102) |
-| 영어 폰트 | `Proxima Nova` |
-| 한글 폰트 | `Noto Sans` |
+### 기본 선택
 
-**폰트 적용 규칙**:
-- 한글이 포함된 텍스트 → `Noto Sans`
-- 영문/숫자 전용 텍스트 → `Proxima Nova`
-- 혼합 콘텐츠 → `Noto Sans` (한글 우선)
-
-### 테마별 색상 토큰
-
-슬라이드 배경이 **검정(다크)**이냐 **흰색(라이트)**이냐에 따라 텍스트·카드 색상이 달라진다.
-
-| 토큰 | 다크 테마 (Black 배경) | 라이트 테마 (White 배경) | 웜 테마 (Beige 배경) | 용도 |
-|-----|---------------------|----------------------|--------------------|-----|
-| `SLIDE_BG` | `#000000` | `#FFFFFF` | `#F5F0E8` | 슬라이드 배경 |
-| `TITLE_COLOR` | `#F9FAFB` | `#1A1A1A` | `#1A1A1A` | 제목 텍스트 |
-| `BODY_COLOR` | `#6B7280` | `#4A4A4A` | `#4A4A4A` | 본문·카드 텍스트 |
-| `CARD_BG` | `#0A0A0A` | `#F5F5F5` | `#FFFFFF` | 카드·아이템 배경 |
-| `CARD_BORDER` | `#141414` | `#E5E5E5` | `#E5E5E5` | 카드 테두리 |
-| `ACCENT` | `#FF6B1A` | `#FF6B1A` | `#FF6B1A` | 강조·바·화살표 (테마 불문 동일) |
-
-**슬라이드 유형별 기본 테마:**
-
-| 유형 | 기본 테마 | 이유 |
-|-----|---------|-----|
-| cover | 다크 | Spigen 브랜드 커버 |
-| section-divider | 다크 | 포스터 스타일 |
-| content | 라이트 | 가독성 우선 |
-| statistics / 3-col | 라이트 | 데이터 가독성 |
-| 3col-cards | 라이트 | 카드별 색상 변형 (light·dark·accent) |
-| toc | 웜 | 베이지 배경 + 메타 라벨 |
-| split-cards | 라이트 | 좌측 텍스트 + 우측 카드 스택 |
-| closing | 다크 | 브랜드 마감 |
-
-### 색상 비율 원칙 (60-30-10)
-
-| 비율 | 역할 | 적용 토큰 |
-|-----|-----|---------|
-| 60% | 슬라이드 배경 | 다크: `#000000` / 라이트: `#FFFFFF` / 웜: `#F5F0E8` |
-| 30% | 중립 텍스트·카드 | `TITLE_COLOR`, `BODY_COLOR`, `CARD_BG` |
-| 10% | 강조 포인트 | `#FF6B1A` — 상단 바, 번호, 화살표, 배지 |
-
-> `#FF6B1A`은 한 슬라이드당 **3개 이하** 요소에 사용한다. 과용하면 브랜드 강조 효과가 희석된다.
-
-### 테마 교차 원칙
-
-동일 테마가 3장 이상 연속되면 시각적 단조로움이 생긴다. 다크↔라이트를 교차 배치한다.
+제안서·시안·CrossCheck Bot·Google Chat Bot류 자료는 **콘텐츠 템플릿 방식**을 우선 사용한다.
 
 ```
-cover(dark) → contents(dark) → section-divider(dark) → content(light) → statistics(light) → section-divider(dark) → ...
+콘텐츠 템플릿 복사 → 필요한 완성형 슬라이드 유지/복제 → 텍스트 교체 → 부족한 페이지만 ccbot_lib/spigen_lib로 추가
 ```
 
+완성형 템플릿은 이미 디자인이 잡힌 Google Slides이므로, 새로 그리기보다 **복사 후 텍스트만 교체**하는 것이 1순위다.
+동적 생성이 필요할 때만 `ccbot_lib.py` 또는 `spigen_lib.py`를 사용한다.
 
-## 컴포넌트 선택
+### 화면 밖 요소 금지
 
-### 컴포넌트 빠른 선택 가이드
+모든 shape / text box / card / chart / diagram node는 720 × 405pt 캔버스 안에 있어야 한다.
 
-| 상황 | 컴포넌트 | 함수 | 기본 테마 |
-|-----|---------|-----|---------|
-| 표지 / 섹션 구분 | slide-base + section-divider | `slide_base()` / `mk_section_divider()` | dark |
-| 목차 (다크 스타일) | contents | `mk_contents()` | dark |
-| 목차 (베이지, 메타 라벨) | toc | `mk_toc()` | warm |
-| 현재→문제→기대효과 3열 비교 | 3-col | `mk_3col()` | light |
-| 핵심 개념 3가지 카드 | 3col-cards | `mk_3col_cards()` | light |
-| 프로세스 / 흐름도 | flow | `mk_flow()` | dark |
-| 텍스트 중심 설명 | text-block | `mk_text_block()` | light |
-| 좌우 비교 / 병렬 | split-layout | `mk_split()` | light |
-| 텍스트 + 우측 카드 스택 | split-cards | `mk_split_cards()` | light |
-| 임팩트 한 줄 메시지 | quote | `mk_quote()` | dark |
-| 오렌지+테마색 2색 제목 | title-accent | `mk_title_accent()` | light |
+실행 규칙:
 
-
-## 제작 원칙
-
-### ⚠️ 내지 장수 제한 (최우선 규칙)
-
-**내지(본문) 슬라이드는 3~4장이 최대다.** cover·closing·toc·section-divider는 카운트에서 제외.
-
-```
-cover (1장) + 내지 3~4장 + closing (1장) = 총 5~6장
+```txt
+1. 먼저 콘텐츠 영역 높이를 계산한다.
+2. 현재 페이지에 안 들어가면 컴포넌트 높이/간격을 줄인다.
+3. 그래도 안 들어가면 더 가벼운 레이아웃으로 바꾸거나 페이지를 분리한다.
+4. 화면 밖으로 나간 상태를 그대로 납품하지 않는다.
 ```
 
-내용이 많아도 이 한도를 넘지 않는다. 넘으면 아래 압축 기술을 적용한다.
+우선순위: 폰트 축소보다 → 카드 높이 재조정 → 간격 재분배 → 행 수 축소 → 페이지 분리
 
-### 내용 압축 기술
+### 콘텐츠 템플릿 1~6번 인벤토리
 
-내지를 줄일 때 아래 순서로 압축한다:
+Google Slides `1rh_2NNwM2CeZxFaZFfgoK3s1RAU2SyzZd794480hrVo` 기준:
 
-1. **합칠 수 있는 슬라이드 통합**: 유사한 포인트 2장 → 1장 (3col 또는 split으로)
-2. **나열 → 카드**: 4개 이상 나열 항목 → `mk_3col()` 3개로 핵심만 추려서 표현
-3. **프로세스 압축**: 단계가 많은 흐름 → `mk_flow()` 1장으로 처리
-4. **문장 → 키워드**: 본문 설명을 완전한 문장이 아닌 명사구·동사구로 교체
-5. **섹션 구분 제거**: 내지 3장 이하면 section-divider 불필요 → 생략
+| 번호 | objectId 예시 | 용도 | 사용 기준 |
+|-----|---------------|------|----------|
+| 1 | `g9001df85b1_0_0` | 표지 | 제목·부제·담당자·날짜 교체 |
+| 2 | `sl_sec01` | 섹션 구분 | 섹션 번호·섹션명 교체 |
+| 3 | `g3e018b790e1_0_0` | 현행 vs 도입 후 비교 | Before/After 비교 제안 |
+| 4 | `g3e018b790e1_0_197` | 일정·목표·확장 계획 | Roadmap / KPI / Next steps |
+| 5 | `g3e018b790e1_0_73` | 프로세스 & 비용 | Flow + 비용 상세 + Summary |
+| 6 | `sl_qte1` | Quote / closing callout | 핵심 한 문장 / 비전 문구 |
 
-### 카피 작성 원칙 (slides-grab 기준)
+### CrossCheck Bot류 덱 권장 순서
 
-- **슬라이드당 하나의 메시지**: 경쟁하는 블록 금지
-- **3~5초 스캔 가능하게**: 본문 글머리는 3줄 이내
-- **제목은 주장형 문장**: "성능 비교" → "성능이 30% 향상됐다"
-- **섹션 구분 슬라이드**: 번호 + 짧은 제목만, 설명 없음
-- **여백 우선**: 공간을 채우려 하지 말 것
-- **AI 클리셰 금지**: 혁신적인·원활한·극대화·시너지·솔루션·최적화·스마트한·강력한·게임체인저 사용 금지 → 구체적 수치·사실로 대체
+기본 6장 구성:
+
+```
+1. Cover
+2. Section Divider
+3. 현행 vs 도입 후 비교
+4. 일정 · 목표 · 확장 계획
+5. 프로세스 & 비용
+6. Quote / Closing
+```
+
+3장 압축 보고서가 필요하면:
+
+```
+1. 현행 vs 도입 후 비교
+2. 프로세스 & 비용
+3. 일정 · 목표 · 확장 계획
+```
+
+이때는 `ccbot_lib.py`의 `ccbot_compare()`, `ccbot_flow()`, `ccbot_roadmap()`을 사용한다.
 
 
-### 리뷰 기준 (slides-grab Review Litmus)
+## 생성 후 검증 (필수)
 
-구성 확정 전 아래 항목을 점검한다:
+슬라이드 생성 직후, 완료 보고 전에 반드시 실행한다.
 
-- [ ] **내지가 3~4장 이내인가?** (cover·closing·toc·section-divider 제외한 본문 슬라이드 수)
-- [ ] 각 슬라이드의 핵심 포인트를 3~5초 안에 파악할 수 있는가?
-- [ ] 각 슬라이드에 경쟁하는 블록 없이 하나의 지배적인 메시지가 있는가?
-- [ ] 제거해도 의미가 손상되지 않는 카피·배지·콜아웃이 없는가?
-- [ ] 섹션 구분 슬라이드가 포스터처럼 간결한가?
-- [ ] `#FF6B1A`이 한 슬라이드에 3개 이하 요소에만 사용됐는가?
-- [ ] 폰트는 Proxima Nova(영문) / Noto Sans(한글) 두 가지만 사용됐는가?
-- [ ] 동일 테마가 3장 이상 연속 배치되지 않았는가? (다크↔라이트 교차 권장)
-- [ ] 슬라이드 유형에 맞는 기본 테마가 적용됐는가? (cover·section-divider → dark, content·statistics → light)
+```bash
+python3 /Users/harugury/.agents/skills/spigen-slides/spigen_verify.py <PRESENTATION_ID>
+```
 
-구성을 사용자에게 보여주고 확인받는다. 
+검증 루프:
+
+```
+1. 슬라이드 생성
+2. spigen_verify.py 실행
+3. 결과 확인
+   ├─ 모든 체크 PASS → "완료" 보고 가능
+   └─ FAIL / MISS 존재 → spigen_lib.py 수정 → 재생성 → 2번으로
+```
+
+`FAIL/MISS`가 하나라도 있으면 **"완료"라고 말하지 않는다.**
 
 
 ---
@@ -149,7 +111,10 @@ cover (1장) + 내지 3~4장 + closing (1장) = 총 5~6장
 
 | 파일 | 내용 | 호출 시점 |
 |-----|-----|---------|
-| `spigen_lib.py` | 컴포넌트 A~L Python 코드 | 슬라이드 생성 시 `cp` 후 import |
+| `spigen_render_rules.md` | 색상·타이포·강조·컴포넌트 선택 hard rule | 슬라이드 생성 시 참조 |
+| `spigen_lib.py` | 컴포넌트 Python 코드 | 슬라이드 생성 시 `cp` 후 import |
+| `template_spec.json` | 컴포넌트별 위치·크기·폰트 기준값 | 검증 기준 참조 |
+| `spigen_verify.py` | 생성된 슬라이드 자동 검증 스크립트 | 슬라이드 생성 직후 실행 |
 | `spigen_planning.md` | Step 1~2 기획·구성 계획 | 전체 PPT 제작 시작 시 |
 | `spigen_execution.md` | Step 3 API 실행 코드 | 실제 Google Slides 생성 시 |
 | `spigen_design_spec.md` | 슬라이드 유형별 시각 규격 | HTML 디자인 생성 시 |

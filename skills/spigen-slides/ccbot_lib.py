@@ -2,7 +2,16 @@
 ccbot_lib.py — CrossCheck Bot 슬라이드 컴포넌트
 캔버스 : 720 × 405pt  (16:9)
 참조   : https://docs.google.com/presentation/d/1rh_2NNwM2CeZxFaZFfgoK3s1RAU2SyzZd794480hrVo/edit
-         slide 6 = PAGE 01, slide 7 = PAGE 03, slide 8 = PAGE 02
+         slide 1 = Cover
+         slide 2 = Section Divider
+         slide 3 = PAGE 01 · 현행 vs 크로스체크봇
+         slide 4 = PAGE 03 · 일정 · 목표 · 확장 계획
+         slide 5 = PAGE 02 · 프로세스 & 비용
+         slide 6 = Quote / Closing
+
+권장:
+    완성형 덱은 템플릿 복사 + 텍스트 교체를 우선한다.
+    이 라이브러리는 3장 압축 보고서나 추가 동적 슬라이드 생성이 필요할 때 사용한다.
 """
 import sys
 sys.path.insert(0, '/tmp')

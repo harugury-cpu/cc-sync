@@ -128,11 +128,11 @@ gws slides presentations batchUpdate \
 
 ### 3-5. 내용 슬라이드 생성 — 디자인 컴포넌트 라이브러리
 
-> **코드 라이브러리**: `~/.claude/skills/spigen-slides/spigen_lib.py`
+> **코드 라이브러리**: `~/.agents/skills/spigen-slides/spigen_lib.py`
 > 스크립트 작성 시 이 파일을 `/tmp/spigen_lib.py`로 복사 후 import 한다.
 
 ```bash
-cp ~/.claude/skills/spigen-slides/spigen_lib.py /tmp/spigen_lib.py
+cp ~/.agents/skills/spigen-slides/spigen_lib.py /tmp/spigen_lib.py
 ```
 
 #### 공통 헬퍼 (spigen_lib.py)
@@ -142,28 +142,157 @@ cp ~/.claude/skills/spigen-slides/spigen_lib.py /tmp/spigen_lib.py
 | `pt(v)` | pt → EMU 변환 (v × 12700) |
 | `c255(r, g, b)` | RGB 0-255 → 0.0-1.0 변환 |
 | `shape(oid, page, stype, x, y, w, h)` | 도형 생성 요청 |
+| `line(oid, page, x1, y1, x2, y2, category)` | native line / connector 생성 |
 | `fill(oid, fg, bg, wt)` | 도형 채우기·테두리 |
+| `linestyle(oid, color, weight, start_arrow, end_arrow)` | line 색·두께·화살표 |
+| `connector(reqs, sid, oid, x1, y1, x2, y2, ...)` | 의미 있는 흐름/관계선 생성 |
+| `_divider(reqs, sid, oid, x, y, w, h, color)` | 정적 divider를 thin rectangle으로 생성 |
 | `txtstyle(oid, color, size, bold)` | 텍스트 스타일 |
 | `txt(oid, text)` | 텍스트 삽입 |
 
-**상수**: `ORANGE` (#FF6900), `WHITE`, `BLACK`, `THEMES` (dark/light/warm)
+**상수**: `BG`, `SURFACE`, `BORDER`, `ORANGE` (#FF6B1A), `TEXT`, `TEXT_DIM`, `TEXT_FAINT`
+
+폰트 최소값:
+
+```txt
+모든 생성 텍스트는 7pt 이상으로 clamp 한다.
+```
+
+선 사용 원칙:
+
+```txt
+connector / 화살표 / 분기선 → line() / connector()
+표 구분선 / 카드 separator / 장식 바 → _divider() 또는 thin rectangle
+```
+
+overflow / bounds 검증 원칙:
+
+```txt
+모든 요소는 720 × 405pt 캔버스 안에 있어야 한다.
+내용 컴포넌트는 가급적 y≈128 ~ 381 영역 안에서 끝나야 한다.
+```
+
+검증 식:
+
+```txt
+x >= 0
+y >= 0
+x + width <= 720
+y + height <= 405
+```
+
+실패 시 대응:
+
+```txt
+1. 카드/블록 높이 재계산
+2. 내부 여백 재분배
+3. 행 수 / 카드 수 재조정
+4. 레이아웃 분리 또는 페이지 분할
+```
+
+카드 내부 여백 원칙:
+
+```txt
+텍스트 그룹 높이보다 상·하 padding 이 더 작아지는 tight 상태에서는
+텍스트 묶음을 카드 중앙 기준으로 다시 배치한다.
+```
+
+불렛 검증 원칙:
+
+```txt
+불렛은 첫 줄 텍스트와 같은 세로 행에 정렬되어야 한다.
+불렛과 텍스트가 어긋난 상태로 납품하지 않는다.
+```
+
+선택 원칙:
+
+```txt
+card component = bullet 제거
+bullet 필요 = wide text block 에서만 native paragraph bullets 우선
+```
+
+최신 실행 원칙:
+
+```txt
+단순 font floor 적용으로 끝내지 않는다.
+작은 / 중간 텍스트 계층은 type scale remap 으로 같이 조정한다.
+```
+
+현재 기준:
+
+```txt
+5.5 → 7
+6.0 → 7.5
+6.5 → 8
+7.0 → 7.5
+8.0 → 9.5
+8.5 → 10
+9.0 → 10.5
+11.0 → 12.5
+13.0 → 14.5
+```
+
+flow 카드 실행 규칙:
+
+```txt
+step label / title / service 가 multiline 이 되면
+카드 높이와 내부 간격을 같이 다시 계산한다.
+텍스트만 커지고 카드 높이가 그대로인 상태로 납품하지 않는다.
+```
+
+structure 페이지 실행 규칙:
+
+```txt
+native BENT connector 를 기본값으로 쓰지 않는다.
+필요 시 manual orthogonal routing 또는 connector 최소화 방향을 사용한다.
+모든 관계를 선으로 설명하려 하지 않는다.
+```
+
+mapping 페이지 실행 규칙:
+
+```txt
+divider / 기준선 / bar 는 카드 내부에만 존재해야 한다.
+카드 밖 gutter 영역에 남아 있으면 FAIL 이다.
+```
+
+강조 row / 강조 card 실행 규칙:
+
+```txt
+오렌지 보더 / 오렌지 라인이 있는 강조 요소는
+반드시 BRING_TO_FRONT 로 일반 요소보다 위에 와야 한다.
+```
+
+> 현재 `spigen_lib.py`는 사용자가 만든 콘텐츠 템플릿 기준으로 교체됐다.  
+> `theme` 인자는 구버전 스니펫 호환용으로만 남아 있으며, 신규 출력은 모두 다크 템플릿 스타일이다.
 
 #### 컴포넌트 참조
 
 | 컴포넌트 | 함수 시그니처 | 기본 테마 |
 |---------|------------|---------|
 | A: slide-base | `slide_base(slide_oid, title_text, insert_index, reqs, theme='dark')` | dark |
-| B: 3-col | `mk_3col(sid, cols, reqs, theme='light')` | light |
+| B: 3-col | `mk_3col(sid, cols, reqs, theme='dark')` | dark |
 | C: flow | `mk_flow(sid, steps, cost_map, reqs, theme='dark')` | dark |
-| D: text-block | `mk_text_block(sid, body_text, reqs, y_start=83, font_size=8.5, theme='light')` | light |
+| C-2: flow-focus | `mk_flow_focus(sid, steps, reqs, x=54, y=136, w=612, cols=3)` | dark |
+| D: text-block | `mk_text_block(sid, body_text, reqs, y_start=128, font_size=10, theme='dark')` | dark |
 | E: section-divider | `mk_section_divider(slide_oid, num, title, insert_index, reqs)` | dark 고정 |
 | F: contents | `mk_contents(slide_oid, sections, insert_index, reqs)` | dark 고정 |
 | G: quote | `mk_quote(slide_oid, quote_text, insert_index, reqs, attribution="")` | dark 고정 |
-| H: split-layout | `mk_split(sid, left, right, reqs, theme='light')` | light |
-| I: title-accent | `mk_title_accent(sid, accent_part, rest_part, reqs, theme='light', subtitle="", y=44, font_size=22)` | light |
-| J: 3col-cards | `mk_3col_cards(sid, cards, reqs, theme='light')` | light |
-| K: toc | `mk_toc(slide_oid, items, insert_index, reqs, category="", year="", title_accent="Table Of", title_rest=" Content", description="")` | warm 고정 |
-| L: split-cards | `mk_split_cards(sid, text_lines, cards, reqs, theme='light')` | light |
+| H: split-layout | `mk_split(sid, left, right, reqs, theme='dark')` | dark |
+| I: title-accent | `mk_title_accent(sid, accent_part, rest_part, reqs, theme='dark', subtitle="", y=54, font_size=22)` | dark |
+| J: 3col-cards | `mk_3col_cards(sid, cards, reqs, theme='dark')` | dark |
+| K: toc | `mk_toc(slide_oid, items, insert_index, reqs, category="", year="", title_accent="Table Of", title_rest=" Content", description="")` | dark |
+| L: split-cards | `mk_split_cards(sid, text_lines, cards, reqs, theme='dark')` | dark |
+| M: arch-layers | `mk_arch_layers(sid, layers, reqs, eyebrow="", title="")` | dark |
+| N: decision-tree | `mk_decision_tree(sid, nodes, reqs, eyebrow="", title="")` | dark |
+| O: swimlane-mapping | `mk_swimlane_mapping(sid, rows, reqs, eyebrow="", title="")` | dark |
+| P: arch-orchestrator | `mk_arch_orchestrator(sid, nodes, reqs, eyebrow="", title="", x=54, y=146)` | dark |
+| Q: conclusion-detail | `mk_conclusion_detail(sid, conclusion, details, reqs, eyebrow="SUMMARY", title="요약")` | dark |
+| R: rule-grid | `mk_rule_grid(sid, cards, reqs, x=M, y=CONTENT_TOP, w=None, cols=2, gap_x=12, gap_y=12, card_h=96)` | dark |
+| S: kpi-dashboard | `mk_kpi_dashboard(sid, kpis, reqs, y=128)` | dark |
+| T: bar-chart | `mk_bar_chart(sid, bars, reqs, x=M, y=144, w=420, h=150)` | dark |
+| U: report-table | `mk_report_table(sid, rows, reqs, x=M, y=138, w=648)` | dark |
+| V: callout-message | `mk_callout_message(sid, message, reqs, sub="", x=84, y=148, w=552, h=126)` | dark |
+| W: metric-bar-summary | `mk_metric_bar_summary(sid, metric, bars, reqs)` | dark |
 
 #### 사용 패턴
 
@@ -176,12 +305,12 @@ reqs = []
 mk_section_divider("sec_01", "01", "디자인 원칙", 1, reqs)
 
 # 슬라이드 2: 3열 비교
-slide_base("cont_01", "현황 분석", 2, reqs, theme='light')
+slide_base("cont_01", "현황 분석", 2, reqs, page_label="PAGE 01 · 현황 분석", page_no=1, total=3)
 mk_3col("cont_01", [
-    {"label": "현재",   "items": ["항목 A", "항목 B"]},
-    {"label": "문제점", "items": ["문제 X", "문제 Y"]},
-    {"label": "도입 시 기대효과", "items": ["효과 P", "효과 Q"]},
-], reqs, theme='light')
+    {"label": "현재", "title": "현재", "items": ["항목 A", "항목 B"]},
+    {"label": "개선", "title": "도입 후", "items": ["효과 P", "효과 Q"], "hot": True},
+    {"label": "기대효과", "title": "결과", "items": ["지표 개선", "비용 관리"]},
+], reqs)
 
 import json
 with open('/tmp/content_req.json', 'w') as f:
@@ -216,6 +345,29 @@ URL: https://docs.google.com/presentation/d/$NEW_ID/edit
 ## 템플릿 방식 (제안서·시안)
 
 콘텐츠 템플릿 ID: `1rh_2NNwM2CeZxFaZFfgoK3s1RAU2SyzZd794480hrVo`
+
+### 템플릿 우선 원칙
+
+제안서·시안·CrossCheck Bot·Google Chat Bot류 자료는 이 콘텐츠 템플릿을 먼저 복사한다.  
+템플릿 1~6번은 완성형 디자인이므로, 가능하면 **슬라이드 복사/유지 + 텍스트 교체**로 만든다.
+
+| 템플릿 번호 | 용도 | 대표 objectId |
+|------------|------|---------------|
+| 1 | Cover | `g9001df85b1_0_0` |
+| 2 | Section Divider | `sl_sec01` |
+| 3 | 현행 vs 도입 후 비교 | `g3e018b790e1_0_0` |
+| 4 | 일정 · 목표 · 확장 계획 | `g3e018b790e1_0_197` |
+| 5 | 프로세스 & 비용 | `g3e018b790e1_0_73` |
+| 6 | Quote / Closing | `sl_qte1` |
+
+권장 구성:
+
+```
+Cover → Section Divider → 현행/도입 후 비교 → 일정/목표/확장 계획 → 프로세스/비용 → Quote
+```
+
+3장 압축 보고서가 필요하면 3~5번 유형만 사용한다.  
+완전히 새로운 내용 슬라이드가 필요할 때만 `ccbot_lib.py` 또는 `spigen_lib.py`로 추가 생성한다.
 
 ### B-1. 날짜 확인
 
@@ -273,6 +425,10 @@ gws slides presentations batchUpdate \
 
 남은 슬라이드의 placeholder를 실제 내용으로 교체:
 
+> **중요**: `deleteText → insertText`만 실행하면 텍스트 스타일이 `themeColor: DARK1` 등으로 초기화되어
+> 검정 배경에서 내용이 안 보일 수 있다. 텍스트 교체 후에는 반드시 `updateTextStyle`을 함께 실행하거나,
+> 최종 검증에서 `foregroundColor`가 `TEXT`, `TEXT_DIM`, `ORANGE` 계열인지 확인한다.
+
 ```python
 # /tmp/fill_template.py
 import json
@@ -298,6 +454,18 @@ for slide_idx, boxes in FILL.items():
                 reqs.append({"deleteText": {"objectId": oid, "textRange": {"type": "ALL"}}})
             if text:
                 reqs.append({"insertText": {"objectId": oid, "insertionIndex": 0, "text": text}})
+                # 필요 시 바로 뒤에 updateTextStyle 추가:
+                # reqs.append({
+                #   "updateTextStyle": {
+                #     "objectId": oid,
+                #     "textRange": {"type": "ALL"},
+                #     "style": {
+                #       "foregroundColor": {"opaqueColor": {"rgbColor": {"red": 0.94, "green": 0.94, "blue": 0.94}}},
+                #       "fontFamily": "Noto Sans"
+                #     },
+                #     "fields": "foregroundColor,fontFamily"
+                #   }
+                # })
 
 with open('/tmp/fill_req.json', 'w') as f:
     json.dump({"requests": reqs}, f)
@@ -325,6 +493,7 @@ lib 방식 3-7과 동일.
 
 - 템플릿 복사 실패 → `gws auth status` 확인
 - `deleteText` 400 오류 → 빈 박스에 deleteText 적용 금지. `existing_text`가 있는 박스에만 실행
+- 텍스트가 사라진 것처럼 보임 → 내용은 있으나 색상이 `DARK1`로 초기화됐을 수 있음. `updateTextStyle`로 `TEXT/TEXT_DIM/ORANGE` 재적용
 - `createShape` 실패 → objectId 중복 확인 (슬라이드마다 고유 prefix 사용). **objectId는 최소 5자 이상** 필요 (예: `slide_01`, `sec_01` — `s01` 같은 4자 이하는 API 거부)
 - Google Drive 인증 오류 → `gws auth status` 확인 후 재인증
 
@@ -332,7 +501,152 @@ lib 방식 3-7과 동일.
 
 - 새 프레젠테이션 URL이 출력됐다.
 - 표지는 Spigen 템플릿 그대로 (제목/부서/담당자/날짜/버전 정확히 입력됨).
-- 내용 슬라이드는 유형별 테마가 올바르게 적용됐다: cover/section-divider → 검정 배경(`dark`), content/statistics → 흰 배경(`light`), 오렌지 상단 바는 테마 불문 공통.
+- 단순 생성 플로우 페이지에 하단 오렌지 강조 박스를 추가하지 않았다.
+- 동작흐름 + 운영 금액 + 비용표처럼 복합 구조가 필요하면 콘텐츠 템플릿 5페이지 구조를 참고했다.
+- 텍스트 교체 후 검정 배경 위 검정 텍스트가 없는지 확인했다.
+- 배경색과 동일한 선/박스/테두리가 생성되지 않았는지 확인했다.
+- 검정 배경 위 긴 문장/보조 텍스트가 진한 화색으로 들어가지 않았는지 확인했다.
+- 각 내용 슬라이드에 보는 사람 기준의 의미 강조점이 1개 있다.
+- 강조 기준이 결론, 상호작용 포인트, 금액, 입력, 출력, 판단 기준 중 하나로 설명 가능하다.
+- 내용 슬라이드는 현재 템플릿과 같은 검정 배경(`dark`) + 오렌지 강조 + 어두운 카드 구조를 따른다.
 - 마지막 슬라이드는 Spigen 템플릿 인덱스 1, 2 (마지막 2페이지).
 - 모든 텍스트·도형이 구글 슬라이드에서 직접 수정 가능하다.
 - Step 2에서 계획한 모든 슬라이드에 내용이 입력됐다.
+
+---
+
+## ccbot 방식 (CrossCheck Bot 전용)
+
+> 캔버스: **720 × 405pt** (Google Slides 16:9)  
+> 참조 템플릿: `1rh_2NNwM2CeZxFaZFfgoK3s1RAU2SyzZd794480hrVo`  
+> 색상: BG `#000000` / DARK `#0E0E0E` / ORNG `#FF6B1A` / WHT `#FFFFFF`
+
+CrossCheck Bot 보고서 전용. 항상 다크 배경 + 오렌지 강조, 3슬라이드 압축 구성.
+
+기본은 위 "템플릿 방식"으로 1~6번 완성형 슬라이드를 복사/수정한다.  
+`ccbot 방식`은 아래 경우에만 사용한다:
+
+- 3장짜리 압축 보고서가 필요할 때
+- 템플릿 슬라이드 복제가 아니라 API로 네이티브 도형을 새로 생성해야 할 때
+- 3~5번 완성형 디자인과 같은 톤으로 추가 슬라이드를 만들어야 할 때
+
+### C-1. 라이브러리 준비
+
+```bash
+cp ~/.agents/skills/spigen-slides/ccbot_lib.py /tmp/ccbot_lib.py
+cp ~/.agents/skills/spigen-slides/spigen_lib.py /tmp/spigen_lib.py
+```
+
+### C-2. 함수 시그니처
+
+| 컴포넌트 | 함수 | 설명 |
+|---------|------|------|
+| 현황 비교 | `ccbot_compare(sid, rows, callout, insert_index, reqs)` | 현행 vs 도입 후 비교표 (좌=취소선, 우=오렌지) |
+| 프로세스 & 비용 | `ccbot_flow(sid, steps, table_rows, summary, insert_index, reqs)` | STEP 카드 + 비용 테이블 + callout 박스 |
+| 로드맵 | `ccbot_roadmap(sid, phases, schedule, kpi, insert_index, reqs)` | Phase 카드 + SCHEDULE + KPI 박스 |
+
+#### 데이터 형식
+
+```python
+# ccbot_compare
+rows = [
+    {"item": "인력 투입", "before": "크로스체크 2인", "after": "봇 자동 대조"},
+    ...  # 최대 5행 권장 (ROW_Y0=230, ROW_H=80, ROW_GAP=9)
+]
+callout = "기존 2인 육안 대조를 1인 + 봇으로 전환, 건당 약 45초"
+
+# ccbot_flow
+steps = [
+    {"num": "01", "name": "이미지 업로드", "service": "Google Chat API",
+     "desc": "라벨 이미지 업로드", "cost": "무료", "paid": False},
+    ...  # 6단계 고정 (CW=206, 6×(206+12)=1296, 마진 포함 1440 내)
+]
+table_rows = [("인프라", "과금 기준", "사용량", "월 비용"), ...]  # 첫 행=헤더
+summary = {
+    "label":    "장당 발생 비용",
+    "price":    "≈ ₩133",
+    "subtitle": "월 75장 기준 · 월 ₩10,000 이하",
+    "note":     "배포시에만 발생 비용 별도",
+}
+
+# ccbot_roadmap
+phases = [
+    {"label":     "Phase 1 · 개발",
+     "period":    "~ 2026. 08",
+     "title":     "봇 개발 완료",
+     "bullets":   ["9개 항목 자동 대조 로직 개발", ...],  # 최대 4개
+     "current":   True,
+     "note":      "← 현재 지점",
+     "note_body": "개발 기간 동안 월 최대 5만 원 발생 가능"},
+    ...  # 3 phases 권장 (PW=245, 3×(245+12)=771, 마진 포함 915 내)
+]
+schedule = [{"num": "1", "title": "봇 개발 완료", "when": "~ 8월"}, ...]  # 4행 권장
+kpi = {
+    "label": "파일럿 목표 · 연말 리뷰 지표",
+    "text":  "OCR 정확도 95% 이상 · 월 실사용 비용 정확 산출",
+}
+```
+
+### C-3. 사용 패턴
+
+```python
+import sys, json, subprocess
+sys.path.insert(0, '/tmp')
+from spigen_lib import *
+from ccbot_lib import *
+
+TMPL_ID = "1rh_2NNwM2CeZxFaZFfgoK3s1RAU2SyzZd794480hrVo"
+TITLE   = "CrossCheck Bot 보고서"
+
+raw = subprocess.run(
+    ["gws", "drive", "files", "copy",
+     "--params", f'{{"fileId":"{TMPL_ID}"}}',
+     "--json", f'{{"name":"{TITLE}"}}'],
+    capture_output=True, text=True
+).stdout
+NEW_ID = json.loads(raw)["id"]
+print(f"복사된 ID: {NEW_ID}")
+
+reqs = []
+ccbot_compare("s01_cmp", rows, callout, 1, reqs)
+ccbot_flow("s02_flow", steps, table_rows, summary, 2, reqs)
+ccbot_roadmap("s03_road", phases, schedule, kpi, 3, reqs)
+
+with open('/tmp/ccbot_req.json', 'w', encoding='utf-8') as f:
+    json.dump({"requests": reqs}, f, ensure_ascii=False)
+```
+
+```bash
+gws slides presentations batchUpdate \
+  --params "{\"presentationId\":\"$NEW_ID\"}" \
+  --json "$(cat /tmp/ccbot_req.json)" 2>/dev/null | \
+  python3 -c "import json,sys; d=json.load(sys.stdin); print('완료:', len(d.get('replies',[])), '항목')"
+echo "URL: https://docs.google.com/presentation/d/$NEW_ID/edit"
+```
+
+### C-4. 설계 규칙
+
+| 규칙 | 상세 |
+|-----|------|
+| 투명 배경 | `propertyState: "NOT_RENDERED"` — 알파 0이 아님 |
+| 반투명 오렌지 테두리 | `alpha=0.549` (원·날짜 배지) |
+| 10% 오렌지 틴트 카드 | `_fill(oid, ORNG, 0.1)` (유료 STEP, Phase current, callout) |
+| 취소선 텍스트 | `_style(oid, WHT, 16.5, strike=True)` |
+| `"›"` 화살표 | 별도 TEXT_BOX, `_ghost()` 적용 + `_center()` |
+
+### C-5. 커스텀 마스터 템플릿 사용 시 (중요)
+
+기본 Google 테마가 아닌 커스텀 마스터(예: 참조 템플릿 `1rh_2NNwM2CeZxFaZFfgoK3s1RAU2SyzZd794480hrVo`)를 복사해 사용할 때는  
+`predefinedLayout: "BLANK"`가 지원되지 않을 수 있다. 이 경우 기존 슬라이드의 `layoutObjectId`를 가져와  
+`layout_id` 파라미터로 전달한다.
+
+```python
+prs = gws_get(NEW_ID)
+slides = prs['slides']
+layout_id = slides[1]['slideProperties'].get('layoutObjectId')  # 기존 콘텐츠 슬라이드에서 추출
+
+ccbot_compare("s01_cmp", rows, callout, 1, reqs, page_no=1, total=2, layout_id=layout_id)
+ccbot_flow("s02_flow", steps, table_rows, summary, 2, reqs, page_no=2, total=2, layout_id=layout_id)
+```
+
+> API 주의: 읽을 때는 `slideProperties.layoutObjectId`, 생성할 때는 `createSlide.slideLayoutReference.layoutId` (다른 필드명)

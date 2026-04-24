@@ -26,7 +26,7 @@
 cover·closing·toc·section-divider는 카운트에서 제외한다.
 
 ```
-cover (1장, 고정) + 내지 3~4장 + closing (1장, 고정) = 총 5~6장
+cover (1장, 고정) + 내지 3~4장 + closing (선택) = 총 4~6장
 ```
 
 slides-grab의 내러티브 시퀀스를 내지 3~4장에 압축한다:
@@ -37,9 +37,14 @@ slides-grab의 내러티브 시퀀스를 내지 3~4장에 압축한다:
 | **Problem / Context** | 현황·문제·배경 | `mk_3col()` 또는 `mk_split()` | 1장 |
 | **Solution / Proof** | 핵심 근거·메커니즘·데이터 | `mk_flow()` 또는 `mk_3col_cards()` | 1~2장 |
 | **Impact / Detail** | 구체적 결과·수치·기대효과 | `mk_text_block()` 또는 `mk_split_cards()` | 0~1장 |
-| **Close / CTA** | 결론·권고·다음 액션 | closing (고정) | 카운트 제외 |
+| **Close / CTA** | 결론·권고·다음 액션 | closing (선택) | 카운트 제외 |
 
 섹션 구분(section-divider)은 내지 4장 이상일 때만 사용한다. 3장 이하면 생략.
+
+**closing(요약 페이지) 포함 여부:**
+아웃라인 제시 전에 반드시 사용자에게 묻는다: "요약 페이지가 필요한가요?"
+- 필요하다 → closing 포함, Spigen 템플릿 마지막 2페이지 사용
+- 필요 없다 → closing 생략, 내지 마지막 장으로 마무리
 
 ### 1-4. 아웃라인 초안 제시
 
@@ -77,23 +82,23 @@ slides-grab의 내러티브 시퀀스를 내지 3~4장에 압축한다:
 | 3열 항목 | `statistics` 또는 `split-layout` | 3개 병렬 항목 나열 시 |
 | 인용·강조 | `quote` | 임팩트 있는 한 줄 메시지 |
 | 변경이력 | `content` | 변경이력 있을 때만 추가 |
-| 마지막 | `closing` | Spigen 분위기 마감 |
+| 마지막 | `closing` | 요약 필요 시만 추가 (사용자 확인 후) |
 
 ### 컴포넌트 빠른 선택 가이드
 
 | 상황 | 컴포넌트 | 함수 | 기본 테마 |
 |-----|---------|-----|---------|
 | 표지 / 섹션 구분 | slide-base + section-divider | `slide_base()` / `mk_section_divider()` | dark |
-| 목차 (다크 스타일) | contents | `mk_contents()` | dark |
-| 목차 (베이지, 메타 라벨) | toc | `mk_toc()` | warm |
-| 현재→문제→기대효과 3열 비교 | 3-col | `mk_3col()` | light |
-| 핵심 개념 3가지 카드 | 3col-cards | `mk_3col_cards()` | light |
+| 목차 | contents | `mk_contents()` | dark |
+| 목차 (TOC 스타일) | toc | `mk_toc()` | dark |
+| 현재→문제→기대효과 3열 비교 | 3-col | `mk_3col()` | dark |
+| 핵심 개념 3가지 카드 | 3col-cards | `mk_3col_cards()` | dark |
 | 프로세스 / 흐름도 | flow | `mk_flow()` | dark |
-| 텍스트 중심 설명 | text-block | `mk_text_block()` | light |
-| 좌우 비교 / 병렬 | split-layout | `mk_split()` | light |
-| 텍스트 + 우측 카드 스택 | split-cards | `mk_split_cards()` | light |
+| 텍스트 중심 설명 | text-block | `mk_text_block()` | dark |
+| 좌우 비교 / 병렬 | split-layout | `mk_split()` | dark |
+| 텍스트 + 우측 카드 스택 | split-cards | `mk_split_cards()` | dark |
 | 임팩트 한 줄 메시지 | quote | `mk_quote()` | dark |
-| 오렌지+테마색 2색 제목 | title-accent | `mk_title_accent()` | light |
+| 오렌지+테마색 2색 제목 | title-accent | `mk_title_accent()` | dark |
 
 ### 카피 작성 원칙 (slides-grab 기준)
 
@@ -129,8 +134,8 @@ slides-grab의 내러티브 시퀀스를 내지 3~4장에 압축한다:
 - [ ] 섹션 구분 슬라이드가 포스터처럼 간결한가?
 - [ ] `#FF6900`이 한 슬라이드에 3개 이하 요소에만 사용됐는가?
 - [ ] 폰트는 Proxima Nova(영문) / Noto Sans(한글) 두 가지만 사용됐는가?
-- [ ] 동일 테마가 3장 이상 연속 배치되지 않았는가? (다크↔라이트 교차 권장)
-- [ ] 슬라이드 유형에 맞는 기본 테마가 적용됐는가? (cover·section-divider → dark, content·statistics → light)
+- [ ] 동일 테마가 3장 이상 연속 배치되지 않았는가? (현재: dark 단일 | light 버전 추후 예정)
+- [ ] 슬라이드 유형에 맞는 기본 테마가 적용됐는가? (cover·section-divider → dark, content·statistics → dark)
 
 구성을 사용자에게 보여주고 확인받는다. 
 

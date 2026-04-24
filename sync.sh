@@ -34,6 +34,17 @@ if [ -d "$HOME/.agents" ]; then
     sync_dir "$HOME/.agents" "$SCRIPT_DIR/home-agents"
 fi
 
+# ~/.agents/skills → ~/.claude/skills 동기화 (Claude Code + Codex 공유 스킬)
+if [ -d "$HOME/.agents/skills" ]; then
+    for skill_dir in "$HOME/.agents/skills"/*/; do
+        skill_name=$(basename "$skill_dir")
+        if [ -d "$HOME/.claude/skills/$skill_name" ]; then
+            cp -r "$skill_dir". "$HOME/.claude/skills/$skill_name/"
+            echo "✓ 스킬 반영: $skill_name (agents → claude)"
+        fi
+    done
+fi
+
 # .opencode 동기화 (선택)
 if [ -d "$HOME/.opencode" ]; then
     echo "✓ .opencode 동기화 중..."
