@@ -120,8 +120,38 @@
 - 배경과 동일한 fill·선·테두리 배치 금지
 - 콘텐츠를 공간 채우기 목적으로 추가 금지
 - 한 슬라이드에 같은 강도·크기·색으로 동등한 카드 5개 이상 배치 금지
+- 720 × 405pt 캔버스 밖으로 shape / text box / chart / diagram node 가 나가는 상태 금지
+- 콘텐츠 영역(`y≈128 ~ 381`)을 넘기는 상태 금지
 
-### 4.3 선 / divider / connector 규칙
+### 4.3 화면 경계 / overflow 규칙
+
+모든 생성 컴포넌트는 아래 bounds 를 만족해야 한다.
+
+```txt
+x >= 0
+y >= 0
+x + width <= 720
+y + height <= 405
+```
+
+내용 영역 컴포넌트는 추가로:
+
+```txt
+y >= 128
+y + height <= 381
+```
+
+overflow 해결 순서:
+
+```txt
+1. 블록 높이 재계산
+2. 내부 간격 재분배
+3. 행 수 / 카드 수 축소
+4. 레이아웃 교체
+5. 페이지 분리
+```
+
+### 4.4 선 / divider / connector 규칙
 
 | 요소 | 구현 방식 | 용도 |
 |-----|---------|------|
@@ -135,6 +165,60 @@
 - 화살표가 필요한 경우 `startArrow` / `endArrow`를 설정한다.
 - 표·카드·그리드 분리선은 `Line`이 아니라 thin rectangle을 사용한다.
 - 대각선·분기선·모듈 연결선은 얇은 면으로 흉내내지 않는다.
+- 강조를 위해 카드 내부에 작은 accent box를 하나 더 넣지 않는다.
+
+### 4.5 카드 내부 세로 여백 규칙
+
+카드 안의 제목/설명/보조문구는 하나의 text group 으로 계산한다.
+
+규칙:
+
+```txt
+텍스트 그룹 높이 = x
+상·하단 padding 이 각각 x보다 작은 tight 상태
+→ 텍스트 그룹을 카드 세로 중앙 기준으로 재배치
+```
+
+의도:
+
+- 글자 크기를 억지로 줄이기 전에
+- 박스 안에서 위아래 여백이 비슷하게 보이도록 만든다
+
+적용 대상:
+
+- flow card
+- structure node
+- mapping row
+- KPI card
+- callout card
+
+### 4.6 불렛 정렬 규칙
+
+불렛 리스트는 점/사각형과 텍스트를 별도 장식 요소로 보지 않는다.
+하나의 텍스트 row 로 취급한다.
+
+규칙:
+
+```txt
+bullet centerY = first-line text area centerY
+```
+
+실무 규칙:
+
+- 불렛은 텍스트 첫 줄과 같은 세로 리듬에 맞춘다
+- 불렛과 텍스트 시작 간격은 컴포넌트별 고정값을 사용한다
+- 줄 간격은 불렛 크기로 보정하지 않는다
+
+금지:
+
+- 불렛이 첫 줄보다 위에 떠 있는 상태
+- 불렛이 텍스트 블록 중앙이 아니라 전체 박스 중앙 기준으로 배치되는 상태
+
+적용 원칙:
+
+- compact card / small rule card / 3-column card → 불렛 금지
+- 카드 계열에서는 plain text stack 사용
+- bullet semantics 가 꼭 필요한 넓은 본문 영역에서만 native paragraph bullets 사용
 
 ---
 
@@ -248,7 +332,9 @@
 | `mk_contents()` / `mk_toc()` | 다크 목차 |
 | `mk_3col()` / `mk_3col_cards()` | 다크 3열 카드 |
 | `mk_flow()` | 단순 프로세스 카드 (하단 callout 없음이 기본) |
+| `mk_flow_focus()` | 동작흐름 메인 페이지용 한 줄 카드 flow |
 | `mk_arch_layers()` | 레이어 구조 다이어그램 |
+| `mk_arch_orchestrator()` | 모듈 관계 구조 다이어그램 |
 | `mk_decision_tree()` | 판단 / 분기 / 폴백 다이어그램 |
 | `mk_swimlane_mapping()` | 모듈 ↔ 설정/데이터 스윔레인 매핑 |
 | `mk_text_block()` | 다크 본문 카드 |

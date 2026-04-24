@@ -3,6 +3,9 @@
 
 set -uo pipefail
 
+# 재귀 방지: memory-learn이 spawning한 claude -p 서브세션이면 스킵
+[ -z "${CLAUDE_SKIP_MEMORY_LEARN:-}" ] || exit 0
+
 MEM_DIR="$HOME/.claude/memory"
 mkdir -p "$MEM_DIR"
 
@@ -36,7 +39,7 @@ except:
 print('\n'.join(msgs[-20:]))
 " "$TRANSCRIPT_PATH" 2>/dev/null || echo "")
 
-# 5턴 미만 세션 스킵 (claude -p 서브프로세스, 짧은 세션 등)
+# 5턴 미만 세션 스킵
 TURN_COUNT=$(echo "$TURNS" | grep -c '^[UA]:' 2>/dev/null || echo 0)
 [ "$TURN_COUNT" -ge 5 ] || exit 0
 
@@ -45,9 +48,10 @@ TIME=$(date +%H%M)
 SESSION_FILE="$MEM_DIR/session_${DATE}_${TIME}.md"
 TURNS_COPY="$TURNS"
 
-# 백그라운드에서 추출 (세션 종료 지연 없음)
-{
-    PROMPT="다음 AI 대화에서 다음 세션에 유용한 정보를 추출하라. 없는 항목은 완전히 생략.
+# 완전 분리된 백그라운드 프로세스 (부모 쉘 즉시 종료)
+(
+    setsid bash -c "
+        PROMPT='다음 AI 대화에서 다음 세션에 유용한 정보를 추출하라. 없는 항목은 완전히 생략.
 
 대화:
 ${TURNS_COPY}
@@ -63,29 +67,30 @@ ${TURNS_COPY}
 -
 
 ## 주의사항
-- "
+- '
 
-    EXTRACT=$(echo "$PROMPT" | claude -p 2>/dev/null | head -30 || echo "")
-    [ -n "$EXTRACT" ] || exit 0
+        EXTRACT=\$(echo \"\$PROMPT\" | CLAUDE_SKIP_MEMORY_LEARN=1 timeout 90 claude -p 2>/dev/null | head -30 || echo '')
+        [ -n \"\$EXTRACT\" ] || exit 0
 
-    {
-        echo "# 세션: ${DATE} ${TIME}"
-        echo ""
-        echo "$EXTRACT"
-        echo ""
-    } > "$SESSION_FILE"
+        {
+            echo '# 세션: ${DATE} ${TIME}'
+            echo ''
+            echo \"\$EXTRACT\"
+            echo ''
+        } > '${SESSION_FILE}'
 
-    # LATEST.md: 최근 3개 세션만 유지
-    {
-        echo "# 이전 세션 메모리"
-        echo ""
-        ls -t "$MEM_DIR"/session_*.md 2>/dev/null | head -3 | while IFS= read -r f; do
-            cat "$f"
-            echo "---"
-        done
-    } > "$MEM_DIR/LATEST.md"
+        {
+            echo '# 이전 세션 메모리'
+            echo ''
+            ls -t '${MEM_DIR}'/session_*.md 2>/dev/null | head -3 | while IFS= read -r f; do
+                cat \"\$f\"
+                echo '---'
+            done
+        } > '${MEM_DIR}/LATEST.md'
 
-    echo "💾 [MEMORY-LEARN] 저장: $SESSION_FILE" >&2
-} &
+        echo '💾 [MEMORY-LEARN] 저장: ${SESSION_FILE}' >&2
+    " > /dev/null 2>&1
+) &
+disown $!
 
 exit 0

@@ -1,0 +1,359 @@
+import { initDatabase } from './db.js';
+import { initEmbeddings, generateEmbedding } from './embeddings.js';
+import { searchSimilarFacts } from './fact-db.js';
+import { getRelatedFacts, listDomains, listCategories } from './ontology-db.js';
+import fs from 'fs';
+import readline from 'readline';
+function validateISODate(dateStr, paramName) {
+    const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!isoDateRegex.test(dateStr)) {
+        throw new Error(`Invalid ${paramName} date: "${dateStr}". Expected YYYY-MM-DD format (e.g., 2025-10-01)`);
+    }
+    // Verify it's actually a valid date
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) {
+        throw new Error(`Invalid ${paramName} date: "${dateStr}". Not a valid calendar date.`);
+    }
+}
+export async function searchConversations(query, options = {}) {
+    const { limit = 10, mode = 'both', after, before, coding_agent } = options;
+    // Validate date parameters
+    if (after)
+        validateISODate(after, '--after');
+    if (before)
+        validateISODate(before, '--before');
+    const db = initDatabase();
+    let results = [];
+    try {
+        // Build filter clauses with parameterized queries
+        const filterParts = [];
+        const filterParams = [];
+        if (after) {
+            filterParts.push(`e.timestamp >= ?`);
+            filterParams.push(after);
+        }
+        if (before) {
+            filterParts.push(`e.timestamp <= ?`);
+            filterParams.push(before);
+        }
+        if (coding_agent) {
+            filterParts.push(`e.coding_agent = ?`);
+            filterParams.push(coding_agent);
+        }
+        const timeClause = filterParts.length > 0 ? `AND ${filterParts.join(' AND ')}` : '';
+        const timeParams = filterParams;
+        if (mode === 'vector' || mode === 'both') {
+            // Vector similarity search
+            await initEmbeddings();
+            const queryEmbedding = await generateEmbedding(query);
+            const stmt = db.prepare(`
+        SELECT
+          e.id,
+          e.project,
+          e.timestamp,
+          e.user_message,
+          e.assistant_message,
+          e.archive_path,
+          e.line_start,
+          e.line_end,
+          e.coding_agent,
+          vec.distance
+        FROM vec_exchanges AS vec
+        JOIN exchanges AS e ON vec.id = e.id
+        WHERE vec.embedding MATCH ?
+          AND k = ?
+          ${timeClause}
+        ORDER BY vec.distance ASC
+      `);
+            results = stmt.all(Buffer.from(new Float32Array(queryEmbedding).buffer), limit, ...timeParams);
+        }
+        if (mode === 'text' || mode === 'both') {
+            // Escape LIKE metacharacters
+            const escapedQuery = query.replace(/%/g, '\\%').replace(/_/g, '\\_');
+            const likePattern = `%${escapedQuery}%`;
+            // Text search
+            const textStmt = db.prepare(`
+        SELECT
+          e.id,
+          e.project,
+          e.timestamp,
+          e.user_message,
+          e.assistant_message,
+          e.archive_path,
+          e.line_start,
+          e.line_end,
+          e.coding_agent,
+          0 as distance
+        FROM exchanges AS e
+        WHERE (e.user_message LIKE ? ESCAPE '\\' OR e.assistant_message LIKE ? ESCAPE '\\')
+          ${timeClause}
+        ORDER BY e.timestamp DESC
+        LIMIT ?
+      `);
+            const textResults = textStmt.all(likePattern, likePattern, ...timeParams, limit);
+            if (mode === 'both') {
+                // Merge and deduplicate by ID
+                const seenIds = new Set(results.map(r => r.id));
+                for (const textResult of textResults) {
+                    if (!seenIds.has(textResult.id)) {
+                        results.push(textResult);
+                    }
+                }
+            }
+            else {
+                results = textResults;
+            }
+        }
+    }
+    finally {
+        db.close();
+    }
+    return results.map((row) => {
+        const exchange = {
+            id: row.id,
+            project: row.project,
+            timestamp: row.timestamp,
+            userMessage: row.user_message,
+            assistantMessage: row.assistant_message,
+            archivePath: row.archive_path,
+            lineStart: row.line_start,
+            lineEnd: row.line_end,
+            codingAgent: row.coding_agent || 'claude-code',
+        };
+        // Try to load summary if available
+        const summaryPath = row.archive_path.replace('.jsonl', '-summary.txt');
+        let summary;
+        try {
+            summary = fs.readFileSync(summaryPath, 'utf-8').trim();
+        }
+        catch { /* absent */ }
+        // Create snippet (first 200 chars, collapse newlines)
+        const snippetText = exchange.userMessage.substring(0, 200).replace(/\s+/g, ' ').trim();
+        const snippet = snippetText + (exchange.userMessage.length > 200 ? '...' : '');
+        return {
+            exchange,
+            similarity: mode === 'text' ? undefined : 1 - row.distance,
+            snippet,
+            summary
+        };
+    });
+}
+// Helper function to count lines in a file efficiently
+async function countLines(filePath) {
+    try {
+        const fileStream = fs.createReadStream(filePath);
+        const rl = readline.createInterface({
+            input: fileStream,
+            crlfDelay: Infinity
+        });
+        let count = 0;
+        for await (const line of rl) {
+            if (line.trim())
+                count++;
+        }
+        return count;
+    }
+    catch (error) {
+        return 0; // Return 0 if file can't be read
+    }
+}
+// Helper function to get file size in KB
+function getFileSizeInKB(filePath) {
+    try {
+        const stats = fs.statSync(filePath);
+        return Math.round(stats.size / 1024 * 10) / 10; // Round to 1 decimal place
+    }
+    catch (error) {
+        return 0;
+    }
+}
+export async function formatResults(results) {
+    if (results.length === 0) {
+        return 'No results found.';
+    }
+    let output = `Found ${results.length} relevant conversation${results.length > 1 ? 's' : ''}:\n\n`;
+    // Process results sequentially to get file metadata
+    for (let index = 0; index < results.length; index++) {
+        const result = results[index];
+        const date = new Date(result.exchange.timestamp).toISOString().split('T')[0];
+        const simPct = result.similarity !== undefined ? Math.round(result.similarity * 100) : null;
+        // Header with match percentage and coding agent
+        const agent = result.exchange.codingAgent || 'claude-code';
+        const agentTag = agent !== 'claude-code' ? ` @${agent}` : '';
+        output += `${index + 1}. [${result.exchange.project}, ${date}${agentTag}]`;
+        if (simPct !== null) {
+            output += ` - ${simPct}% match`;
+        }
+        output += '\n';
+        // Show summary only if it's concise (< 300 chars)
+        if (result.summary && result.summary.length < 300) {
+            output += `   ${result.summary}\n`;
+        }
+        // Show snippet
+        output += `   "${result.snippet}"\n`;
+        // Show tool usage if available
+        if (result.exchange.toolCalls && result.exchange.toolCalls.length > 0) {
+            const toolCounts = new Map();
+            result.exchange.toolCalls.forEach(tc => {
+                toolCounts.set(tc.toolName, (toolCounts.get(tc.toolName) || 0) + 1);
+            });
+            const toolSummary = Array.from(toolCounts.entries())
+                .map(([name, count]) => `${name}(${count})`)
+                .join(', ');
+            output += `   Tools: ${toolSummary}\n`;
+        }
+        // Get file metadata
+        const fileSizeKB = getFileSizeInKB(result.exchange.archivePath);
+        const totalLines = await countLines(result.exchange.archivePath);
+        const lineRange = `${result.exchange.lineStart}-${result.exchange.lineEnd}`;
+        // File information with metadata (clean format for smart tool selection)
+        output += `   Lines ${lineRange} in ${result.exchange.archivePath} (${fileSizeKB}KB, ${totalLines} lines)\n\n`;
+    }
+    return output;
+}
+export async function searchMultipleConcepts(concepts, options = {}) {
+    const { limit = 10 } = options;
+    if (concepts.length === 0) {
+        return [];
+    }
+    // Search for each concept independently
+    const conceptResults = await Promise.all(concepts.map(concept => searchConversations(concept, { ...options, limit: limit * 5, mode: 'vector' })));
+    // Build map of conversation path -> array of results (one per concept)
+    const conversationMap = new Map();
+    conceptResults.forEach((results, conceptIndex) => {
+        results.forEach(result => {
+            const key = result.exchange.archivePath;
+            if (!conversationMap.has(key)) {
+                conversationMap.set(key, []);
+            }
+            conversationMap.get(key).push({ ...result, conceptIndex });
+        });
+    });
+    // Find conversations that match ALL concepts
+    const multiConceptResults = [];
+    for (const [, results] of conversationMap.entries()) {
+        // Check if all concepts are represented
+        const representedConcepts = new Set(results.map(r => r.conceptIndex));
+        if (representedConcepts.size === concepts.length) {
+            // All concepts found in this conversation
+            const conceptSimilarities = concepts.map((_concept, index) => {
+                const result = results.find(r => r.conceptIndex === index);
+                return result?.similarity || 0;
+            });
+            const averageSimilarity = conceptSimilarities.reduce((sum, sim) => sum + sim, 0) / conceptSimilarities.length;
+            // Use the first result's exchange data (they're all from the same conversation)
+            const firstResult = results[0];
+            multiConceptResults.push({
+                exchange: firstResult.exchange,
+                snippet: firstResult.snippet,
+                conceptSimilarities,
+                averageSimilarity
+            });
+        }
+    }
+    // Sort by average similarity (highest first)
+    multiConceptResults.sort((a, b) => b.averageSimilarity - a.averageSimilarity);
+    // Apply limit
+    return multiConceptResults.slice(0, limit);
+}
+/**
+ * Enrich search results with knowledge graph context.
+ * Finds related facts from the ontology and expands via graph traversal.
+ */
+export async function getKnowledgeContext(query, project, limit = 5) {
+    await initEmbeddings();
+    const db = initDatabase();
+    try {
+        const queryEmbedding = await generateEmbedding(query);
+        const factResults = searchSimilarFacts(db, queryEmbedding, project ?? null, limit, 0.6);
+        if (factResults.length === 0) {
+            return { facts: [] };
+        }
+        // Build domain/category lookup
+        const domains = listDomains(db);
+        const categories = listCategories(db);
+        const domainMap = new Map(domains.map(d => [d.id, d.name]));
+        const categoryMap = new Map(categories.map(c => [c.id, { name: c.name, domainId: c.domain_id }]));
+        const enrichedFacts = [];
+        for (const { fact, distance } of factResults) {
+            const similarity = parseFloat((1 - (distance * distance) / 2).toFixed(3));
+            const catInfo = fact.ontology_category_id
+                ? categoryMap.get(fact.ontology_category_id)
+                : undefined;
+            const domainName = catInfo ? (domainMap.get(catInfo.domainId) ?? 'Unclassified') : 'Unclassified';
+            const catName = catInfo ? catInfo.name : 'Unclassified';
+            // Expand via 1-hop graph traversal
+            const related = getRelatedFacts(db, fact.id, 1);
+            const relatedFacts = related.map(({ fact: relFact, relation }) => ({
+                fact: relFact.fact,
+                relationType: relation.relation_type,
+            }));
+            enrichedFacts.push({
+                fact: fact.fact,
+                category: fact.category,
+                domain: domainName,
+                categoryName: catName,
+                similarity,
+                relatedFacts,
+            });
+        }
+        return { facts: enrichedFacts };
+    }
+    finally {
+        db.close();
+    }
+}
+/**
+ * Format knowledge context as a readable section appended to search results.
+ */
+export function formatKnowledgeContext(context) {
+    if (context.facts.length === 0)
+        return '';
+    let output = '\n---\n**Related Knowledge (from past decisions):**\n\n';
+    for (const fact of context.facts) {
+        output += `- **[${fact.domain}/${fact.categoryName}]** ${fact.fact} _(${fact.category}, ${Math.round(fact.similarity * 100)}% relevant)_\n`;
+        for (const rel of fact.relatedFacts) {
+            output += `  - ${rel.relationType}: ${rel.fact}\n`;
+        }
+    }
+    return output;
+}
+export async function formatMultiConceptResults(results, concepts) {
+    if (results.length === 0) {
+        return `No conversations found matching all concepts: ${concepts.join(', ')}`;
+    }
+    let output = `Found ${results.length} conversation${results.length > 1 ? 's' : ''} matching all concepts [${concepts.join(' + ')}]:\n\n`;
+    // Process results sequentially to get file metadata
+    for (let index = 0; index < results.length; index++) {
+        const result = results[index];
+        const date = new Date(result.exchange.timestamp).toISOString().split('T')[0];
+        const avgPct = Math.round(result.averageSimilarity * 100);
+        // Header with average match percentage
+        output += `${index + 1}. [${result.exchange.project}, ${date}] - ${avgPct}% avg match\n`;
+        // Show individual concept scores
+        const scores = result.conceptSimilarities
+            .map((sim, i) => `${concepts[i]}: ${Math.round(sim * 100)}%`)
+            .join(', ');
+        output += `   Concepts: ${scores}\n`;
+        // Show snippet
+        output += `   "${result.snippet}"\n`;
+        // Show tool usage if available
+        if (result.exchange.toolCalls && result.exchange.toolCalls.length > 0) {
+            const toolCounts = new Map();
+            result.exchange.toolCalls.forEach(tc => {
+                toolCounts.set(tc.toolName, (toolCounts.get(tc.toolName) || 0) + 1);
+            });
+            const toolSummary = Array.from(toolCounts.entries())
+                .map(([name, count]) => `${name}(${count})`)
+                .join(', ');
+            output += `   Tools: ${toolSummary}\n`;
+        }
+        // Get file metadata
+        const fileSizeKB = getFileSizeInKB(result.exchange.archivePath);
+        const totalLines = await countLines(result.exchange.archivePath);
+        const lineRange = `${result.exchange.lineStart}-${result.exchange.lineEnd}`;
+        // File information with metadata (clean format for smart tool selection)
+        output += `   Lines ${lineRange} in ${result.exchange.archivePath} (${fileSizeKB}KB, ${totalLines} lines)\n\n`;
+    }
+    return output;
+}

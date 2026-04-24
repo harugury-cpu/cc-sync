@@ -165,7 +165,7 @@
       ],
       "context": "이미 수정 지시를 받은 행동을 반복하여 강한 불만(!!!, 욕설)을 유발함",
       "level": "HARD",
-      "hit_count": 432,
+      "hit_count": 433,
       "source": "user_frustration",
       "created_at": "2026-04-09T11:03:21Z"
     },
@@ -180,7 +180,7 @@
       ],
       "context": "Claude가 동일한 회피 응답(맥락 질문, 경고)을 반복하여 실제 요청에 응답하지 않은 상황",
       "level": "HARD",
-      "hit_count": 282,
+      "hit_count": 370,
       "source": "user_frustration",
       "created_at": "2026-04-13T04:31:59Z"
     },
@@ -219,7 +219,7 @@
       ],
       "context": "사용자: '직접 할 수 있는 것을 못한다고 하지마라. 진행할지는 당연히 물어봐.'",
       "level": "HARD",
-      "hit_count": 5,
+      "hit_count": 7,
       "source": "user_frustration",
       "created_at": "2026-04-16T09:30:00Z"
     },
@@ -251,7 +251,7 @@
       ],
       "context": "사용자: 니가 할 수 있는데 나한테 하라고 하지마라",
       "level": "HARD",
-      "hit_count": 1,
+      "hit_count": 2,
       "source": "user_frustration",
       "created_at": "2026-04-24T00:00:00Z"
     }

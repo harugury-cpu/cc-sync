@@ -159,6 +159,52 @@ connector / 화살표 / 분기선 → line() / connector()
 표 구분선 / 카드 separator / 장식 바 → _divider() 또는 thin rectangle
 ```
 
+overflow / bounds 검증 원칙:
+
+```txt
+모든 요소는 720 × 405pt 캔버스 안에 있어야 한다.
+내용 컴포넌트는 가급적 y≈128 ~ 381 영역 안에서 끝나야 한다.
+```
+
+검증 식:
+
+```txt
+x >= 0
+y >= 0
+x + width <= 720
+y + height <= 405
+```
+
+실패 시 대응:
+
+```txt
+1. 카드/블록 높이 재계산
+2. 내부 여백 재분배
+3. 행 수 / 카드 수 재조정
+4. 레이아웃 분리 또는 페이지 분할
+```
+
+카드 내부 여백 원칙:
+
+```txt
+텍스트 그룹 높이보다 상·하 padding 이 더 작아지는 tight 상태에서는
+텍스트 묶음을 카드 중앙 기준으로 다시 배치한다.
+```
+
+불렛 검증 원칙:
+
+```txt
+불렛은 첫 줄 텍스트와 같은 세로 행에 정렬되어야 한다.
+불렛과 텍스트가 어긋난 상태로 납품하지 않는다.
+```
+
+선택 원칙:
+
+```txt
+card component = bullet 제거
+bullet 필요 = wide text block 에서만 native paragraph bullets 우선
+```
+
 > 현재 `spigen_lib.py`는 사용자가 만든 콘텐츠 템플릿 기준으로 교체됐다.  
 > `theme` 인자는 구버전 스니펫 호환용으로만 남아 있으며, 신규 출력은 모두 다크 템플릿 스타일이다.
 
@@ -169,6 +215,7 @@ connector / 화살표 / 분기선 → line() / connector()
 | A: slide-base | `slide_base(slide_oid, title_text, insert_index, reqs, theme='dark')` | dark |
 | B: 3-col | `mk_3col(sid, cols, reqs, theme='dark')` | dark |
 | C: flow | `mk_flow(sid, steps, cost_map, reqs, theme='dark')` | dark |
+| C-2: flow-focus | `mk_flow_focus(sid, steps, reqs, x=54, y=136, w=612, cols=3)` | dark |
 | D: text-block | `mk_text_block(sid, body_text, reqs, y_start=128, font_size=10, theme='dark')` | dark |
 | E: section-divider | `mk_section_divider(slide_oid, num, title, insert_index, reqs)` | dark 고정 |
 | F: contents | `mk_contents(slide_oid, sections, insert_index, reqs)` | dark 고정 |
