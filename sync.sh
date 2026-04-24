@@ -28,6 +28,12 @@ for dir in agents hooks skills memory plugins commands scripts rules teams data;
     fi
 done
 
+# ~/.agents 동기화 → home-agents/
+if [ -d "$HOME/.agents" ]; then
+    echo "✓ ~/.agents 동기화 중..."
+    sync_dir "$HOME/.agents" "$SCRIPT_DIR/home-agents"
+fi
+
 # .opencode 동기화 (선택)
 if [ -d "$HOME/.opencode" ]; then
     echo "✓ .opencode 동기화 중..."

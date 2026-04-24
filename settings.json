@@ -33,6 +33,10 @@
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/context-enrichment.sh"
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/memory-inject.sh"
           }
         ]
       }
@@ -47,6 +51,10 @@
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/harsh-critic-learn.sh"
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/memory-learn.sh"
           }
         ]
       }
