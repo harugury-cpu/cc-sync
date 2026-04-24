@@ -285,6 +285,14 @@ divider / 기준선 / bar 는 카드 내부에만 존재해야 한다.
 | M: arch-layers | `mk_arch_layers(sid, layers, reqs, eyebrow="", title="")` | dark |
 | N: decision-tree | `mk_decision_tree(sid, nodes, reqs, eyebrow="", title="")` | dark |
 | O: swimlane-mapping | `mk_swimlane_mapping(sid, rows, reqs, eyebrow="", title="")` | dark |
+| P: arch-orchestrator | `mk_arch_orchestrator(sid, nodes, reqs, eyebrow="", title="", x=54, y=146)` | dark |
+| Q: conclusion-detail | `mk_conclusion_detail(sid, conclusion, details, reqs, eyebrow="SUMMARY", title="요약")` | dark |
+| R: rule-grid | `mk_rule_grid(sid, cards, reqs, x=M, y=CONTENT_TOP, w=None, cols=2, gap_x=12, gap_y=12, card_h=96)` | dark |
+| S: kpi-dashboard | `mk_kpi_dashboard(sid, kpis, reqs, y=128)` | dark |
+| T: bar-chart | `mk_bar_chart(sid, bars, reqs, x=M, y=144, w=420, h=150)` | dark |
+| U: report-table | `mk_report_table(sid, rows, reqs, x=M, y=138, w=648)` | dark |
+| V: callout-message | `mk_callout_message(sid, message, reqs, sub="", x=84, y=148, w=552, h=126)` | dark |
+| W: metric-bar-summary | `mk_metric_bar_summary(sid, metric, bars, reqs)` | dark |
 
 #### 사용 패턴
 

@@ -129,8 +129,8 @@ slides-grab의 내러티브 시퀀스를 내지 3~4장에 압축한다:
 - [ ] 섹션 구분 슬라이드가 포스터처럼 간결한가?
 - [ ] `#FF6900`이 한 슬라이드에 3개 이하 요소에만 사용됐는가?
 - [ ] 폰트는 Proxima Nova(영문) / Noto Sans(한글) 두 가지만 사용됐는가?
-- [ ] 동일 테마가 3장 이상 연속 배치되지 않았는가? (다크↔라이트 교차 권장)
-- [ ] 슬라이드 유형에 맞는 기본 테마가 적용됐는가? (cover·section-divider → dark, content·statistics → light)
+- [ ] 동일 테마가 3장 이상 연속 배치되지 않았는가? (현재: dark 단일 | light 버전 추후 예정)
+- [ ] 슬라이드 유형에 맞는 기본 테마가 적용됐는가? (cover·section-divider → dark, content·statistics → dark)
 
 구성을 사용자에게 보여주고 확인받는다. 
 
