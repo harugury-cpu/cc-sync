@@ -862,7 +862,7 @@ def mk_flow(sid, steps, cost_map=None, reqs=None, theme="dark"):
               ORANGE if is_primary else (ORANGE_DIM if dim_hot else SURFACE),
               ORANGE if marked else BORDER, 0.5)
         _text(reqs, sid, f"{sid}_sn{i}", x + 8, y0 + 8, cw - 16, 9,
-              f"STEP {num}", BLACK if is_primary else (ORANGE if dim_hot else TEXT_FAINT), 5, False, "JetBrains Mono")
+              f"STEP {num}", BLACK if is_primary else (ORANGE if dim_hot else TEXT_FAINT), 5, False, "Proxima Nova")
         _text(reqs, sid, f"{sid}_st{i}", x + 8, y0 + 18, cw - 16, 13,
               name, BLACK if is_primary else TEXT, 8, True, "Noto Sans")
         _text(reqs, sid, f"{sid}_sv{i}", x + 8, y0 + 31, cw - 16, 10,
@@ -953,7 +953,7 @@ def mk_flow_focus(sid, steps, reqs, x=54, y=136, w=612, cols=3):
               ORANGE if marked else BORDER, 0.5)
         _text(reqs, sid, f"{sid}_focus_num{i}", xx + 12, num_y, 56, num_h,
               f"STEP {num}", BLACK if hot else (ORANGE if dim_hot else TEXT_FAINT),
-              7, True, "JetBrains Mono", valign=True)
+              7, True, "Proxima Nova", valign=True)
         _text(reqs, sid, f"{sid}_focus_title{i}", xx + 12, title_y, card_w - 24, title_h,
               name, BLACK if hot else TEXT, title_size, True, "Noto Sans", valign=True)
         if svc:
@@ -1233,7 +1233,7 @@ def mk_conclusion_detail(sid, conclusion, details, reqs, eyebrow="SUMMARY", titl
     """
     if eyebrow:
         _text(reqs, sid, f"{sid}_summary_eyebrow", M, 28, 120, 10,
-              eyebrow.upper(), ORANGE, 7, True, "JetBrains Mono")
+              eyebrow.upper(), ORANGE, 7, True, "Proxima Nova")
     _text(reqs, sid, f"{sid}_summary_title", M, 50, 180, 28,
           title, TEXT, 22, True, "Noto Sans")
     if accent_line:
@@ -1265,7 +1265,7 @@ def mk_conclusion_detail(sid, conclusion, details, reqs, eyebrow="SUMMARY", titl
         _rect(reqs, sid, f"{sid}_summary_detail_bg{i}", box_x, y, box_w, box_h,
               SURFACE, BORDER, 0.4)
         _text(reqs, sid, f"{sid}_summary_detail_no{i}", box_x + 16, y + max(10, (box_h - 11) / 2), 24, 11,
-              label, ORANGE, 7, True, "JetBrains Mono")
+              label, ORANGE, 7, True, "Proxima Nova")
         _text(reqs, sid, f"{sid}_summary_detail_text{i}", box_x + 50, y + max(8, (box_h - 20) / 2), box_w - 68, 20,
               text, TEXT, 9, True, "Noto Sans")
 
@@ -1524,9 +1524,9 @@ def mk_decision_tree(sid, nodes, reqs, eyebrow="", title="", x=54, y=170):
     connector(reqs, sid, f"{sid}_tree_c4", x + 546, base_y + 118, x + 574, base_y + 60, color=BORDER_HI, weight=1.0)
 
     _text(reqs, sid, f"{sid}_tree_yes_lab", x + 336, base_y + 20, 34, 10, yes_label,
-          ORANGE, 5, False, "JetBrains Mono", center=True)
+          ORANGE, 5, False, "Proxima Nova", center=True)
     _text(reqs, sid, f"{sid}_tree_no_lab", x + 336, base_y + 106, 34, 10, no_label,
-          TEXT_FAINT, 5, False, "JetBrains Mono", center=True)
+          TEXT_FAINT, 5, False, "Proxima Nova", center=True)
 
 
 def mk_swimlane_mapping(sid, rows, reqs, eyebrow="", title="", x=54, y=148):

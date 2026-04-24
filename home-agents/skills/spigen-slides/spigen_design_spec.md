@@ -92,10 +92,9 @@
 | 폰트 | 용도 |
 |-----|------|
 | `Noto Sans` | 한글 포함 텍스트, 혼합 콘텐츠 |
-| `Proxima Nova` | 영문 전용·섹션 번호·레이블 |
-| `JetBrains Mono` | 수치·STEP 번호·코드 |
+| `Proxima Nova` | 영문 전용·숫자·섹션 번호·레이블·STEP 번호 |
 
-폰트 선택 규칙: 한글 포함 → `Noto Sans` / 영문·숫자 전용 → `Proxima Nova` / 수치·STEP → `JetBrains Mono`
+폰트 선택 규칙: 한글 포함 → `Noto Sans` / 영문·숫자·STEP 번호 → `Proxima Nova`
 
 ### 3.3 Avoid — 타이포그래피
 
@@ -544,7 +543,7 @@ accent border / accent line 이 다른 row 경계선에 가려지면 안 된다.
 ### 가독성
 
 - [ ] 표·플로우·로드맵의 텍스트는 3~5초 안에 읽힌다.
-- [ ] 폰트는 Noto Sans / Proxima Nova / JetBrains Mono 세 가지만 사용됐다.
+- [ ] 폰트는 Noto Sans / Proxima Nova 두 가지만 사용됐다.
 - [ ] 모든 요소가 Google Slides에서 직접 수정 가능한 텍스트/도형이다.
 
 ### 구성

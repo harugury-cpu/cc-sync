@@ -45,7 +45,7 @@
       "_note": "n<=4: gap=12, n>4: gap=8 / cw=(total_w - gap*(n-1))/n"
     },
     "step":  { "rel_x": 0,  "rel_y": 0,  "h": 96 },
-    "sn":    { "rel_x": 8,  "rel_y": 8,  "w_shrink": 16, "h": 9,  "font_size": 5, "font_family": "JetBrains Mono", "bold": false },
+    "sn":    { "rel_x": 8,  "rel_y": 8,  "w_shrink": 16, "h": 9,  "font_size": 5, "font_family": "Proxima Nova", "bold": false },
     "st":    { "rel_x": 8,  "rel_y": 18, "w_shrink": 16, "h": 13, "font_size": 8, "font_family": "Noto Sans",      "bold": true  },
     "sv":    { "rel_x": 8,  "rel_y": 31, "w_shrink": 16, "h": 10, "font_size": 5, "font_family": "Noto Sans",      "bold": false },
     "sd":    { "rel_x": 8,  "rel_y": 42, "w_shrink": 16, "h": 17, "font_size": 5, "font_family": "Noto Sans",      "bold": false },
