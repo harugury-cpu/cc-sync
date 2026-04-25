@@ -110,8 +110,7 @@
 | 한글 폰트 | `Noto Sans` |
 폰트 적용 규칙:
 - 한글이 포함된 텍스트 → `Noto Sans`
-- 영문/숫자 전용 텍스트 → `Proxima Nova`
-- 혼합 콘텐츠 → `Noto Sans` (한글 우선)
+- 한글이 없는 모든 텍스트(영문/숫자/레이블) → `Proxima Nova`
 - 모든 생성 텍스트는 `7pt` 미만으로 내리지 않는다
 
 ### 타입 스케일 (type scale remap)

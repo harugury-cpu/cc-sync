@@ -1,6 +1,7 @@
 # spigen_design_spec.md — Spigen Slide Design System v2
 
 > 기준 템플릿: `1rh_2NNwM2CeZxFaZFfgoK3s1RAU2SyzZd794480hrVo`
+> 시스템 가이드 시트: `https://docs.google.com/presentation/d/1HJbTWXPCr38gXDQuarglSLrkheDQXAojlrYUKcfVgAc/edit`
 > 캔버스: **720 × 405pt** · Google Slides 16:9
 > 방향: **Dark only + Orange accent + Native editable shapes**
 
@@ -17,6 +18,22 @@
 **③ 절제된 오렌지** — `ACCENT #FF6B1A`는 한 슬라이드에 3개 이하 요소에만 사용한다. 결론·핵심 수치·상호작용 포인트 이외에는 `ACCENT_DIM` 또는 오렌지 선으로 처리한다.
 
 **④ 의미가 형태를 결정한다** — 같은 의미 역할은 같은 형태로, 다른 의미 역할은 다른 형태로. 장식 목적의 색상·형태 변형은 금지한다.
+
+### 1.1 Cover source of truth
+
+표지는 임의 커스텀 커버가 아니라 아래 기준을 사용한다.
+
+```txt
+template ID 1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk 의 1페이지
+```
+
+즉 기본 cover 는 새 세부 가이드 표지와 동일한 구조를 사용한다.
+
+cover 구조:
+
+- 메인 제목 (필요 시 2줄)
+- 하단 좌측: 부서 / 담당자
+- 하단 우측: 날짜 / 버전
 
 ---
 
@@ -91,10 +108,10 @@
 
 | 폰트 | 용도 |
 |-----|------|
-| `Noto Sans` | 한글 포함 텍스트, 혼합 콘텐츠 |
-| `Proxima Nova` | 영문 전용·숫자·섹션 번호·레이블·STEP 번호 |
+| `Noto Sans` | 한글이 포함된 모든 텍스트 |
+| `Proxima Nova` | 한글이 없는 영문·숫자·레이블 |
 
-폰트 선택 규칙: 한글 포함 → `Noto Sans` / 영문·숫자·STEP 번호 → `Proxima Nova`
+폰트 선택 규칙: 한글 포함 → `Noto Sans` / 그 외 전부 → `Proxima Nova`
 
 ### 3.3 Avoid — 타이포그래피
 

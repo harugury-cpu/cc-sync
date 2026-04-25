@@ -25,6 +25,29 @@ def pt(v):
     return int(v * 12700)
 
 
+def _has_korean(text):
+    s = str(text or "")
+    return any(
+        ("\uac00" <= ch <= "\ud7a3")
+        or ("\u1100" <= ch <= "\u11ff")
+        or ("\u3130" <= ch <= "\u318f")
+        for ch in s
+    )
+
+
+def _font_for(text, ff=None):
+    """
+    Font policy:
+      - Korean-containing text -> Noto Sans
+      - Everything else        -> Proxima Nova
+
+    Explicit fontFamily still wins unless ff is None / AUTO.
+    """
+    if ff not in (None, "AUTO"):
+        return ff
+    return "Noto Sans" if _has_korean(text) else "Proxima Nova"
+
+
 def c255(r, g, b):
     return {"red": r / 255, "green": g / 255, "blue": b / 255}
 
@@ -367,11 +390,11 @@ def _new_slide(sid, insert_index, reqs, layout_id=None):
 
 
 def _text(reqs, sid, oid, x, y, w, h, text, color=TEXT, size=8, bold=False,
-          ff="Noto Sans", center=False, valign=False):
+          ff=None, center=False, valign=False):
     reqs += [
         shape(oid, sid, "TEXT_BOX", x, y, w, h),
         txt(oid, text),
-        txtstyle(oid, color, size, bold=bold, ff=ff),
+        txtstyle(oid, color, size, bold=bold, ff=_font_for(text, ff)),
         clr(oid),
     ]
     if center:
@@ -440,10 +463,10 @@ def _bulleted_text_box(reqs, sid, oid, x, y, w, h, items,
 def _header(sid, reqs, eyebrow="", title="", page_no=None, total=None, footer=""):
     if eyebrow:
         _text(reqs, sid, f"{sid}_eyebrow", M, M, 240, 12, eyebrow.upper(),
-              ORANGE, 7, True, "Noto Sans")
+              ORANGE, 7, True, "AUTO")
     if title:
         _text(reqs, sid, f"{sid}_title", M, 54, W - M * 2, 40, title,
-              TEXT, 22, True, "Noto Sans")
+              TEXT, 22, True, "AUTO")
     # Current template direction: no title underline bar, no top page indicator,
     # no bottom footer/year. Keep only eyebrow + title.
 
@@ -655,7 +678,7 @@ def mk_contents(slide_oid, sections, insert_index, reqs):
 
 def mk_3col(sid, cols, reqs, theme="dark", align_mode="top_weighted"):
     """Template-style 3-column card grid."""
-    card_w, gap, x0, y0 = 206, 12, M, 116
+    card_w, gap, x0, y0 = 206, 12, M, 128
     visible_cols = cols[:3]
     primary = _primary_index(
         visible_cols,
@@ -688,7 +711,7 @@ def mk_3col(sid, cols, reqs, theme="dark", align_mode="top_weighted"):
         if align_mode == "balanced":
             start_y = _center_group_start(y0, 190, group_h, min_pad=outer_pad)
         else:
-            start_y = _top_weighted_group_start(y0, 190, group_h, top_pad=16, bottom_bias=16)
+            start_y = _top_weighted_group_start(y0, 190, group_h, top_pad=20, bottom_bias=16)
         cursor_y = start_y
         _text(reqs, sid, f"{sid}_cl{i}", x + 18, cursor_y, card_w - 36, label_h,
               str(label).upper(), BLACK if hot else (ORANGE if dim_hot else TEXT_FAINT), 7, True, "Proxima Nova", valign=True)
@@ -714,7 +737,7 @@ def mk_3col_cards(sid, cards, reqs, theme="dark"):
         normalized.append({
             "label": c.get("num", c.get("label", f"0{i+1}")),
             "title": c.get("title", c.get("label", "")),
-            "items": [c.get("body", "")] if c.get("body") else c.get("items", []),
+            "items": (c["body"] if isinstance(c.get("body"), list) else ([c["body"]] if c.get("body") else c.get("items", []))),
             "hot": c.get("hot") or c.get("accent") or c.get("style") == "accent",
         })
     mk_3col(sid, normalized, reqs, theme=theme)
@@ -1112,11 +1135,11 @@ def mk_kpi_dashboard(sid, kpis, reqs, y=128):
               ORANGE if hot else (ORANGE_DIM if dim_hot else SURFACE),
               ORANGE if marked else BORDER, 0.5)
         _text(reqs, sid, f"{sid}_kpi_label{i}", x + 14, y + 18, card_w - 28, 12,
-              k.get("label", ""), BLACK if hot else (ORANGE if dim_hot else TEXT_FAINT), 7, True, "Noto Sans")
+              k.get("label", ""), BLACK if hot else (ORANGE if dim_hot else TEXT_FAINT), 7, True, "AUTO")
         _text(reqs, sid, f"{sid}_kpi_value{i}", x + 14, y + 46, card_w - 28, 40,
               k.get("value", ""), BLACK if hot else TEXT, 26, True, "Proxima Nova")
         _text(reqs, sid, f"{sid}_kpi_sub{i}", x + 14, y + 91, card_w - 28, 20,
-              k.get("sub", ""), BLACK if hot else TEXT_DIM, 7, False, "Noto Sans")
+              k.get("sub", ""), BLACK if hot else TEXT_DIM, 7, False, "AUTO")
 
 
 def mk_bar_chart(sid, bars, reqs, x=M, y=144, w=420, h=150,
@@ -1435,7 +1458,7 @@ def mk_arch_orchestrator(sid, nodes, reqs, eyebrow="", title="", x=54, y=146):
         _rect(reqs, sid, f"{sid}_orc_rbox{i}", x + 428, yy, 184, 36,
               SURFACE, ORANGE if accent else BORDER, 0.4)
         _text(reqs, sid, f"{sid}_orc_rtxt{i}", x + 444, yy + 12, 152, 12,
-              item.get("label", ""), TEXT, 7.5, True, "Noto Sans", valign=True)
+              item.get("label", ""), TEXT, 7.5, True, "AUTO", valign=True)
 
     _rect(reqs, sid, f"{sid}_orc_engine", x + 200, engine_y, 160, 40, SURFACE, BORDER, 0.4)
     _text(reqs, sid, f"{sid}_orc_engine_txt", x + 200, engine_y + 14, 160, 12, engine_text,
@@ -1443,7 +1466,7 @@ def mk_arch_orchestrator(sid, nodes, reqs, eyebrow="", title="", x=54, y=146):
 
     _rect(reqs, sid, f"{sid}_orc_out", x + 428, output_y, 184, 36, SURFACE, BORDER, 0.4)
     _text(reqs, sid, f"{sid}_orc_out_txt", x + 444, output_y + 12, 152, 12, output_text,
-          TEXT, 7.5, True, "Noto Sans", valign=True)
+          TEXT, 7.5, True, "AUTO", valign=True)
 
     in_rect = (x, input_y, 120, 44)
     main_rect = (x + 200, main_y, 160, 64)
@@ -1568,6 +1591,6 @@ def mk_swimlane_mapping(sid, rows, reqs, eyebrow="", title="", x=54, y=148):
         _text(reqs, sid, f"{sid}_map_left{i}", x + 18, yy + 8, left_w - 36, 16,
               row.get("left", ""), TEXT, 13, True, "Noto Sans", valign=True)
         _text(reqs, sid, f"{sid}_map_mid{i}", mid_x + 16, yy + 10, mid_w - 32, 12,
-              row.get("middle", ""), ORANGE if accent else TEXT_DIM, 7, accent, "Noto Sans", center=True, valign=True)
+              row.get("middle", ""), ORANGE if accent else TEXT_DIM, 7, accent, "AUTO", center=True, valign=True)
         _text(reqs, sid, f"{sid}_map_right{i}", right_x + 18, yy + 8, right_w - 36, 16,
               row.get("right", ""), TEXT, 13, True, "Noto Sans", valign=True)

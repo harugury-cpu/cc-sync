@@ -82,6 +82,9 @@ python3 /tmp/parse_slides.py
 
 ### 3-4. 표지 텍스트 삽입
 
+> **표지 source of truth**: 템플릿 ID `1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk` 의 1페이지  
+> 새 세부 가이드 표지와 동일한 구조를 기본 cover 로 사용한다.
+
 표지 박스 인덱스 (Spigen 템플릿 인덱스 0 기준):
 
 | box | 위치 | 내용 |
@@ -91,6 +94,15 @@ python3 /tmp/parse_slides.py
 | box[3] | 날짜·버전 | `YYYY.MM.DD\nV1.0` |
 
 > **주의**: box[2]는 빈 박스 — 건너뜀. `existing_text`가 있는 박스만 `deleteText` 실행.
+
+표지 생성 원칙:
+
+```txt
+1. 커스텀 cover를 새로 그리지 않는다.
+2. 기본은 템플릿 cover 복사 + 텍스트 교체다.
+3. 제목 / 부서·담당자 / 날짜·버전의 3영역 구조를 유지한다.
+4. 다른 덱에서 임시로 만든 커버를 source 로 삼지 않는다.
+```
 
 ```python
 # /tmp/fill_cover.py
