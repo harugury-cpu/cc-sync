@@ -6,9 +6,8 @@ Design source:
 
 Design direction:
     - 720 × 405pt Google Slides 16:9 canvas
-    - dark background (#000000)
+    - theme-selectable token system (dark / light)
     - orange accent (#FF6B1A)
-    - surface cards (#0E0E0E)
     - native Google Slides shapes/text only
 
 Compatibility:
@@ -25,39 +24,133 @@ def pt(v):
     return int(v * 12700)
 
 
+def _has_korean(text):
+    s = str(text or "")
+    return any(
+        ("\uac00" <= ch <= "\ud7a3")
+        or ("\u1100" <= ch <= "\u11ff")
+        or ("\u3130" <= ch <= "\u318f")
+        for ch in s
+    )
+
+
+def _font_for(text, ff=None):
+    """
+    Font policy:
+      - Korean-containing text -> Noto Sans
+      - Everything else        -> Proxima Nova
+
+    Explicit fontFamily still wins unless ff is None / AUTO.
+    """
+    if ff not in (None, "AUTO"):
+        return ff
+    return "Noto Sans" if _has_korean(text) else "Proxima Nova"
+
+
 def c255(r, g, b):
     return {"red": r / 255, "green": g / 255, "blue": b / 255}
 
 
-BG = {"red": 0, "green": 0, "blue": 0}
-SURFACE = c255(14, 14, 14)
-SURFACE_HI = c255(22, 22, 22)
-BORDER = c255(32, 32, 32)
-BORDER_HI = c255(48, 48, 48)
-ORANGE = c255(255, 107, 26)
-ORANGE_DIM = c255(61, 26, 5)
-WHITE = {"red": 1, "green": 1, "blue": 1}
-TEXT = c255(240, 240, 240)
-TEXT_DIM = c255(170, 170, 170)
-TEXT_FAINT = c255(110, 110, 110)
-GOOD = c255(156, 227, 125)
-BAD = c255(255, 122, 122)
-BLACK = c255(0, 0, 0)
+THEME_TOKENS = {
+    "dark": {
+        "BG": {"red": 0, "green": 0, "blue": 0},
+        "SURFACE": c255(14, 14, 14),
+        "SURFACE_HI": c255(22, 22, 22),
+        "BORDER": c255(32, 32, 32),
+        "BORDER_HI": c255(48, 48, 48),
+        "ORANGE": c255(255, 107, 26),
+        "ORANGE_DIM": c255(61, 26, 5),
+        "WHITE": {"red": 1, "green": 1, "blue": 1},
+        "TEXT": c255(240, 240, 240),
+        "TEXT_DIM": c255(170, 170, 170),
+        "TEXT_FAINT": c255(110, 110, 110),
+        "GOOD": c255(156, 227, 125),
+        "BAD": c255(255, 122, 122),
+        "BLACK": c255(0, 0, 0),
+    },
+    "light": {
+        "BG": c255(247, 247, 245),
+        "SURFACE": {"red": 1, "green": 1, "blue": 1},
+        "SURFACE_HI": c255(241, 241, 237),
+        "BORDER": c255(217, 217, 210),
+        "BORDER_HI": c255(191, 192, 184),
+        "ORANGE": c255(255, 107, 26),
+        "ORANGE_DIM": c255(255, 230, 214),
+        "WHITE": {"red": 1, "green": 1, "blue": 1},
+        "TEXT": c255(23, 23, 23),
+        "TEXT_DIM": c255(95, 97, 91),
+        "TEXT_FAINT": c255(138, 141, 132),
+        "GOOD": c255(80, 166, 76),
+        "BAD": c255(214, 74, 74),
+        "BLACK": c255(0, 0, 0),
+    },
+}
+
+CURRENT_THEME = "dark"
+
+
+def set_theme(theme="dark"):
+    """
+    Public theme switch for future deck generation.
+
+    Usage:
+        import spigen_lib as lib
+        lib.set_theme('light')
+        ...
+        lib.mk_rule_grid(...)
+    """
+    global CURRENT_THEME
+    global BG, SURFACE, SURFACE_HI, BORDER, BORDER_HI
+    global ORANGE, ORANGE_DIM, WHITE, TEXT, TEXT_DIM, TEXT_FAINT
+    global GOOD, BAD, BLACK, THEMES
+
+    key = str(theme or "dark").lower()
+    if key not in THEME_TOKENS:
+        key = "dark"
+    CURRENT_THEME = key
+    tokens = THEME_TOKENS[key]
+    BG = tokens["BG"]
+    SURFACE = tokens["SURFACE"]
+    SURFACE_HI = tokens["SURFACE_HI"]
+    BORDER = tokens["BORDER"]
+    BORDER_HI = tokens["BORDER_HI"]
+    ORANGE = tokens["ORANGE"]
+    ORANGE_DIM = tokens["ORANGE_DIM"]
+    WHITE = tokens["WHITE"]
+    TEXT = tokens["TEXT"]
+    TEXT_DIM = tokens["TEXT_DIM"]
+    TEXT_FAINT = tokens["TEXT_FAINT"]
+    GOOD = tokens["GOOD"]
+    BAD = tokens["BAD"]
+    BLACK = tokens["BLACK"]
+    THEMES = {
+        "dark": {
+            "SLIDE_BG": THEME_TOKENS["dark"]["BG"],
+            "TITLE_COLOR": THEME_TOKENS["dark"]["TEXT"],
+            "BODY_COLOR": THEME_TOKENS["dark"]["TEXT_DIM"],
+            "CARD_BG": THEME_TOKENS["dark"]["SURFACE"],
+            "CARD_BORDER": THEME_TOKENS["dark"]["BORDER"],
+        },
+        "light": {
+            "SLIDE_BG": THEME_TOKENS["light"]["BG"],
+            "TITLE_COLOR": THEME_TOKENS["light"]["TEXT"],
+            "BODY_COLOR": THEME_TOKENS["light"]["TEXT_DIM"],
+            "CARD_BG": THEME_TOKENS["light"]["SURFACE"],
+            "CARD_BORDER": THEME_TOKENS["light"]["BORDER"],
+        },
+    }
+    return CURRENT_THEME
+
+
+# initialize default theme
+set_theme("dark")
 
 W, H, M = 720, 405, 36
 CONTENT_TOP = 112
 CONTENT_BOTTOM = 381
 
-# 모든 출력은 dark 단일 테마. theme= 인자는 API 호환용으로만 남겨둔다.
-THEMES = {
-    "dark": {
-        "SLIDE_BG": BG,
-        "TITLE_COLOR": TEXT,
-        "BODY_COLOR": TEXT_DIM,
-        "CARD_BG": SURFACE,
-        "CARD_BORDER": BORDER,
-    },
-}
+# theme= 인자는 기존 API 호환용으로 남아 있으며,
+# 실제 색상 토큰은 set_theme('dark'|'light') 로 전환한다.
 
 
 def _same_rgb(a, b, eps=1e-6):
@@ -367,11 +460,11 @@ def _new_slide(sid, insert_index, reqs, layout_id=None):
 
 
 def _text(reqs, sid, oid, x, y, w, h, text, color=TEXT, size=8, bold=False,
-          ff="Noto Sans", center=False, valign=False):
+          ff=None, center=False, valign=False):
     reqs += [
         shape(oid, sid, "TEXT_BOX", x, y, w, h),
         txt(oid, text),
-        txtstyle(oid, color, size, bold=bold, ff=ff),
+        txtstyle(oid, color, size, bold=bold, ff=_font_for(text, ff)),
         clr(oid),
     ]
     if center:
@@ -440,10 +533,10 @@ def _bulleted_text_box(reqs, sid, oid, x, y, w, h, items,
 def _header(sid, reqs, eyebrow="", title="", page_no=None, total=None, footer=""):
     if eyebrow:
         _text(reqs, sid, f"{sid}_eyebrow", M, M, 240, 12, eyebrow.upper(),
-              ORANGE, 7, True, "Noto Sans")
+              ORANGE, 7, True, "AUTO")
     if title:
         _text(reqs, sid, f"{sid}_title", M, 54, W - M * 2, 40, title,
-              TEXT, 22, True, "Noto Sans")
+              TEXT, 22, True, "AUTO")
     # Current template direction: no title underline bar, no top page indicator,
     # no bottom footer/year. Keep only eyebrow + title.
 
@@ -655,7 +748,7 @@ def mk_contents(slide_oid, sections, insert_index, reqs):
 
 def mk_3col(sid, cols, reqs, theme="dark", align_mode="top_weighted"):
     """Template-style 3-column card grid."""
-    card_w, gap, x0, y0 = 206, 12, M, 116
+    card_w, gap, x0, y0 = 206, 12, M, 128
     visible_cols = cols[:3]
     primary = _primary_index(
         visible_cols,
@@ -675,27 +768,36 @@ def mk_3col(sid, cols, reqs, theme="dark", align_mode="top_weighted"):
         label = col.get("label", f"0{i+1}")
         title = col.get("title", label)
         items = col.get("items", [])
+        reason = col.get("reason", "")
         label_h = 12
         title_h = 28
         item_h = 12
+        reason_h = 10
         label_gap = 11
         title_gap = 12
+        reason_gap = 5
         body_gap = 4
         outer_pad = 16
         group_h = label_h + label_gap + title_h
+        if reason:
+            group_h += reason_gap + reason_h
         if items:
             group_h += title_gap + item_h * min(5, len(items)) + body_gap * max(0, min(5, len(items)) - 1)
         if align_mode == "balanced":
             start_y = _center_group_start(y0, 190, group_h, min_pad=outer_pad)
         else:
-            start_y = _top_weighted_group_start(y0, 190, group_h, top_pad=16, bottom_bias=16)
+            start_y = _top_weighted_group_start(y0, 190, group_h, top_pad=20, bottom_bias=16)
         cursor_y = start_y
         _text(reqs, sid, f"{sid}_cl{i}", x + 18, cursor_y, card_w - 36, label_h,
               str(label).upper(), BLACK if hot else (ORANGE if dim_hot else TEXT_FAINT), 7, True, "Proxima Nova", valign=True)
         cursor_y += label_h + label_gap
         _text(reqs, sid, f"{sid}_ct{i}", x + 18, cursor_y, card_w - 36, title_h,
               title, BLACK if hot else TEXT, 13, True, "Noto Sans", valign=True)
-        cursor_y += title_h + title_gap
+        cursor_y += title_h + (reason_gap if reason else title_gap)
+        if reason:
+            _text(reqs, sid, f"{sid}_reason{i}", x + 18, cursor_y, card_w - 36, reason_h,
+                  reason, BLACK if hot else ORANGE, 7, True, "Proxima Nova", valign=True)
+            cursor_y += reason_h + title_gap
         if items:
             line_y = cursor_y
             for j, item in enumerate(items[:5]):
@@ -714,8 +816,9 @@ def mk_3col_cards(sid, cards, reqs, theme="dark"):
         normalized.append({
             "label": c.get("num", c.get("label", f"0{i+1}")),
             "title": c.get("title", c.get("label", "")),
-            "items": [c.get("body", "")] if c.get("body") else c.get("items", []),
+            "items": (c["body"] if isinstance(c.get("body"), list) else ([c["body"]] if c.get("body") else c.get("items", []))),
             "hot": c.get("hot") or c.get("accent") or c.get("style") == "accent",
+            "reason": c.get("reason", ""),
         })
     mk_3col(sid, normalized, reqs, theme=theme)
 
@@ -1112,11 +1215,11 @@ def mk_kpi_dashboard(sid, kpis, reqs, y=128):
               ORANGE if hot else (ORANGE_DIM if dim_hot else SURFACE),
               ORANGE if marked else BORDER, 0.5)
         _text(reqs, sid, f"{sid}_kpi_label{i}", x + 14, y + 18, card_w - 28, 12,
-              k.get("label", ""), BLACK if hot else (ORANGE if dim_hot else TEXT_FAINT), 7, True, "Noto Sans")
+              k.get("label", ""), BLACK if hot else (ORANGE if dim_hot else TEXT_FAINT), 7, True, "AUTO")
         _text(reqs, sid, f"{sid}_kpi_value{i}", x + 14, y + 46, card_w - 28, 40,
               k.get("value", ""), BLACK if hot else TEXT, 26, True, "Proxima Nova")
         _text(reqs, sid, f"{sid}_kpi_sub{i}", x + 14, y + 91, card_w - 28, 20,
-              k.get("sub", ""), BLACK if hot else TEXT_DIM, 7, False, "Noto Sans")
+              k.get("sub", ""), BLACK if hot else TEXT_DIM, 7, False, "AUTO")
 
 
 def mk_bar_chart(sid, bars, reqs, x=M, y=144, w=420, h=150,
@@ -1435,7 +1538,7 @@ def mk_arch_orchestrator(sid, nodes, reqs, eyebrow="", title="", x=54, y=146):
         _rect(reqs, sid, f"{sid}_orc_rbox{i}", x + 428, yy, 184, 36,
               SURFACE, ORANGE if accent else BORDER, 0.4)
         _text(reqs, sid, f"{sid}_orc_rtxt{i}", x + 444, yy + 12, 152, 12,
-              item.get("label", ""), TEXT, 7.5, True, "Noto Sans", valign=True)
+              item.get("label", ""), TEXT, 7.5, True, "AUTO", valign=True)
 
     _rect(reqs, sid, f"{sid}_orc_engine", x + 200, engine_y, 160, 40, SURFACE, BORDER, 0.4)
     _text(reqs, sid, f"{sid}_orc_engine_txt", x + 200, engine_y + 14, 160, 12, engine_text,
@@ -1443,7 +1546,7 @@ def mk_arch_orchestrator(sid, nodes, reqs, eyebrow="", title="", x=54, y=146):
 
     _rect(reqs, sid, f"{sid}_orc_out", x + 428, output_y, 184, 36, SURFACE, BORDER, 0.4)
     _text(reqs, sid, f"{sid}_orc_out_txt", x + 444, output_y + 12, 152, 12, output_text,
-          TEXT, 7.5, True, "Noto Sans", valign=True)
+          TEXT, 7.5, True, "AUTO", valign=True)
 
     in_rect = (x, input_y, 120, 44)
     main_rect = (x + 200, main_y, 160, 64)
@@ -1568,6 +1671,6 @@ def mk_swimlane_mapping(sid, rows, reqs, eyebrow="", title="", x=54, y=148):
         _text(reqs, sid, f"{sid}_map_left{i}", x + 18, yy + 8, left_w - 36, 16,
               row.get("left", ""), TEXT, 13, True, "Noto Sans", valign=True)
         _text(reqs, sid, f"{sid}_map_mid{i}", mid_x + 16, yy + 10, mid_w - 32, 12,
-              row.get("middle", ""), ORANGE if accent else TEXT_DIM, 7, accent, "Noto Sans", center=True, valign=True)
+              row.get("middle", ""), ORANGE if accent else TEXT_DIM, 7, accent, "AUTO", center=True, valign=True)
         _text(reqs, sid, f"{sid}_map_right{i}", right_x + 18, yy + 8, right_w - 36, 16,
               row.get("right", ""), TEXT, 13, True, "Noto Sans", valign=True)
