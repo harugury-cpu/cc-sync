@@ -36,11 +36,55 @@ TODAY=$(date +%Y.%m.%d)
 echo $TODAY
 ```
 
-### 3-2. 템플릿 복사
+### 3-1.a 테마 확인
 
 ```bash
+THEME=${THEME:-dark}   # dark | light
+echo "theme=$THEME"
+```
+
+> **테마 선택 원칙:**
+> - **KPI / 성과 / 실적 보고서 → light 고정 (dark 사용 불가)**
+> - 상세 세부 보고서 (수치·근거 중심, KPI 제외) → light 우선
+> - 제안서, 발표자료, 임원 보고 등 임팩트 중심 → dark
+
+---
+
+### 3-1.b KPI 보고서 양식 고정 규칙
+
+KPI 내용이 포함된 보고서는 아래 두 슬라이드 포맷을 **반드시 세트로** 사용한다. (양식 고정)
+
+| 슬라이드 용도 | 함수 | 출처 |
+|-------------|------|------|
+| KPI 진행 현황 수치 (목표·실적·달성률 요약) | `mk_kpi_status_light()` | `guide_kpi_status_light` |
+| 핵심과제 상세 (연관 KPI·핵심과제·실행 계획·나의 역할) | `mk_kpi_dense_table()` | `light_dense_table_01` |
+
+적용 조건:
+- KPI 수치 요약이 필요한 경우 → `mk_kpi_status_light()` 필수
+- KPI 항목별 핵심과제·실행 계획·나의 역할이 포함된 경우 → `mk_kpi_dense_table()` 필수
+- **두 함수는 세트** — 한쪽만 단독 사용 불가
+- 이 함수들 사용 시 **light 테마 고정** (`lib.set_theme('light')`)
+- 커스텀 카드/그리드로 대체 불가 — 임의 대체 금지
+
+### 3-2. 템플릿 복사
+
+템플릿 ID (테마별):
+
+| 테마 | 템플릿 ID |
+|------|-----------|
+| dark | `1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk` |
+| light | `1gPAlxb421I_IaVIG0y9xGTV0qLxiF3PIgLVFODq30tc` |
+
+```bash
+# THEME 변수에 따라 자동 선택
+if [ "$THEME" = "light" ]; then
+  TMPL_ID="1gPAlxb421I_IaVIG0y9xGTV0qLxiF3PIgLVFODq30tc"
+else
+  TMPL_ID="1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk"
+fi
+
 COPY_RESULT=$(gws drive files copy \
-  --params '{"fileId":"1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk"}' \
+  --params "{\"fileId\":\"$TMPL_ID\"}" \
   --json "{\"name\":\"$TITLE\"}" 2>/dev/null)
 NEW_ID=$(echo "$COPY_RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 echo "복사된 ID: $NEW_ID"
@@ -82,7 +126,12 @@ python3 /tmp/parse_slides.py
 
 ### 3-4. 표지 텍스트 삽입
 
-표지 박스 인덱스 (Spigen 템플릿 인덱스 0 기준):
+> **표지 source of truth**: 테마별 템플릿 1페이지  
+> 새 세부 가이드 표지와 동일한 구조를 기본 cover 로 사용한다.
+
+표지 박스 인덱스 (슬라이드 인덱스 0 기준) — **테마마다 다름**:
+
+**dark 템플릿** (`1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk`):
 
 | box | 위치 | 내용 |
 |-----|------|------|
@@ -90,7 +139,26 @@ python3 /tmp/parse_slides.py
 | box[1] | 부서·담당자 | `디자인부문ㅣ패키지디자인팀\n한원진 담당` |
 | box[3] | 날짜·버전 | `YYYY.MM.DD\nV1.0` |
 
-> **주의**: box[2]는 빈 박스 — 건너뜀. `existing_text`가 있는 박스만 `deleteText` 실행.
+> **주의**: box[2]는 빈 박스 — 건너뜀.
+
+**light 템플릿** (`1gPAlxb421I_IaVIG0y9xGTV0qLxiF3PIgLVFODq30tc`):
+
+| box | 위치 | 내용 |
+|-----|------|------|
+| box[0] | 제목 | `제목\n부제목` |
+| box[1] | 부서·담당자 | `디자인부문ㅣ패키지디자인팀\n한원진 담당` |
+| box[2] | 날짜·버전 | `YYYY.MM.DD\nV1.0` |
+
+> `existing_text`가 있는 박스만 `deleteText` 실행.
+
+표지 생성 원칙:
+
+```txt
+1. 커스텀 cover를 새로 그리지 않는다.
+2. 기본은 템플릿 cover 복사 + 텍스트 교체다.
+3. 제목 / 부서·담당자 / 날짜·버전의 3영역 구조를 유지한다.
+4. 다른 덱에서 임시로 만든 커버를 source 로 삼지 않는다.
+```
 
 ```python
 # /tmp/fill_cover.py
@@ -133,6 +201,35 @@ gws slides presentations batchUpdate \
 
 ```bash
 cp ~/.agents/skills/spigen-slides/spigen_lib.py /tmp/spigen_lib.py
+```
+
+테마 선택이 필요한 경우:
+
+```python
+import spigen_lib as lib
+lib.set_theme(THEME)   # 'dark' | 'light'
+```
+
+원칙:
+
+- theme 값은 deck 생성 시작 전에 한 번만 정한다.
+- 생성 중간에 dark / light 를 섞지 않는다.
+- 테마를 바꿔도 레이아웃/spacing/validator 규칙은 유지된다.
+
+preview / 샘플 덱 / 실험 덱의 첫 슬라이드는 임시 텍스트박스로 직접 그리지 않고 아래 helper 를 사용한다.
+
+```python
+lib.mk_cover(
+    'slide_cover',
+    title='메인 제목',
+    subtitle='부제목',
+    department='디자인부문ㅣ패키지디자인팀',
+    owner='한원진 담당',
+    date_text='2026.04.25',
+    version='V1.0',
+    insert_index=0,
+    reqs=reqs,
+)
 ```
 
 #### 공통 헬퍼 (spigen_lib.py)
@@ -293,6 +390,8 @@ divider / 기준선 / bar 는 카드 내부에만 존재해야 한다.
 | U: report-table | `mk_report_table(sid, rows, reqs, x=M, y=138, w=648)` | dark |
 | V: callout-message | `mk_callout_message(sid, message, reqs, sub="", x=84, y=148, w=552, h=126)` | dark |
 | W: metric-bar-summary | `mk_metric_bar_summary(sid, metric, bars, reqs)` | dark |
+| X: kpi-status-light | `mk_kpi_status_light(sid, reqs, year="24", period="상반기", kpi_rows=[], def_rows=[], y=99)` | **light 전용·KPI 고정 양식 (슬라이드 6)** |
+| Y: kpi-dense-table | `mk_kpi_dense_table(sid, rows, reqs, y=96)` · rows 키: `kpi/task/plan/role` | **light 전용·KPI 고정 양식 (슬라이드 7)** |
 
 #### 사용 패턴
 
@@ -497,6 +596,165 @@ lib 방식 3-7과 동일.
 - `createShape` 실패 → objectId 중복 확인 (슬라이드마다 고유 prefix 사용). **objectId는 최소 5자 이상** 필요 (예: `slide_01`, `sec_01` — `s01` 같은 4자 이하는 API 거부)
 - Google Drive 인증 오류 → `gws auth status` 확인 후 재인증
 
+## 생성 후 검증 — Step A → B → C → D
+
+슬라이드 생성(`NEW_ID` 확보) 직후 아래 순서로 실행한다.  
+하나라도 FAIL이면 수정 후 Step A부터 재실행한다.
+
+---
+
+### Step A: 수치 검증
+
+```bash
+python3 /Users/harugury/.agents/skills/spigen-slides/spigen_verify.py $NEW_ID
+```
+
+---
+
+### Step B: 내용 검수 서브에이전트
+
+메인 에이전트가 아래 프롬프트로 서브에이전트를 spawn한다.  
+**서브에이전트는 생성 컨텍스트를 전달받지 않는다. 슬라이드 ID만 전달한다.**
+
+```
+[서브에이전트 프롬프트 — Step B 내용 검수]
+
+너는 Spigen 슬라이드 내용 검수자다. 생성 과정이나 기획 의도는 모른다. 결과물만 본다.
+
+슬라이드 ID: {{PRESENTATION_ID}}
+
+먼저 아래 명령으로 슬라이드 데이터를 읽어라:
+  gws slides presentations get --params '{"presentationId":"{{PRESENTATION_ID}}"}' 2>/dev/null
+
+읽은 데이터를 바탕으로 아래 6가지 항목을 검수한다.
+
+1. 컴포넌트 선택 적합성
+   - 여러 항목의 동일 속성을 비교하는데 카드를 썼는가? → 표가 맞음
+   - 상태(완료/진행중/대기)가 핵심인데 상태 구분 없이 나열됐는가?
+   - 독립적이지 않은 항목에 카드를 썼는가?
+
+2. 페이지별 주제 명확성
+   - 각 슬라이드의 주제가 하나인가?
+   - 제목(eyebrow + title)만 봐도 이 슬라이드가 무엇에 대한 것인지 알 수 있는가?
+   ⚠️ KPI 고정 양식 예외: 슬라이드에 상단 KPI 진행 현황 테이블 + 하단 KPI 정의 테이블이 한 페이지에 공존하는 경우(guide_kpi_status_light 양식), 이는 spigen_execution.md 3-1.b의 고정 양식이므로 "주제 이중화"로 판정하지 않는다. 이 구조는 설계 의도이다.
+
+3. 슬라이드 의도 (무엇을 보여주려는가)
+   - "이 슬라이드를 보고 나서 청중이 무엇을 알아야 하는가?"가 한 문장으로 표현 가능한가?
+   - 정보 나열 / 판단 유도 / 현황 보고 — 의도가 선택한 컴포넌트 형식과 일치하는가?
+
+4. 카드 역할 구분
+   - mk_split_cards 카드에 완료/대기/Next가 섞이면 ✅/⏳/primary로 구분됐는가?
+
+5. 핵심 메시지
+   - 발표자 설명 없이 슬라이드만 봐도 핵심이 파악되는가?
+
+6. 디테일용 기준 (해당 시)
+   - 5~6줄 허용, 수치·근거 생략 없음, 자기완결 기준을 지켰는가?
+
+출력 형식:
+[내용 검수]
+
+슬라이드별 분석:
+- 슬라이드 N: [주제 한 줄] / [의도 한 줄] / [컴포넌트 선택 적합 여부]
+
+확인한 항목:
+- [컴포넌트 선택] ✅ / ❌ (이유)
+- [페이지별 주제] ✅ / ❌ (이유)
+- [슬라이드 의도] ✅ / ❌ (이유)
+- [카드 역할 구분] ✅ / ❌ (이유)
+- [핵심 메시지] ✅ / ❌ (이유)
+- [디테일 기준] ✅ / ❌ / N/A (이유)
+
+판정: ✅ 통과 / ❌ 불통과
+불통과 시: 어떤 슬라이드의 어떤 요소가 문제인지 구체적으로 명시
+```
+
+---
+
+### Step C: 디자이너 시뮬레이션 서브에이전트
+
+```
+[서브에이전트 프롬프트 — Step C 디자이너 검수]
+
+너는 spigen_design_spec.md를 숙지한 Spigen 디자이너다. 생성 과정은 모른다. 결과물만 본다.
+
+슬라이드 ID: {{PRESENTATION_ID}}
+
+먼저 아래 명령으로 슬라이드 데이터를 읽어라:
+  gws slides presentations get --params '{"presentationId":"{{PRESENTATION_ID}}"}' 2>/dev/null
+
+그 다음 ~/.agents/skills/spigen-slides/spigen_design_spec.md 를 읽어라.
+
+슬라이드에 KPI 관련 테이블이 포함된 경우 ~/.agents/skills/spigen-slides/spigen_execution.md 의 3-1.b 섹션도 읽어 KPI 고정 양식 구조(guide_kpi_status_light / light_dense_table_01)를 파악한다.
+
+읽은 데이터를 바탕으로 아래 항목을 검수한다:
+1. 폰트: 한글 포함 → Noto Sans, 그 외 → Proxima Nova
+2. 색상·오렌지: #FF6B1A 계열이 슬라이드당 3개 이하 요소에만 사용됐는가?
+3. 레이아웃: 60-30-10 비율, 캔버스 여백, 오렌지 절제 원칙
+4. 강조 구조: 슬라이드당 강조점 1개, 근거 있는 강조
+5. 형태 차별화: 분석/결론/수치 카드가 구분되는가?
+6. 캔버스 오버플로: 모든 요소가 720×405pt 안에 있는가?
+   ⚠️ KPI 고정 양식 예외: Google Slides native table의 elementProperties.size는 API 저장 기본값(약 236.2pt, 3,000,000 EMU)으로 항상 고정된다. 실제 렌더 크기는 tableRows[].rowHeight 합산값으로 계산한다. KPI 슬라이드(guide_kpi_status_light / light_dense_table_01)에서 elementProperties.size를 근거로 오버플로 판정 금지.
+
+출력 형식:
+[디자이너 검수]
+
+확인한 항목:
+- [폰트] ✅ / ❌ (이유)
+- [색상·오렌지] ✅ / ❌ (이유)
+- [레이아웃] ✅ / ❌ (이유)
+- [강조 구조] ✅ / ❌ (이유)
+- [형태 차별화] ✅ / ❌ (이유)
+- [캔버스 오버플로] ✅ / ❌ (이유)
+
+판정: ✅ 통과 / ❌ 불통과
+```
+
+---
+
+### Step D: 청중 시뮬레이션 서브에이전트
+
+메인 에이전트가 Q2(청중)와 Q4(목적)를 함께 전달한다.
+
+```
+[서브에이전트 프롬프트 — Step D 청중 시뮬레이션]
+
+너는 이 슬라이드를 처음 보는 사람이다.
+청중: {{Q2}}
+목적: {{Q4}}
+
+슬라이드 ID: {{PRESENTATION_ID}}
+
+먼저 아래 명령으로 슬라이드 텍스트를 읽어라:
+  gws slides presentations get --params '{"presentationId":"{{PRESENTATION_ID}}"}' 2>/dev/null
+
+기획 과정, 사용자 지시, 대화 맥락은 일절 참조하지 않는다.
+
+⚠️ KPI 보고서 판단 기준 전환: 슬라이드 내용이 KPI 진행 현황·달성률·핵심과제를 다루는 KPI 보고서인 경우, Q2(청중) 설정과 무관하게 반드시 "대표(경영진)" 입장에서 판단한다.
+- 대표가 이 자료만 보고 KPI 현황, 달성률, 핵심과제를 즉시 파악할 수 있는가?
+- 수치·달성률이 명확하게 드러나는가?
+- KPI 보고서가 아닌 경우에만 {{Q2}} 입장에서 판단한다.
+
+평가 항목:
+1. 이 자료만 보고 무슨 말을 하려는지 파악할 수 있는가?
+2. {{Q4}} 목적이 달성됐는가?
+3. 불명확하거나 빠진 것이 있는가?
+
+출력 형식:
+(KPI 보고서인 경우) [청중: 대표(경영진) / 목적: {{Q4}}]
+(그 외) [청중: {{Q2}} / 목적: {{Q4}}]
+
+이 자료만 보고 느낀 점:
+- (슬라이드별 구체적 반응)
+
+목적 달성 여부: ✅ 충족 / ❌ 미충족
+
+미충족 시 이유:
+- (무엇이 불명확한가, 무엇이 빠졌는가)
+```
+
+---
+
 ## Done when
 
 - 새 프레젠테이션 URL이 출력됐다.
@@ -508,7 +766,7 @@ lib 방식 3-7과 동일.
 - 검정 배경 위 긴 문장/보조 텍스트가 진한 화색으로 들어가지 않았는지 확인했다.
 - 각 내용 슬라이드에 보는 사람 기준의 의미 강조점이 1개 있다.
 - 강조 기준이 결론, 상호작용 포인트, 금액, 입력, 출력, 판단 기준 중 하나로 설명 가능하다.
-- 내용 슬라이드는 현재 템플릿과 같은 검정 배경(`dark`) + 오렌지 강조 + 어두운 카드 구조를 따른다.
+- 내용 슬라이드는 Q7에서 선택한 테마 + 오렌지 강조 + 해당 테마 카드 구조를 따른다.
 - 마지막 슬라이드는 Spigen 템플릿 인덱스 1, 2 (마지막 2페이지).
 - 모든 텍스트·도형이 구글 슬라이드에서 직접 수정 가능하다.
 - Step 2에서 계획한 모든 슬라이드에 내용이 입력됐다.
