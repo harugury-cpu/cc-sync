@@ -695,6 +695,11 @@ python3 /Users/harugury/.agents/skills/spigen-slides/spigen_verify.py $NEW_ID
 5. 형태 차별화: 분석/결론/수치 카드가 구분되는가?
 6. 캔버스 오버플로: 모든 요소가 720×405pt 안에 있는가?
    ⚠️ KPI 고정 양식 예외: Google Slides native table의 elementProperties.size는 API 저장 기본값(약 236.2pt, 3,000,000 EMU)으로 항상 고정된다. 실제 렌더 크기는 tableRows[].rowHeight 합산값으로 계산한다. KPI 슬라이드(guide_kpi_status_light / light_dense_table_01)에서 elementProperties.size를 근거로 오버플로 판정 금지.
+7. 표 레이아웃 (테이블이 포함된 슬라이드에만 적용)
+   - 표 전체가 캔버스(720×405pt) 안에 들어오는가? (표 x좌표 + 실제 너비 ≤ 720, 표 y좌표 + 실제 높이 ≤ 405)
+   - 셀 안 상하 여백이 텍스트를 읽기에 충분한가? 텍스트가 셀 경계에 붙어있거나 행이 너무 빽빽하지 않은가?
+   - 열 너비 배분이 내용 길이에 적합한가? 짧은 레이블 열에 과도한 너비, 긴 텍스트 열에 부족한 너비가 없는가?
+   - 표 주변 여백이 슬라이드의 다른 요소(제목·설명 텍스트)와 균형있게 배분됐는가?
 
 출력 형식:
 [디자이너 검수]
@@ -706,6 +711,7 @@ python3 /Users/harugury/.agents/skills/spigen-slides/spigen_verify.py $NEW_ID
 - [강조 구조] ✅ / ❌ (이유)
 - [형태 차별화] ✅ / ❌ (이유)
 - [캔버스 오버플로] ✅ / ❌ (이유)
+- [표 레이아웃] ✅ / ❌ / N/A (이유)
 
 판정: ✅ 통과 / ❌ 불통과
 ```
