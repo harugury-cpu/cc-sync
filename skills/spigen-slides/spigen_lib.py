@@ -14,6 +14,7 @@ Compatibility:
     Existing public helper/function names are preserved so older execution snippets
     still run, but all visual output now follows the user's current template.
 """
+import math
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -69,13 +70,13 @@ THEME_TOKENS = {
         "BLACK": c255(0, 0, 0),
     },
     "light": {
-        "BG": c255(247, 247, 245),
+        "BG": c255(255, 255, 255),
         "SURFACE": {"red": 1, "green": 1, "blue": 1},
-        "SURFACE_HI": c255(241, 241, 237),
+        "SURFACE_HI": {"red": 1, "green": 1, "blue": 1},
         "BORDER": c255(217, 217, 210),
         "BORDER_HI": c255(191, 192, 184),
         "ORANGE": c255(255, 107, 26),
-        "ORANGE_DIM": c255(255, 230, 214),
+        "ORANGE_DIM": {"red": 1, "green": 1, "blue": 1},
         "WHITE": {"red": 1, "green": 1, "blue": 1},
         "TEXT": c255(23, 23, 23),
         "TEXT_DIM": c255(95, 97, 91),
@@ -197,6 +198,27 @@ def _fit_height_to_content(y, desired_h, min_h=12, bottom=CONTENT_BOTTOM):
     return max(min_h, min(desired_h, bottom - y))
 
 
+def _grid_columns(x, total_w, ratios, precision=0.5):
+    """
+    Build a stable column grid from ratios.
+    Snap intermediate widths to a small step and let the final column absorb
+    the remainder so adjacent table sections always share the same edge.
+    """
+    unit = float(precision)
+    widths = []
+    used = 0.0
+    for ratio in ratios[:-1]:
+        raw = total_w * ratio
+        snapped = round(raw / unit) * unit
+        widths.append(snapped)
+        used += snapped
+    widths.append(total_w - used)
+    xs = [x]
+    for width in widths[:-1]:
+        xs.append(xs[-1] + width)
+    return xs, widths
+
+
 def _stack_group_height(item_heights, gap=0):
     if not item_heights:
         return 0
@@ -225,6 +247,144 @@ def shape(oid, page, stype, x, y, w, h):
             },
         }
     }
+
+
+def table(oid, page, rows, cols, x, y, w, h):
+    x, y, w, h = _clamp_rect_to_canvas(x, y, w, h)
+    return {
+        "createTable": {
+            "objectId": oid,
+            "rows": rows,
+            "columns": cols,
+            "elementProperties": {
+                "pageObjectId": page,
+                "size": {
+                    "width": {"magnitude": pt(w), "unit": "EMU"},
+                    "height": {"magnitude": pt(h), "unit": "EMU"},
+                },
+                "transform": {
+                    "scaleX": 1,
+                    "scaleY": 1,
+                    "translateX": pt(x),
+                    "translateY": pt(y),
+                    "unit": "EMU",
+                },
+            },
+        }
+    }
+
+
+def merge_cells(table_id, row, col, row_span, col_span):
+    return {
+        "mergeTableCells": {
+            "objectId": table_id,
+            "tableRange": {
+                "location": {"rowIndex": row, "columnIndex": col},
+                "rowSpan": row_span,
+                "columnSpan": col_span,
+            },
+        }
+    }
+
+
+def table_col_width(table_id, col_index, width):
+    return {
+        "updateTableColumnProperties": {
+            "objectId": table_id,
+            "columnIndices": [col_index],
+            "tableColumnProperties": {
+                "columnWidth": {"magnitude": width, "unit": "PT"}
+            },
+            "fields": "columnWidth",
+        }
+    }
+
+
+def table_row_height(table_id, row_index, height):
+    return {
+        "updateTableRowProperties": {
+            "objectId": table_id,
+            "rowIndices": [row_index],
+            "tableRowProperties": {
+                "minRowHeight": {"magnitude": height, "unit": "PT"}
+            },
+            "fields": "minRowHeight",
+        }
+    }
+
+
+def table_cell_fill(table_id, row, col, row_span, col_span, color):
+    return {
+        "updateTableCellProperties": {
+            "objectId": table_id,
+            "tableRange": {
+                "location": {"rowIndex": row, "columnIndex": col},
+                "rowSpan": row_span,
+                "columnSpan": col_span,
+            },
+            "tableCellProperties": {
+                "tableCellBackgroundFill": {
+                    "solidFill": {"color": {"rgbColor": color}}
+                }
+            },
+            "fields": "tableCellBackgroundFill.solidFill.color",
+        }
+    }
+
+
+def table_cell_valign(table_id, row, col, row_span, col_span, valign="MIDDLE"):
+    return {
+        "updateTableCellProperties": {
+            "objectId": table_id,
+            "tableRange": {
+                "location": {"rowIndex": row, "columnIndex": col},
+                "rowSpan": row_span,
+                "columnSpan": col_span,
+            },
+            "tableCellProperties": {
+                "contentAlignment": valign
+            },
+            "fields": "contentAlignment",
+        }
+    }
+
+
+def table_cell_text(reqs, table_id, row, col, text, color=TEXT, size=7,
+                    bold=False, ff=None, center=False):
+    reqs += [
+        {
+            "insertText": {
+                "objectId": table_id,
+                "cellLocation": {"rowIndex": row, "columnIndex": col},
+                "text": str(text or " "),
+                "insertionIndex": 0,
+            }
+        },
+        {
+            "updateTextStyle": {
+                "objectId": table_id,
+                "cellLocation": {"rowIndex": row, "columnIndex": col},
+                "textRange": {"type": "ALL"},
+                "style": {
+                    "foregroundColor": {"opaqueColor": {"rgbColor": color}},
+                    "fontSize": {"magnitude": _type_scale(size), "unit": "PT"},
+                    "fontFamily": _font_for(text, ff),
+                    "bold": bold,
+                },
+                "fields": "foregroundColor,fontSize,fontFamily,bold",
+            }
+        },
+    ]
+    if center:
+        reqs.append({
+            "updateParagraphStyle": {
+                "objectId": table_id,
+                "cellLocation": {"rowIndex": row, "columnIndex": col},
+                "textRange": {"type": "ALL"},
+                "style": {"alignment": "CENTER"},
+                "fields": "alignment",
+            }
+        })
 
 
 def line(oid, page, x1, y1, x2, y2, category="STRAIGHT"):
@@ -459,6 +619,31 @@ def _new_slide(sid, insert_index, reqs, layout_id=None):
     _page_bg(sid, reqs)
 
 
+def mk_cover(slide_oid, title, insert_index, reqs, subtitle="",
+             department="디자인부문ㅣ패키지디자인팀", owner="한원진 담당",
+             date_text="", version="V1.0"):
+    """
+    Theme-aware standard cover helper.
+
+    Use this for previews / generated decks instead of ad-hoc first-slide text boxes.
+    The hierarchy follows the current cover contract:
+      - large title block
+      - bottom-left department / owner
+      - bottom-right date / version
+    """
+    _new_slide(slide_oid, insert_index, reqs)
+    title_text = title if not subtitle else f"{title}\\n{subtitle}"
+    meta_text = version if not date_text else f"{date_text}\\n{version}"
+    team_text = department if not owner else f"{department}\\n{owner}"
+
+    _text(reqs, slide_oid, f"{slide_oid}_cover_title",
+          27.6, 34.3, 594.8, 99.5, title_text, TEXT, 36, False, "AUTO")
+    _text(reqs, slide_oid, f"{slide_oid}_cover_team",
+          27.6, 319.4, 561.4, 50.2, team_text, TEXT, 12, False, "AUTO")
+    _text(reqs, slide_oid, f"{slide_oid}_cover_meta",
+          507.5, 319.4, 176.6, 50.2, meta_text, TEXT, 12, False, "AUTO")
+
+
 def _text(reqs, sid, oid, x, y, w, h, text, color=TEXT, size=8, bold=False,
           ff=None, center=False, valign=False):
     reqs += [
@@ -567,6 +752,43 @@ def _estimate_lines(text, card_w, chars_per_line_at_100=11):
     # Normalize by a ~100pt card width baseline.
     capacity = max(6, int(chars_per_line_at_100 * (card_w / 100.0)))
     return max(1, (len(str(text)) + capacity - 1) // capacity)
+
+
+def _estimate_block_lines(text, card_w, chars_per_line_at_100=11):
+    """
+    Estimate wrapped line count while respecting explicit line breaks.
+    """
+    chunks = str(text or "").splitlines() or [""]
+    return max(1, sum(_estimate_lines(chunk, card_w, chars_per_line_at_100) for chunk in chunks))
+
+
+def _cap_text_block(text, card_w, max_lines=4, chars_per_line_at_100=10):
+    """
+    Keep table copy editable but bounded.
+    If text would make the table too tall, compress it to a readable number of lines.
+    """
+    raw_lines = []
+    for part in str(text or "").replace("\n\n", "\n").splitlines():
+        part = part.strip()
+        if part:
+            raw_lines.append(part)
+    if not raw_lines:
+        return " "
+    capacity = max(6, int(chars_per_line_at_100 * (card_w / 100.0)))
+    out = []
+    truncated = False
+    for line_idx, line in enumerate(raw_lines):
+        while line:
+            out.append(line[:capacity])
+            line = line[capacity:]
+            if len(out) >= max_lines:
+                truncated = bool(line) or line_idx < len(raw_lines) - 1
+                break
+        if len(out) >= max_lines:
+            break
+    if truncated and out:
+        out[-1] = out[-1].rstrip(" .,") + "…"
+    return "\n".join(out[:max_lines])
 
 
 def _center_group_start(card_y, card_h, group_h, min_pad=8):
@@ -789,14 +1011,14 @@ def mk_3col(sid, cols, reqs, theme="dark", align_mode="top_weighted"):
             start_y = _top_weighted_group_start(y0, 190, group_h, top_pad=20, bottom_bias=16)
         cursor_y = start_y
         _text(reqs, sid, f"{sid}_cl{i}", x + 18, cursor_y, card_w - 36, label_h,
-              str(label).upper(), BLACK if hot else (ORANGE if dim_hot else TEXT_FAINT), 7, True, "Proxima Nova", valign=True)
+              str(label).upper(), BLACK if hot else (ORANGE if dim_hot else TEXT_FAINT), 7, True, "AUTO", valign=True)
         cursor_y += label_h + label_gap
         _text(reqs, sid, f"{sid}_ct{i}", x + 18, cursor_y, card_w - 36, title_h,
               title, BLACK if hot else TEXT, 13, True, "Noto Sans", valign=True)
         cursor_y += title_h + (reason_gap if reason else title_gap)
         if reason:
             _text(reqs, sid, f"{sid}_reason{i}", x + 18, cursor_y, card_w - 36, reason_h,
-                  reason, BLACK if hot else ORANGE, 7, True, "Proxima Nova", valign=True)
+                  reason, BLACK if hot else ORANGE, 7, True, "AUTO", valign=True)
             cursor_y += reason_h + title_gap
         if items:
             line_y = cursor_y
@@ -849,7 +1071,7 @@ def mk_rule_grid(sid, cards, reqs, x=M, y=CONTENT_TOP, w=None, cols=2, gap_x=12,
     for card in visible:
         label = card.get("label", "")
         title = card.get("title", "")
-        lines = card.get("lines", [])[:3]
+        lines = card.get("lines", [])
         label_h = 10 if label else 0
         title_h = 18 if title else 0
         line_h = 10
@@ -884,7 +1106,7 @@ def mk_rule_grid(sid, cards, reqs, x=M, y=CONTENT_TOP, w=None, cols=2, gap_x=12,
 
         label = card.get("label", "").upper()
         title = card.get("title", "")
-        lines = card.get("lines", [])[:3]
+        lines = card.get("lines", [])
 
         label_h = 10 if label else 0
         title_h = 18 if title else 0
@@ -899,7 +1121,7 @@ def mk_rule_grid(sid, cards, reqs, x=M, y=CONTENT_TOP, w=None, cols=2, gap_x=12,
                 reqs, sid, f"{sid}_rulegrid_label_{i}",
                 xx + 16, cursor_y, card_w - 32, label_h, label,
                 ORANGE if marked or card.get("accent_bg") else TEXT_FAINT,
-                7, True, "Proxima Nova", valign=True
+                7, True, "AUTO", valign=True
             )
             cursor_y += label_h + label_gap
 
@@ -1083,7 +1305,7 @@ def mk_text_block(sid, body_text, reqs, y_start=128, font_size=10, theme="dark")
           body_text, TEXT_DIM, font_size, False, "Noto Sans")
 
 
-def mk_split(sid, left, right, reqs, theme="dark"):
+def mk_split(sid, left, right, reqs, theme="dark", arrow=True):
     _rect(reqs, sid, f"{sid}_leftbox", M, 128, 313, 170, SURFACE, BORDER, 0.5)
     _rect(reqs, sid, f"{sid}_rightbox", 371, 128, 313, 170, ORANGE_DIM, ORANGE, 0.5)
     _text(reqs, sid, f"{sid}_lt", M + 18, 150, 280, 24, left.get("title", ""),
@@ -1094,7 +1316,8 @@ def mk_split(sid, left, right, reqs, theme="dark"):
           TEXT, 14, True)
     _text(reqs, sid, f"{sid}_rb", 389, 184, 280, 80, right.get("body", ""),
           TEXT_DIM, 8, False)
-    _text(reqs, sid, f"{sid}_arrow", 352, 198, 16, 16, "›", ORANGE, 11, True, center=True)
+    if arrow:
+        _text(reqs, sid, f"{sid}_arrow", 352, 198, 16, 16, "›", ORANGE, 11, True, center=True)
 
 
 def mk_title_accent(sid, accent_part, rest_part, reqs, theme="dark",
@@ -1297,6 +1520,505 @@ def mk_report_table(sid, rows, reqs, x=M, y=138, w=648):
             bold = c in (0, 3)
             _text(reqs, sid, f"{sid}_tbl_{r}_{c}", xs[c] + 10, ry + 11, ws[c] - 20, 13,
                   val, color, 7, bold, "Noto Sans", valign=True)
+
+
+def mk_kpi_status_detail(sid, reqs, eyebrow="APPENDIX", title="KPI 진행 현황",
+                         x=54, y=96, w=612, summary_title=None, summary_groups=None,
+                         summary_headers=None, summary_rows=None,
+                         detail_title=None, detail_headers=None, detail_rows=None):
+    """
+    Dense appendix/report table page.
+
+    Use for:
+      - KPI summary tables
+      - definition / formula appendix pages
+      - report-style dense reference sheets
+
+    summary_groups format:
+      [("KPI 정보", 0, 4), ("상반기 목표/실적", 4, 3), ...]
+
+    detail_rows format:
+      [
+        ["협업 업무 만족도", "정의 ...", "측정식 ..."],
+        ...
+      ]
+    """
+    _header(sid, reqs, eyebrow=eyebrow, title=title)
+
+    summary_title = summary_title or None
+    summary_groups = summary_groups or [
+        ("KPI 정보", 0, 3),
+        ("상반기 목표/실적", 3, 3),
+        ("연간 목표/실적", 6, 3),
+    ]
+    summary_headers = summary_headers or [
+        "목표", "KPI", "가중치", "목표", "실적", "달성률", "목표", "실적", "달성률"
+    ]
+    summary_rows = summary_rows or [
+        {
+            "goal": "브랜드 가치 향상을 위한 전략 디자인 제공",
+            "goal_span": 2,
+            "kpi": "협업 만족도 조사",
+            "weight": "30%",
+            "half_target": "유관부서 만족도 2.7/3",
+            "half_actual": "",
+            "half_rate": "",
+            "year_target": "유관부서 만족도 2.8/3",
+            "year_actual": "",
+            "year_rate": "",
+        },
+        {
+            "goal_cont": True,
+            "kpi": "전략콘텐츠 기여도 조사",
+            "weight": "20%",
+            "half_target": "영업·마케팅 부서 설문조사 2.7/3",
+            "half_actual": "",
+            "half_rate": "",
+            "year_target": "영업·마케팅 부서 설문조사 2.8/3",
+            "year_actual": "",
+            "year_rate": "",
+        },
+        {
+            "goal": "안정적인 공급",
+            "kpi": "오류건수 & 품질 이슈",
+            "weight": "50%",
+            "half_target": "3건 이하",
+            "half_actual": "",
+            "half_rate": "",
+            "year_target": "6건 이하",
+            "year_actual": "",
+            "year_rate": "",
+        },
+    ]
+    detail_title = detail_title or "■ KPI 세부정보"
+    detail_headers = detail_headers or ["KPI", "정의", "측정산식", "증빙"]
+    detail_rows = detail_rows or [
+        {
+            "kpi": "협업 만족도 조사",
+            "definition": "패키지 품질과 협업 만족도를 조사해\n업무 기여도를 평가한다.",
+            "formula": "유관부서 설문 평균 점수\n목표 2.7/3",
+            "evidence": "설문조사 결과 자료",
+        },
+        {
+            "kpi": "전략콘텐츠 기여도 설문조사",
+            "definition": "디자인이 전략제품의 매출/브랜드 가치 향상에\n기여했는지 의견으로 확인한다.",
+            "formula": "영업·마케팅 설문 점수\n전략콘텐츠 기여 의견",
+            "evidence": "설문조사 결과 자료",
+        },
+        {
+            "kpi": "오류건수 & 신규패키지 품질이슈",
+            "definition": "오타·정보오류·품질 이슈 등\n개선이 필요한 케이스를 관리한다.",
+            "formula": "발생 건수(먼데이)\n+ 부서 확인 건수",
+            "evidence": "먼데이 이력 + 부서 확인 기록",
+        },
+    ]
+
+    table_fill = SURFACE if CURRENT_THEME == "dark" else WHITE
+    table_head_fill = SURFACE_HI if CURRENT_THEME == "dark" else WHITE
+    table_border = BORDER_HI if CURRENT_THEME == "dark" else BORDER
+
+    # Native editable table path.
+    top_y = y
+    if summary_title:
+        _text(reqs, sid, f"{sid}_sec1", x, y, w, 12, summary_title, TEXT, 8, True, "AUTO")
+        top_y += 18
+
+    col_ratios = [0.165, 0.155, 0.06, 0.185, 0.06, 0.06, 0.185, 0.06, 0.07]
+    col_xs, col_ws = _grid_columns(x, w, col_ratios)
+    row_heights = []
+    for row in summary_rows[:3]:
+        cell_values = [
+            row.get("kpi", ""),
+            row.get("weight", ""),
+            row.get("half_target", ""),
+            row.get("half_actual", ""),
+            row.get("half_rate", ""),
+            row.get("year_target", ""),
+            row.get("year_actual", ""),
+            row.get("year_rate", ""),
+        ]
+        max_lines = max(
+            _estimate_block_lines(val or " ", width - 8, 10)
+            for val, width in zip(cell_values, col_ws[1:])
+        )
+        row_heights.append(max(28, 8 + max_lines * 8))
+    for idx, row in enumerate(summary_rows[:3]):
+        span = int(row.get("goal_span", 1))
+        goal = row.get("goal", "")
+        if goal and span > 1:
+            needed = max(36, 8 + _estimate_block_lines(goal, col_ws[0] - 12, 10) * 8)
+            current = sum(row_heights[idx:idx + span])
+            if needed > current:
+                extra = needed - current
+                for off in range(span):
+                    row_heights[idx + off] += extra / span
+
+    top_row_heights = [20, 20] + row_heights
+    top_h = sum(top_row_heights)
+    top_tbl = f"{sid}_kpi_top_tbl"
+    reqs.append(table(top_tbl, sid, 5, 9, x, top_y, w, top_h))
+    for ci, width in enumerate(col_ws):
+        reqs.append(table_col_width(top_tbl, ci, width))
+    for ri, height in enumerate(top_row_heights):
+        reqs.append(table_row_height(top_tbl, ri, height))
+    reqs += [
+        merge_cells(top_tbl, 0, 0, 1, 3),
+        merge_cells(top_tbl, 0, 3, 1, 3),
+        merge_cells(top_tbl, 0, 6, 1, 3),
+        merge_cells(top_tbl, 2, 0, 2, 1),
+    ]
+    reqs += [
+        table_cell_fill(top_tbl, 0, 0, 1, 3, table_head_fill),
+        table_cell_fill(top_tbl, 0, 3, 1, 3, table_head_fill),
+        table_cell_fill(top_tbl, 0, 6, 1, 3, table_head_fill),
+    ]
+    for ci in range(9):
+        reqs.append(table_cell_fill(top_tbl, 1, ci, 1, 1, table_fill))
+    for ri in range(2, 5):
+        for ci in range(9):
+            reqs.append(table_cell_fill(top_tbl, ri, ci, 1, 1, table_fill))
+
+    top_group_labels = [("KPI 정보", 0), ("상반기 목표/실적", 3), ("연간 목표/실적", 6)]
+    for label, ci in top_group_labels:
+        table_cell_text(reqs, top_tbl, 0, ci, label, TEXT, 7, True, "AUTO", center=True)
+    for ci, head in enumerate(summary_headers):
+        table_cell_text(reqs, top_tbl, 1, ci, head, TEXT, 7, True, "AUTO", center=True)
+
+    # merged goal cells
+    table_cell_text(reqs, top_tbl, 2, 0, summary_rows[0].get("goal", ""), TEXT, 7.5, True, "AUTO", center=True)
+    table_cell_text(reqs, top_tbl, 4, 0, summary_rows[2].get("goal", ""), TEXT, 7.5, True, "AUTO", center=True)
+    top_value_keys = ["kpi", "weight", "half_target", "half_actual", "half_rate", "year_target", "year_actual", "year_rate"]
+    for r, row in enumerate(summary_rows[:3], start=2):
+        for ci, key in enumerate(top_value_keys, start=1):
+            table_cell_text(
+                reqs, top_tbl, r, ci, row.get(key, ""),
+                TEXT, 7.5 if ci == 1 else 7, ci == 1, "AUTO", center=True
+            )
+
+    sec2_y = top_y + top_h + 14
+    _text(reqs, sid, f"{sid}_sec2", x, sec2_y, w, 12, detail_title, TEXT, 8, True, "AUTO")
+    detail_y = sec2_y + 14
+    detail_ratios = [0.19, 0.32, 0.30, 0.19]
+    _, detail_ws = _grid_columns(x, w, detail_ratios)
+    detail_heights = []
+    for row in detail_rows[:3]:
+        vals = [row.get("kpi", ""), row.get("definition", ""), row.get("formula", ""), row.get("evidence", "")]
+        max_lines = max(
+            _estimate_block_lines(val or " ", width - (12 if idx == 0 else 8), 10 if idx else 9)
+            for idx, (val, width) in enumerate(zip(vals, detail_ws))
+        )
+        detail_heights.append(max(32, 8 + max_lines * 8))
+    detail_tbl = f"{sid}_kpi_detail_tbl"
+    detail_h = 20 + sum(detail_heights)
+    reqs.append(table(detail_tbl, sid, 4, 4, x, detail_y, w, detail_h))
+    for ci, width in enumerate(detail_ws):
+        reqs.append(table_col_width(detail_tbl, ci, width))
+    reqs.append(table_row_height(detail_tbl, 0, 20))
+    for ri, height in enumerate(detail_heights, start=1):
+        reqs.append(table_row_height(detail_tbl, ri, height))
+    for ci in range(4):
+        reqs.append(table_cell_fill(detail_tbl, 0, ci, 1, 1, table_head_fill))
+    for ri in range(1, 4):
+        for ci in range(4):
+            reqs.append(table_cell_fill(detail_tbl, ri, ci, 1, 1, table_fill))
+    for ci, head in enumerate(detail_headers):
+        table_cell_text(reqs, detail_tbl, 0, ci, head, TEXT, 7, True, "AUTO", center=True)
+    detail_keys = ["kpi", "definition", "formula", "evidence"]
+    for ri, row in enumerate(detail_rows[:3], start=1):
+        for ci, key in enumerate(detail_keys):
+            table_cell_text(
+                reqs, detail_tbl, ri, ci, row.get(key, ""),
+                TEXT, 7 if ci else 7.5, ci == 0, "AUTO", center=(ci == 0)
+            )
+    return
+
+    # Section 1
+    top_y = y
+    if summary_title:
+        _text(reqs, sid, f"{sid}_sec1", x, y, w, 12,
+              summary_title,
+              TEXT, 8, True, "AUTO")
+        top_y += 18
+
+    group_h = 20
+    head_h = 20
+    col_ratios = [0.18, 0.165, 0.055, 0.20, 0.055, 0.06, 0.20, 0.055, 0.06]
+    xs, ws = _grid_columns(x, w, col_ratios)
+
+    row_heights = []
+    for row in summary_rows[:3]:
+        cell_values = [
+            row.get("kpi", ""),
+            row.get("weight", ""),
+            row.get("half_target", ""),
+            row.get("half_actual", ""),
+            row.get("half_rate", ""),
+            row.get("year_target", ""),
+            row.get("year_actual", ""),
+            row.get("year_rate", ""),
+        ]
+        cell_widths = [ws[1], ws[2], ws[3], ws[4], ws[5], ws[6], ws[7], ws[8]]
+        max_lines = max(
+            _estimate_block_lines(val or " ", width - 8, 10)
+            for val, width in zip(cell_values, cell_widths)
+        )
+        row_heights.append(max(28, 8 + max_lines * 8))
+
+    for idx, row in enumerate(summary_rows[:3]):
+        span = int(row.get("goal_span", 1))
+        goal = row.get("goal", "")
+        if goal and span > 1:
+            needed = max(36, 8 + _estimate_block_lines(goal, ws[0] - 12, 10) * 8)
+            current = sum(row_heights[idx:idx + span])
+            if needed > current:
+                extra = needed - current
+                for off in range(span):
+                    row_heights[idx + off] += extra / span
+
+    table1_h = group_h + head_h + sum(row_heights)
+    _rect(reqs, sid, f"{sid}_t1_outer", x, top_y, w, table1_h, table_fill, table_border, 0.5)
+
+    for i, (label, start, span) in enumerate(summary_groups):
+        gx = xs[start]
+        gw = sum(ws[start:start + span])
+        _rect(reqs, sid, f"{sid}_t1_group{i}", gx, top_y, gw, group_h, table_head_fill, table_border, 0.5)
+        _text(reqs, sid, f"{sid}_t1_group_txt{i}", gx + 6, top_y + 4, gw - 12, 12,
+              label, TEXT, 7, True, "AUTO", center=True, valign=True)
+
+    head_y = top_y + group_h
+    for i, head in enumerate(summary_headers):
+        _rect(reqs, sid, f"{sid}_t1_head{i}", xs[i], head_y, ws[i], head_h, table_fill, table_border, 0.4)
+        _text(reqs, sid, f"{sid}_t1_head_txt{i}", xs[i] + 4, head_y + 4, ws[i] - 8, 12,
+              head, TEXT, 7, True, "AUTO", center=True, valign=True)
+
+    current_y = head_y + head_h
+    for r, row in enumerate(summary_rows[:3]):
+        body_h = row_heights[r]
+        ry = current_y
+        if not row.get("goal_cont"):
+            span = int(row.get("goal_span", 1))
+            gh = sum(row_heights[r:r + span])
+            _rect(reqs, sid, f"{sid}_t1_goal_{r}", xs[0], ry, ws[0], gh, table_fill, BORDER, 0.4)
+            _text(reqs, sid, f"{sid}_t1_goal_txt_{r}", xs[0] + 6, ry + 4, ws[0] - 12, gh - 8,
+                  row.get("goal", ""), TEXT, 7.5, True, "AUTO", center=True, valign=True)
+        values = [
+            row.get("kpi", ""),
+            row.get("weight", ""),
+            row.get("half_target", ""),
+            row.get("half_actual", ""),
+            row.get("half_rate", ""),
+            row.get("year_target", ""),
+            row.get("year_actual", ""),
+            row.get("year_rate", ""),
+        ]
+        for offset, val in enumerate(values, start=1):
+            _rect(reqs, sid, f"{sid}_t1_cell_{r}_{offset}", xs[offset], ry, ws[offset], body_h, table_fill, BORDER, 0.4)
+            size = 7.5 if offset == 1 else 7
+            _text(reqs, sid, f"{sid}_t1_txt_{r}_{offset}", xs[offset] + 4, ry + 4, ws[offset] - 8, body_h - 8,
+                  val or " ", TEXT, size, offset == 1, "AUTO", center=True, valign=True)
+        current_y += body_h
+
+    # Section 2
+    sec2_y = top_y + table1_h + 14
+    _text(reqs, sid, f"{sid}_sec2", x, sec2_y, w, 12, detail_title, TEXT, 8, True, "AUTO")
+
+    table2_y = sec2_y + 14
+    col2 = [0.19, 0.32, 0.30, 0.19]
+    xs2, ws2 = _grid_columns(x, w, col2)
+    for i, head in enumerate(detail_headers):
+        _rect(reqs, sid, f"{sid}_t2_head{i}", xs2[i], table2_y, ws2[i], 20, table_head_fill, table_border, 0.5)
+        _text(reqs, sid, f"{sid}_t2_head_txt{i}", xs2[i] + 4, table2_y + 4, ws2[i] - 8, 12,
+              head, TEXT, 7, True, "AUTO", center=True, valign=True)
+
+    detail_heights = []
+    for row in detail_rows[:3]:
+        values = [
+            row.get("kpi", ""),
+            row.get("definition", ""),
+            row.get("formula", ""),
+            row.get("evidence", ""),
+        ]
+        widths = [ws2[0], ws2[1], ws2[2], ws2[3]]
+        max_lines = max(
+            _estimate_block_lines(val or " ", width - (12 if idx == 0 else 8), 10 if idx else 9)
+            for idx, (val, width) in enumerate(zip(values, widths))
+        )
+        detail_heights.append(max(32, 8 + max_lines * 8))
+
+    table2_h = 20 + sum(detail_heights)
+    _rect(reqs, sid, f"{sid}_t2_outer", x, table2_y, w, table2_h, table_fill, table_border, 0.5)
+
+    current_y = table2_y + 20
+    for r, row in enumerate(detail_rows[:3]):
+        row2_h = detail_heights[r]
+        ry = current_y
+        values = [
+            row.get("kpi", ""),
+            row.get("definition", ""),
+            row.get("formula", ""),
+            row.get("evidence", ""),
+        ]
+        for c, val in enumerate(values):
+            _rect(reqs, sid, f"{sid}_t2_cell_{r}_{c}", xs2[c], ry, ws2[c], row2_h, table_fill, BORDER, 0.4)
+            align_center = c == 0
+            size = 7 if c else 7.5
+            _text(reqs, sid, f"{sid}_t2_txt_{r}_{c}", xs2[c] + (4 if not align_center else 6), ry + 4,
+                  ws2[c] - (8 if not align_center else 12), row2_h - 8, val or " ",
+                  TEXT, size, c == 0, "AUTO", center=align_center, valign=True)
+        current_y += row2_h
+
+
+def mk_kpi_key_task_table(sid, reqs, eyebrow="APPENDIX", title="KPI 핵심 과제",
+                          x=54, y=96, w=612, headers=None, rows=None):
+    """
+    Editable native-table layout for KPI key-task pages.
+
+    columns:
+      KPI 항목 / 달성률(%) / 세부 내용 / 하반기·내년 계획
+    """
+    _header(sid, reqs, eyebrow=eyebrow, title=title)
+
+    headers = headers or [
+        "KPI 항목",
+        "달성률\n(%)",
+        "핵심과제를 바탕으로 세부 내용 기입\n(달성: 주요 성과 / 미달성: 미달성 원인)",
+        "(6월 PT) 하반기 계획\n(12월 PT) 내년 계획",
+    ]
+    rows = rows or [
+        {
+            "kpi": "협업 업무만족도",
+            "kpi_span": 1,
+            "col1": "100%",
+            "col2": "주요 성과\n- 패키지 리뉴얼 체계 정리\n- 협업 프로세스 개선",
+            "col3": "하반기\n- 운영 범위 확대",
+        },
+        {
+            "kpi": "오류 및 신규 패키지 이슈 미발생",
+            "kpi_span": 1,
+            "col1": "120%",
+            "col2": "주요 성과\n- 오류 이력 추적 체계 운영\n- 유관부서 확인 프로세스 정착\n- 신규 패키지 검수 기준 명확화",
+            "col3": "하반기\n- 이슈 로그 표준화\n내년\n- 사전 경보 체계 도입",
+        },
+    ]
+
+    table_fill = SURFACE if CURRENT_THEME == "dark" else WHITE
+    table_head_fill = SURFACE_HI if CURRENT_THEME == "dark" else WHITE
+    col_ratios = [0.16, 0.09, 0.42, 0.33]
+    _, col_ws = _grid_columns(x, w, col_ratios)
+
+    # Keep source data intact. The table must adapt to the content,
+    # not the other way around.
+    fitted_rows = [dict(row) for row in rows]
+
+    def _task_row_needed_height(row):
+        values = [
+            row.get("col1", row.get("rate", "")),
+            row.get("col2", row.get("detail", "")),
+            row.get("col3", row.get("plan", "")),
+        ]
+        line_counts = [
+            _estimate_block_lines(val or " ", width - 12, 8)
+            for val, width in zip(values, col_ws[1:4])
+        ]
+        max_lines = max(line_counts or [1])
+        return max(44, 14 + max_lines * 8.5)
+
+    desired_row_heights = [_task_row_needed_height(row) for row in fitted_rows]
+    row_weights = []
+    for row in fitted_rows:
+        values = [
+            row.get("col1", row.get("rate", "")),
+            row.get("col2", row.get("detail", "")),
+            row.get("col3", row.get("plan", "")),
+        ]
+        row_weights.append(max(
+            _estimate_block_lines(val or " ", width - 12, 8)
+            for val, width in zip(values, col_ws[1:4])
+        ))
+
+    # Merged KPI label cells also need enough total span height.
+    for idx, row in enumerate(fitted_rows):
+        span = int(row.get("kpi_span", 1))
+        label = row.get("kpi", "")
+        if label and span > 1:
+            needed = max(44, 14 + _estimate_block_lines(label, col_ws[0] - 12, 8) * 8.5)
+            current = sum(desired_row_heights[idx:idx + span])
+            if needed > current:
+                extra = needed - current
+                for off in range(span):
+                    desired_row_heights[idx + off] += extra / span
+
+    header_h = 26
+    available_h = max(120, CONTENT_BOTTOM - y)
+    available_rows_h = max(80, available_h - header_h)
+    desired_total = sum(desired_row_heights)
+
+    # Do not force the table to fill the whole page.
+    # Keep a report-style natural density, then add only a modest amount of
+    # breathing space if there is room.
+    target_rows_h = min(available_rows_h, desired_total * 1.04 + 6)
+
+    if desired_total > target_rows_h and desired_total > 0:
+        scale = target_rows_h / desired_total
+        row_heights = [h * scale for h in desired_row_heights]
+    else:
+        row_heights = list(desired_row_heights)
+        extra = max(0, target_rows_h - sum(row_heights))
+        weight_total = sum(row_weights) or len(row_weights) or 1
+        row_heights = [
+            h + extra * ((wgt or 1) / weight_total)
+            for h, wgt in zip(row_heights, row_weights)
+        ]
+
+    min_row_h = 38
+    row_heights = [max(min_row_h, round(h, 1)) for h in row_heights]
+
+    table_id = f"{sid}_kpi_task_tbl"
+    total_h = header_h + sum(row_heights)
+    reqs.append(table(table_id, sid, 1 + len(fitted_rows), 4, x, y, w, total_h))
+    for ci, width in enumerate(col_ws):
+        reqs.append(table_col_width(table_id, ci, width))
+    reqs.append(table_row_height(table_id, 0, header_h))
+    for ri, height in enumerate(row_heights, start=1):
+        reqs.append(table_row_height(table_id, ri, height))
+
+    for ci in range(4):
+        reqs.append(table_cell_fill(table_id, 0, ci, 1, 1, table_head_fill))
+        reqs.append(table_cell_valign(table_id, 0, ci, 1, 1, "MIDDLE"))
+        table_cell_text(reqs, table_id, 0, ci, headers[ci], TEXT, 7, True, "AUTO", center=True)
+
+    for ri, row in enumerate(fitted_rows, start=1):
+        span = int(row.get("kpi_span", 1))
+        if not row.get("kpi_cont"):
+            if span > 1:
+                reqs.append(merge_cells(table_id, ri, 0, span, 1))
+                reqs.append(table_cell_valign(table_id, ri, 0, span, 1, "MIDDLE"))
+            else:
+                reqs.append(table_cell_valign(table_id, ri, 0, 1, 1, "MIDDLE"))
+            table_cell_text(reqs, table_id, ri, 0, row.get("kpi", ""), TEXT, 7.5, True, "AUTO", center=True)
+
+    for ri, row in enumerate(fitted_rows, start=1):
+        for ci in range(4):
+            reqs.append(table_cell_fill(table_id, ri, ci, 1, 1, table_fill))
+        values = [
+            row.get("col1", row.get("rate", "")),
+            row.get("col2", row.get("detail", "")),
+            row.get("col3", row.get("plan", "")),
+        ]
+        for ci, val in enumerate(values, start=1):
+            reqs.append(table_cell_valign(table_id, ri, ci, 1, 1, "MIDDLE" if ci == 1 else "TOP"))
+            table_cell_text(
+                reqs,
+                table_id,
+                ri,
+                ci,
+                val,
+                TEXT,
+                7.5 if ci == 1 else 7,
+                ci == 1,
+                "AUTO",
+                center=(ci == 1),
+            )
 
 
 def mk_callout_message(sid, message, reqs, sub="", x=84, y=148, w=552, h=126):
@@ -1664,7 +2386,7 @@ def mk_swimlane_mapping(sid, rows, reqs, eyebrow="", title="", x=54, y=148):
     for i, row in enumerate(visible):
         yy = base_y + i * (row_h + row_gap)
         accent = bool(row.get("primary") or row.get("accent") or row.get("hot"))
-        if i < len(visible):
+        if i < len(visible) - 1:
             _divider(reqs, sid, f"{sid}_map_sep_l{i}", x + 14, yy + row_h + 4, left_w - 28)
             _divider(reqs, sid, f"{sid}_map_sep_m{i}", mid_x + 14, yy + row_h + 4, mid_w - 28)
             _divider(reqs, sid, f"{sid}_map_sep_r{i}", right_x + 14, yy + row_h + 4, right_w - 28)
@@ -1674,3 +2396,253 @@ def mk_swimlane_mapping(sid, rows, reqs, eyebrow="", title="", x=54, y=148):
               row.get("middle", ""), ORANGE if accent else TEXT_DIM, 7, accent, "AUTO", center=True, valign=True)
         _text(reqs, sid, f"{sid}_map_right{i}", right_x + 18, yy + 8, right_w - 36, 16,
               row.get("right", ""), TEXT, 13, True, "Noto Sans", valign=True)
+
+
+def _dyn_row_h(cells_ws, font_size=7, pad_v=8, line_h=10, min_h=28):
+    """셀 내용 기반 동적 행 높이 계산. cells_ws: [(text, col_width), ...]"""
+    max_lines = 1
+    for text, col_w in cells_ws:
+        if not text:
+            continue
+        char_w = max(1.0, font_size * 0.65)
+        chars_per_line = max(3, int(max(10.0, col_w - 10) / char_w))
+        lines = 0
+        for para in str(text).split('\n'):
+            lines += max(1, math.ceil(len(para) / chars_per_line)) if para.strip() else 1
+        max_lines = max(max_lines, max(1, lines))
+    return max(min_h, pad_v * 2 + max_lines * line_h)
+
+
+def mk_kpi_dense_table(sid, rows, reqs, y=96):
+    """
+    light_dense_table_01 고정 양식 — KPI 핵심과제 상세 테이블.
+
+    light 테마 전용. slide_base() 호출 후 본문을 채운다.
+    mk_kpi_status_light()과 세트로 사용한다.
+
+    rows: [
+        {
+            "kpi":   "연관 KPI 항목명",
+            "task":  "핵심과제 (\\n 허용)",
+            "plan":  "실행 계획 (\\n 허용)",
+            "role":  "나의 역할 (\\n 허용)",
+        },
+        ...
+    ]
+    """
+    COL_WS  = [100.9, 183.1, 252.9, 93.2]
+    TABLE_X = 36.0
+    TABLE_W = sum(COL_WS)
+    HEAD_H  = 26
+    KEYS    = ["kpi", "task", "plan", "role"]
+    HEADERS = ["연관 KPI", "핵심과제", "실행 계획", "나의 역할"]
+    n       = len(rows)
+    tbl_id  = f"{sid}_kdt"
+
+    row_hs = []
+    for row in rows:
+        cells_ws = [(row.get(k, ""), COL_WS[j]) for j, k in enumerate(KEYS)]
+        row_hs.append(_dyn_row_h(cells_ws, font_size=7, pad_v=8, line_h=10, min_h=28))
+    total_h = HEAD_H + sum(row_hs)
+
+    reqs.append(table(tbl_id, sid, 1 + n, 4, TABLE_X, y, TABLE_W, total_h))
+
+    for j, cw in enumerate(COL_WS):
+        reqs.append(table_col_width(tbl_id, j, cw))
+
+    reqs.append(table_row_height(tbl_id, 0, HEAD_H))
+    for i, rh in enumerate(row_hs):
+        reqs.append(table_row_height(tbl_id, 1 + i, rh))
+
+    reqs.append(table_cell_fill(tbl_id, 0, 0, 1, 4, SURFACE_HI))
+    reqs.append(table_cell_valign(tbl_id, 0, 0, 1, 4, "MIDDLE"))
+
+    for i in range(n):
+        bg = SURFACE if i % 2 == 0 else SURFACE_HI
+        reqs.append(table_cell_fill(tbl_id, 1 + i, 0, 1, 4, bg))
+        reqs.append(table_cell_valign(tbl_id, 1 + i, 0, 1, 4, "TOP"))
+
+    for j, htxt in enumerate(HEADERS):
+        table_cell_text(reqs, tbl_id, 0, j, htxt, TEXT_FAINT, 7, False, "Noto Sans")
+
+    for i, row in enumerate(rows):
+        for j, key in enumerate(KEYS):
+            val = row.get(key, "")
+            if val:
+                table_cell_text(reqs, tbl_id, 1 + i, j, val, TEXT, 7, j == 0, "Noto Sans")
+
+
+def mk_kpi_status_light(sid, reqs,
+                         year="24",
+                         period="상반기",
+                         kpi_rows=None,
+                         def_rows=None,
+                         y=99):
+    """
+    guide_kpi_status_light 고정 양식 — KPI 진행 현황 수치 테이블.
+
+    light 테마 전용. slide_base() 호출 후 본문을 채운다.
+    mk_kpi_dense_table()과 세트로 사용한다.
+
+    kpi_rows: [
+        {
+            "objective": "목표 (KPI 정보 그룹)",
+            "kpi":       "KPI 항목명",
+            "weight":    "가중치 (예: 20%)",
+            "h_target":  "상반기 목표",
+            "h_actual":  "상반기 실적",
+            "h_rate":    "상반기 달성률",
+            "y_target":  "연간 목표",
+            "y_actual":  "연간 실적",
+            "y_rate":    "연간 달성률",
+            "h_done":    True,
+            "y_done":    False,
+        },
+        ...
+    ]
+    def_rows: [
+        {
+            "kpi":        "KPI 항목명",
+            "definition": "정의 및 선정배경",
+            "formula":    "달성률 측정산식",
+            "evidence":   "증빙",
+        },
+        ...
+    ]
+    year:   연도 표기 (기본 "24")
+    period: 반기 구분 (기본 "상반기")
+    """
+    kpi_rows = kpi_rows or []
+    def_rows = def_rows or []
+
+    TOP_COL_WS = [108.8, 102.3, 39.3, 121.7, 39.3, 39.3, 121.7, 39.3, 47.4]
+    TABLE_X    = 25.0
+    TABLE_W    = sum(TOP_COL_WS)
+    GRP_H      = 8
+    HEAD_H     = 20
+    top_id     = f"{sid}_kst"
+
+    _KEYS_TOP = ["objective", "kpi", "weight",
+                 "h_target", "h_actual", "h_rate",
+                 "y_target", "y_actual", "y_rate"]
+    n_top       = len(kpi_rows)
+    kpi_row_hs  = [
+        _dyn_row_h(
+            [(str(row.get(k, "") or ""), TOP_COL_WS[j]) for j, k in enumerate(_KEYS_TOP)],
+            font_size=7.5, pad_v=6, line_h=10, min_h=33
+        )
+        for row in kpi_rows
+    ]
+    total_top_h = GRP_H + HEAD_H + sum(kpi_row_hs)
+
+    # ── 상단 테이블 생성 ──────────────────────────────────────────────
+    reqs.append(table(top_id, sid, 2 + n_top, 9, TABLE_X, y, TABLE_W, total_top_h))
+
+    for j, cw in enumerate(TOP_COL_WS):
+        reqs.append(table_col_width(top_id, j, cw))
+    reqs.append(table_row_height(top_id, 0, GRP_H))
+    reqs.append(table_row_height(top_id, 1, HEAD_H))
+    for i, rh in enumerate(kpi_row_hs):
+        reqs.append(table_row_height(top_id, 2 + i, rh))
+
+    # ── 배경 채우기 (merge 전) ────────────────────────────────────────
+    reqs.append(table_cell_fill(top_id, 0, 0, 1, 9, SURFACE_HI))
+    reqs.append(table_cell_fill(top_id, 1, 0, 1, 9, SURFACE_HI))
+    for i in range(n_top):
+        bg = SURFACE if i % 2 == 0 else SURFACE_HI
+        reqs.append(table_cell_fill(top_id, 2 + i, 0, 1, 9, bg))
+
+    # ── valign ────────────────────────────────────────────────────────
+    reqs.append(table_cell_valign(top_id, 0, 0, 1, 9, "MIDDLE"))
+    reqs.append(table_cell_valign(top_id, 1, 0, 1, 9, "MIDDLE"))
+    for i in range(n_top):
+        reqs.append(table_cell_valign(top_id, 2 + i, 0, 1, 9, "MIDDLE"))
+
+    # ── 셀 병합 (row 0 그룹 헤더, fill 이후) ─────────────────────────
+    reqs.append(merge_cells(top_id, 0, 0, 1, 3))
+    reqs.append(merge_cells(top_id, 0, 3, 1, 3))
+    reqs.append(merge_cells(top_id, 0, 6, 1, 3))
+
+    # ── 그룹 헤더 텍스트 (병합된 셀 원본 열 인덱스로 접근) ────────────
+    table_cell_text(reqs, top_id, 0, 0, "KPI 정보",
+                    TEXT_FAINT, 6, False, "Noto Sans", center=True)
+    table_cell_text(reqs, top_id, 0, 3, f"{period} 목표/실적",
+                    TEXT_FAINT, 6, False, "Noto Sans", center=True)
+    table_cell_text(reqs, top_id, 0, 6, "연간 목표/실적",
+                    TEXT_FAINT, 6, False, "Noto Sans", center=True)
+
+    # ── 컬럼 헤더 텍스트 (row 1) ─────────────────────────────────────
+    COL_HEADERS = ["목표", "KPI", "가중치",
+                   "목표", "실적", "달성률",
+                   "목표", "실적", "달성률"]
+    for j, htxt in enumerate(COL_HEADERS):
+        table_cell_text(reqs, top_id, 1, j, htxt,
+                        TEXT_FAINT, 6, False, "Noto Sans", center=True)
+
+    # ── 데이터 행 ─────────────────────────────────────────────────────
+    KEYS     = ["objective", "kpi", "weight",
+                "h_target", "h_actual", "h_rate",
+                "y_target", "y_actual", "y_rate"]
+    DONE_MAP = {5: "h_done", 8: "y_done"}
+    for i, row in enumerate(kpi_rows):
+        for j, key in enumerate(KEYS):
+            val = str(row.get(key, "") or "")
+            if not val:
+                continue
+            done_key = DONE_MAP.get(j)
+            if done_key:
+                clr  = ORANGE if row.get(done_key, False) else TEXT
+                bold = bool(row.get(done_key, False))
+            else:
+                clr  = TEXT
+                bold = (j == 1)
+            table_cell_text(reqs, top_id, 2 + i, j, val,
+                            clr, 7, bold, "Noto Sans", center=(j >= 2))
+
+    # ── KPI 세부정보 레이블 ────────────────────────────────────────────
+    def_label_y = y + total_top_h + 10
+    _text(reqs, sid, f"{sid}_ksl_deflabel",
+          TABLE_X + 6, def_label_y, 200, 12,
+          "■ KPI 세부정보", TEXT_FAINT, 7, False, "Noto Sans")
+
+    # ── 하단 KPI 세부정보 테이블 ──────────────────────────────────────
+    DEF_COL_WS  = [125.4, 211.1, 197.6, 124.9]
+    DEF_TABLE_X = 28.6
+    DEF_TABLE_W = sum(DEF_COL_WS)
+    DEF_HEAD_H  = 20
+    DEF_KEYS    = ["kpi", "definition", "formula", "evidence"]
+    DEF_HEADERS = ["KPI", "정의 및 선정배경", "달성률 측정산식", "증빙"]
+    def_id      = f"{sid}_ksd"
+
+    n_def = len(def_rows)
+    def_row_hs = []
+    for row in def_rows:
+        cells_ws = [(row.get(k, ""), DEF_COL_WS[jj]) for jj, k in enumerate(DEF_KEYS)]
+        def_row_hs.append(_dyn_row_h(cells_ws, font_size=7, pad_v=8, line_h=10, min_h=28))
+    total_def_h = DEF_HEAD_H + sum(def_row_hs)
+
+    def_tbl_y = def_label_y + 14
+    reqs.append(table(def_id, sid, 1 + n_def, 4, DEF_TABLE_X, def_tbl_y, DEF_TABLE_W, total_def_h))
+
+    for j, cw in enumerate(DEF_COL_WS):
+        reqs.append(table_col_width(def_id, j, cw))
+    reqs.append(table_row_height(def_id, 0, DEF_HEAD_H))
+    for i, rh in enumerate(def_row_hs):
+        reqs.append(table_row_height(def_id, 1 + i, rh))
+
+    reqs.append(table_cell_fill(def_id, 0, 0, 1, 4, SURFACE_HI))
+    reqs.append(table_cell_valign(def_id, 0, 0, 1, 4, "MIDDLE"))
+    for i in range(n_def):
+        bg = SURFACE if i % 2 == 0 else SURFACE_HI
+        reqs.append(table_cell_fill(def_id, 1 + i, 0, 1, 4, bg))
+        reqs.append(table_cell_valign(def_id, 1 + i, 0, 1, 4, "TOP"))
+
+    for j, htxt in enumerate(DEF_HEADERS):
+        table_cell_text(reqs, def_id, 0, j, htxt, TEXT_FAINT, 7, False, "Noto Sans")
+
+    for i, row in enumerate(def_rows):
+        for j, key in enumerate(DEF_KEYS):
+            val = row.get(key, "")
+            if val:
+                table_cell_text(reqs, def_id, 1 + i, j, val,
+                                TEXT, 7, j == 0, "Noto Sans")
