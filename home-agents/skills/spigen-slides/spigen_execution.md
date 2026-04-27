@@ -36,11 +36,55 @@ TODAY=$(date +%Y.%m.%d)
 echo $TODAY
 ```
 
-### 3-2. 템플릿 복사
+### 3-1.a 테마 확인
 
 ```bash
+THEME=${THEME:-dark}   # dark | light
+echo "theme=$THEME"
+```
+
+> **테마 선택 원칙:**
+> - **KPI / 성과 / 실적 보고서 → light 고정 (dark 사용 불가)**
+> - 상세 세부 보고서 (수치·근거 중심, KPI 제외) → light 우선
+> - 제안서, 발표자료, 임원 보고 등 임팩트 중심 → dark
+
+---
+
+### 3-1.b KPI 보고서 양식 고정 규칙
+
+KPI 내용이 포함된 보고서는 아래 두 슬라이드 포맷을 **반드시 세트로** 사용한다. (양식 고정)
+
+| 슬라이드 용도 | 함수 | 출처 |
+|-------------|------|------|
+| KPI 진행 현황 수치 (목표·실적·달성률 요약) | `mk_kpi_status_light()` | `guide_kpi_status_light` |
+| 핵심과제 상세 (연관 KPI·핵심과제·실행 계획·나의 역할) | `mk_kpi_dense_table()` | `light_dense_table_01` |
+
+적용 조건:
+- KPI 수치 요약이 필요한 경우 → `mk_kpi_status_light()` 필수
+- KPI 항목별 핵심과제·실행 계획·나의 역할이 포함된 경우 → `mk_kpi_dense_table()` 필수
+- **두 함수는 세트** — 한쪽만 단독 사용 불가
+- 이 함수들 사용 시 **light 테마 고정** (`lib.set_theme('light')`)
+- 커스텀 카드/그리드로 대체 불가 — 임의 대체 금지
+
+### 3-2. 템플릿 복사
+
+템플릿 ID (테마별):
+
+| 테마 | 템플릿 ID |
+|------|-----------|
+| dark | `1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk` |
+| light | `1gPAlxb421I_IaVIG0y9xGTV0qLxiF3PIgLVFODq30tc` |
+
+```bash
+# THEME 변수에 따라 자동 선택
+if [ "$THEME" = "light" ]; then
+  TMPL_ID="1gPAlxb421I_IaVIG0y9xGTV0qLxiF3PIgLVFODq30tc"
+else
+  TMPL_ID="1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk"
+fi
+
 COPY_RESULT=$(gws drive files copy \
-  --params '{"fileId":"1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk"}' \
+  --params "{\"fileId\":\"$TMPL_ID\"}" \
   --json "{\"name\":\"$TITLE\"}" 2>/dev/null)
 NEW_ID=$(echo "$COPY_RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 echo "복사된 ID: $NEW_ID"
@@ -82,10 +126,12 @@ python3 /tmp/parse_slides.py
 
 ### 3-4. 표지 텍스트 삽입
 
-> **표지 source of truth**: 템플릿 ID `1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk` 의 1페이지  
+> **표지 source of truth**: 테마별 템플릿 1페이지  
 > 새 세부 가이드 표지와 동일한 구조를 기본 cover 로 사용한다.
 
-표지 박스 인덱스 (Spigen 템플릿 인덱스 0 기준):
+표지 박스 인덱스 (슬라이드 인덱스 0 기준) — **테마마다 다름**:
+
+**dark 템플릿** (`1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk`):
 
 | box | 위치 | 내용 |
 |-----|------|------|
@@ -93,7 +139,17 @@ python3 /tmp/parse_slides.py
 | box[1] | 부서·담당자 | `디자인부문ㅣ패키지디자인팀\n한원진 담당` |
 | box[3] | 날짜·버전 | `YYYY.MM.DD\nV1.0` |
 
-> **주의**: box[2]는 빈 박스 — 건너뜀. `existing_text`가 있는 박스만 `deleteText` 실행.
+> **주의**: box[2]는 빈 박스 — 건너뜀.
+
+**light 템플릿** (`1gPAlxb421I_IaVIG0y9xGTV0qLxiF3PIgLVFODq30tc`):
+
+| box | 위치 | 내용 |
+|-----|------|------|
+| box[0] | 제목 | `제목\n부제목` |
+| box[1] | 부서·담당자 | `디자인부문ㅣ패키지디자인팀\n한원진 담당` |
+| box[2] | 날짜·버전 | `YYYY.MM.DD\nV1.0` |
+
+> `existing_text`가 있는 박스만 `deleteText` 실행.
 
 표지 생성 원칙:
 
@@ -147,6 +203,35 @@ gws slides presentations batchUpdate \
 cp ~/.agents/skills/spigen-slides/spigen_lib.py /tmp/spigen_lib.py
 ```
 
+테마 선택이 필요한 경우:
+
+```python
+import spigen_lib as lib
+lib.set_theme(THEME)   # 'dark' | 'light'
+```
+
+원칙:
+
+- theme 값은 deck 생성 시작 전에 한 번만 정한다.
+- 생성 중간에 dark / light 를 섞지 않는다.
+- 테마를 바꿔도 레이아웃/spacing/validator 규칙은 유지된다.
+
+preview / 샘플 덱 / 실험 덱의 첫 슬라이드는 임시 텍스트박스로 직접 그리지 않고 아래 helper 를 사용한다.
+
+```python
+lib.mk_cover(
+    'slide_cover',
+    title='메인 제목',
+    subtitle='부제목',
+    department='디자인부문ㅣ패키지디자인팀',
+    owner='한원진 담당',
+    date_text='2026.04.25',
+    version='V1.0',
+    insert_index=0,
+    reqs=reqs,
+)
+```
+
 #### 공통 헬퍼 (spigen_lib.py)
 
 | 함수 | 역할 |
@@ -193,13 +278,25 @@ x + width <= 720
 y + height <= 405
 ```
 
-실패 시 대응:
+실패 시 대응 (내용이 레이아웃을 초과할 때):
 
 ```txt
-1. 카드/블록 높이 재계산
-2. 내부 여백 재분배
-3. 행 수 / 카드 수 재조정
-4. 레이아웃 분리 또는 페이지 분할
+원칙: 내용을 잘라 레이아웃에 맞추지 않는다. 레이아웃을 교체하거나 페이지를 분리한다.
+
+텍스트가 카드 안에서 잘리거나 "…"이 생기는 상황 → 레이아웃 선택 실패 신호
+→ 더 큰 컴포넌트(text-block, split-layout 등)로 교체
+
+카드 내용이 넘침 (항목당 줄 수 초과)
+→ 카드 수를 줄이고 레이아웃을 넓히거나, 페이지 분리
+
+슬라이드 한 장에 담기지 않음
+→ 페이지 분리. 억지로 한 장에 압축하지 않는다
+
+항목 3개 각각 내용이 많음
+→ mk_3col_cards() 대신 mk_split() 또는 mk_text_block()으로 교체
+
+최후 수단으로 카드/블록 높이 재계산 및 내부 여백 재분배를 시도하되,
+그래도 담기지 않으면 반드시 레이아웃 교체 또는 페이지 분리로 해결한다.
 ```
 
 카드 내부 여백 원칙:
@@ -267,6 +364,22 @@ divider / 기준선 / bar 는 카드 내부에만 존재해야 한다.
 카드 밖 gutter 영역에 남아 있으면 FAIL 이다.
 ```
 
+레이아웃 제한 원칙 (강제):
+
+```txt
+[불필요한 선 금지]
+- 카드 밖에 구분선 / 데코 bar / separator line 삽입 금지
+- 텍스트 블록 사이에 장식용 선 추가 금지
+- connector 는 흐름·관계가 명확히 존재할 때만 사용 — 단순 배치 목적 사용 금지
+- _divider() / thin rectangle 은 카드 내부에서만 호출
+
+[불필요한 여백 금지]
+- 공간을 채우기 위한 빈 rect / 투명 shape 삽입 금지
+- top / bottom 여백을 도형으로 추가하는 것 금지
+- 내용이 적으면 레이아웃을 단순화한다 — 빈 공간을 도형으로 채우지 않는다
+- 슬라이드 내 요소 수는 내용이 요구하는 최솟값으로 유지한다
+```
+
 강조 row / 강조 card 실행 규칙:
 
 ```txt
@@ -305,6 +418,8 @@ divider / 기준선 / bar 는 카드 내부에만 존재해야 한다.
 | U: report-table | `mk_report_table(sid, rows, reqs, x=M, y=138, w=648)` | dark |
 | V: callout-message | `mk_callout_message(sid, message, reqs, sub="", x=84, y=148, w=552, h=126)` | dark |
 | W: metric-bar-summary | `mk_metric_bar_summary(sid, metric, bars, reqs)` | dark |
+| X: kpi-status-light | `mk_kpi_status_light(sid, reqs, year="24", period="상반기", kpi_rows=[], def_rows=[], y=99)` | **light 전용·KPI 고정 양식 (슬라이드 6)** |
+| Y: kpi-dense-table | `mk_kpi_dense_table(sid, rows, reqs, y=96)` · rows 키: `kpi/task/plan/role` | **light 전용·KPI 고정 양식 (슬라이드 7)** |
 
 #### 사용 패턴
 
@@ -329,6 +444,60 @@ with open('/tmp/content_req.json', 'w') as f:
     json.dump({"requests": reqs}, f)
 ```
 
+#### 신규 권장 패턴: shared spec → preview / Slides 동시 생성
+
+```python
+from spigen_models import SlideSpec, ComponentSpec
+import spigen_preview as prev
+import spigen_lib as lib
+import json
+
+slides = [
+    SlideSpec(
+        slide_id="slide_decision",
+        label="SLIDE 01 — DECISION",
+        eyebrow="PROCESS",
+        title="자동 선택 실패 시 수동 폴백",
+        page_no=1,
+        components=[
+            ComponentSpec(
+                type="decision-tree",
+                props={
+                    "nodes": {
+                        "input": "CSV 입력",
+                        "decision": "자동 선택 가능?",
+                        "yes": "project.json 자동 선택",
+                        "no": "리스트박스 수동 폴백",
+                        "output": "PDF 출력",
+                    }
+                },
+            )
+        ],
+    )
+]
+
+# 1) preview
+prev.send_specs("/tmp/spigen_preview.html", slides)
+
+# 2) Google Slides requests
+reqs = []
+for idx, slide in enumerate(slides):
+    lib.slide_base(slide.slide_id, slide.title, idx, reqs, page_no=idx + 1, total=len(slides))
+    for component in slide.components:
+        lib.render_component_spec(slide.slide_id, component, reqs, eyebrow=slide.eyebrow, title=slide.title)
+
+with open("/tmp/content_req.json", "w", encoding="utf-8") as f:
+    json.dump({"requests": reqs}, f, ensure_ascii=False)
+```
+
+원칙:
+
+```txt
+HTML을 먼저 만들고 Slides로 변환하지 않는다.
+SlideSpec / ComponentSpec을 먼저 만든다.
+preview HTML과 Google Slides는 같은 spec을 각각 렌더한다.
+```
+
 ### 3-6. batchUpdate 실행
 
 모든 컴포넌트 요청을 하나의 리스트에 모아 실행:
@@ -349,6 +518,56 @@ gws slides presentations batchUpdate \
 슬라이드 수: N장
 URL: https://docs.google.com/presentation/d/$NEW_ID/edit
 ```
+
+
+---
+
+### 3-8. 생성 후 이미지 검수 (getThumbnail)
+
+슬라이드 생성 완료 후, 기획자·디자이너 서브에이전트 spawn 전에 실행한다.
+API 텍스트 데이터만으로 잡을 수 없는 **시각적 문제(오버플로·겹침·오렌지 과다)를 이미지로 직접 확인**한다.
+
+```bash
+# 슬라이드 N번 썸네일 URL 조회 (1-indexed)
+PAGE_IDX=1  # 0-indexed → 1번 슬라이드 = 0
+gws slides presentations pages getThumbnail \
+  --params "{"presentationId":"$NEW_ID", "pageObjectId":"$(gws slides presentations get \
+    --params "{\"presentationId\":\"$NEW_ID\"}" 2>/dev/null | \
+    python3 -c "import json,sys; slides=json.load(sys.stdin)['slides']; print(slides[$PAGE_IDX]['objectId'])")}" \
+  2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin)['contentUrl'])"
+```
+
+실용적 사용 패턴 (전체 슬라이드 URL 일괄 조회):
+
+```bash
+python3 << 'EOF'
+import subprocess, json
+
+result = subprocess.run(
+    ["gws", "slides", "presentations", "get",
+     "--params", f'{{"presentationId":"{NEW_ID}"}}'],
+    capture_output=True, text=True
+)
+slides = json.loads(result.stdout)["slides"]
+
+for i, slide in enumerate(slides):
+    thumb = subprocess.run(
+        ["gws", "slides", "presentations", "pages", "getThumbnail",
+         "--params", json.dumps({"presentationId": NEW_ID, "pageObjectId": slide["objectId"]})],
+        capture_output=True, text=True
+    )
+    url = json.loads(thumb.stdout).get("contentUrl", "")
+    print(f"슬라이드 {i+1}: {url}")
+EOF
+```
+
+Claude가 각 URL을 읽어 시각적으로 확인하는 항목:
+- 텍스트가 도형 밖으로 넘치지 않는가
+- 요소 간 겹침이 없는가
+- 오렌지 강조가 슬라이드당 3개 이하인가
+- 전체 레이아웃이 균형 있는가
+
+썸네일 URL은 발급 후 **1시간** 유효. 검수 즉시 진행한다.
 
 ---
 
@@ -437,6 +656,10 @@ gws slides presentations batchUpdate \
 
 남은 슬라이드의 placeholder를 실제 내용으로 교체:
 
+> **권장**: box index(`0`, `1`, `3` 등)로 채우지 말고, `slide_map`에서 placeholder 텍스트 또는 objectId 역할을 먼저 식별해
+> `{"cover_title": "...", "cover_team": "...", "cover_meta": "..."}` 같은 의미 키로 매핑한 뒤 교체한다.
+> 템플릿 수정 시 box 순서는 쉽게 바뀌지만 의미 기반 object 매핑은 덜 깨진다.
+
 > **중요**: `deleteText → insertText`만 실행하면 텍스트 스타일이 `themeColor: DARK1` 등으로 초기화되어
 > 검정 배경에서 내용이 안 보일 수 있다. 텍스트 교체 후에는 반드시 `updateTextStyle`을 함께 실행하거나,
 > 최종 검증에서 `foregroundColor`가 `TEXT`, `TEXT_DIM`, `ORANGE` 계열인지 확인한다.
@@ -509,21 +732,115 @@ lib 방식 3-7과 동일.
 - `createShape` 실패 → objectId 중복 확인 (슬라이드마다 고유 prefix 사용). **objectId는 최소 5자 이상** 필요 (예: `slide_01`, `sec_01` — `s01` 같은 4자 이하는 API 거부)
 - Google Drive 인증 오류 → `gws auth status` 확인 후 재인증
 
+## 생성 후 검증 — Step A → Step B → 기획자 → 디자이너 → 대상
+
+슬라이드 생성(`NEW_ID` 확보) 직후 아래 순서로 실행한다.  
+하나라도 FAIL이면 수정 후 Step A부터 재실행한다.
+
+---
+
+### Step A: 수치 검증
+
+```bash
+python3 /Users/harugury/.agents/skills/spigen-slides/spigen_verify.py $NEW_ID
+```
+
+---
+
+### Step B: 이미지 검수 (getThumbnail)
+
+Step A 전원 PASS 이후, 서브에이전트 spawn 전에 반드시 실행한다.  
+API 구조 데이터만으로 놓치기 쉬운 시각적 문제를 여기서 잡는다.
+
+```bash
+python3 << 'EOF'
+import subprocess, json
+
+result = subprocess.run(
+    ["gws", "slides", "presentations", "get",
+     "--params", f'{{"presentationId":"{NEW_ID}"}}'],
+    capture_output=True, text=True
+)
+slides = json.loads(result.stdout)["slides"]
+
+for i, slide in enumerate(slides):
+    thumb = subprocess.run(
+        ["gws", "slides", "presentations", "pages", "getThumbnail",
+         "--params", json.dumps({"presentationId": NEW_ID, "pageObjectId": slide["objectId"]})],
+        capture_output=True, text=True
+    )
+    print(f"슬라이드 {i+1}: {json.loads(thumb.stdout).get('contentUrl', '')}")
+EOF
+```
+
+확인 항목:
+- 텍스트 오버플로
+- 요소 겹침
+- 오렌지 강조 슬라이드당 3개 이하
+- 강조점 1개 원칙 유지
+- 전체 레이아웃 균형
+
+문제 발견 시:
+
+```txt
+수정 → 재생성 → Step A부터 전체 재실행
+```
+
+---
+
+### 기획자: 내용 검수 서브에이전트
+
+메인 에이전트가 아래 프롬프트로 서브에이전트를 spawn한다.  
+**서브에이전트는 생성 컨텍스트를 전달받지 않는다. 단, 슬라이드 ID + COMPONENT_BRIEF는 반드시 전달한다.**
+
+기획자에게 넘기는 최소 입력:
+
+```txt
+- PRESENTATION_ID
+- slide별 COMPONENT_BRIEF
+  (select_component() 입력값 / function_name / rationale)
+```
+
+→ 프롬프트 원문: `spigen_subagent_prompts.md` 참조
+
+---
+
+### 디자이너: 시뮬레이션 서브에이전트
+
+→ 프롬프트 원문: `spigen_subagent_prompts.md` 참조
+
+---
+
+### 대상: 청중 시뮬레이션 서브에이전트
+
+메인 에이전트가 Q2(청중)와 Q4(목적)를 함께 전달한다.
+
+→ 프롬프트 원문: `spigen_subagent_prompts.md` 참조
+
+---
+
 ## Done when
 
 - 새 프레젠테이션 URL이 출력됐다.
 - 표지는 Spigen 템플릿 그대로 (제목/부서/담당자/날짜/버전 정확히 입력됨).
 - 단순 생성 플로우 페이지에 하단 오렌지 강조 박스를 추가하지 않았다.
 - 동작흐름 + 운영 금액 + 비용표처럼 복합 구조가 필요하면 콘텐츠 템플릿 5페이지 구조를 참고했다.
-- 텍스트 교체 후 검정 배경 위 검정 텍스트가 없는지 확인했다.
+- 텍스트 교체 후 배경색과 같거나 유사한 색의 텍스트가 없는지 확인했다 (dark: 검정 배경 위 검정, light: 흰 배경 위 흰/연회색).
 - 배경색과 동일한 선/박스/테두리가 생성되지 않았는지 확인했다.
-- 검정 배경 위 긴 문장/보조 텍스트가 진한 화색으로 들어가지 않았는지 확인했다.
+- 긴 문장/보조 텍스트가 배경색과 구분되지 않는 색으로 들어가지 않았는지 확인했다 (dark: 진한 화색, light: 연회색·흰색).
 - 각 내용 슬라이드에 보는 사람 기준의 의미 강조점이 1개 있다.
 - 강조 기준이 결론, 상호작용 포인트, 금액, 입력, 출력, 판단 기준 중 하나로 설명 가능하다.
-- 내용 슬라이드는 현재 템플릿과 같은 검정 배경(`dark`) + 오렌지 강조 + 어두운 카드 구조를 따른다.
+- 내용 슬라이드는 Q7에서 선택한 테마 + 오렌지 강조 + 해당 테마 카드 구조를 따른다.
 - 마지막 슬라이드는 Spigen 템플릿 인덱스 1, 2 (마지막 2페이지).
 - 모든 텍스트·도형이 구글 슬라이드에서 직접 수정 가능하다.
 - Step 2에서 계획한 모든 슬라이드에 내용이 입력됐다.
+- Step 1에서 확정한 `select_component()` 결과와 실제 렌더 함수가 일치한다.
+- slide별 `COMPONENT_BRIEF`가 저장되고, 기획자 검수 입력에 함께 전달됐다.
+- 슬라이드 텍스트에 함수명·파일명·변수명(`mk_flow()`, `spigen_lib.py` 등)이 그대로 노출되지 않았다.
+- 슬라이드에 장식용 선·구분선이 없다. 카드 밖 gutter에 divider / bar가 없다.
+- 여백을 채우기 위한 빈 rect / 투명 도형이 없다. 요소 수가 내용 기준 최솟값이다.
+- 각 슬라이드의 핵심이 3~5초 안에 파악된다. 경쟁하는 메시지 블록이 없다.
+- 카드·구분선·장식 요소가 구조나 이해에 실질적으로 기여하는가? 그렇지 않으면 삭제했다.
 
 ---
 
@@ -640,7 +957,8 @@ echo "URL: https://docs.google.com/presentation/d/$NEW_ID/edit"
 
 | 규칙 | 상세 |
 |-----|------|
-| 투명 배경 | `propertyState: "NOT_RENDERED"` — 알파 0이 아님 |
+| 투명 배경 | `alpha: 0.0` (solidFill, black base) — `NOT_RENDERED` 사용 금지 |
+| 오렌지 3중 충돌 | eyebrow(항상 ORANGE) + flow hot step + sbox_bar 동시 사용 금지 — hot step 있는 슬라이드의 sbox_bar는 `ORANGE_DIM` 사용 |
 | 반투명 오렌지 테두리 | `alpha=0.549` (원·날짜 배지) |
 | 10% 오렌지 틴트 카드 | `_fill(oid, ORNG, 0.1)` (유료 STEP, Phase current, callout) |
 | 취소선 텍스트 | `_style(oid, WHT, 16.5, strike=True)` |

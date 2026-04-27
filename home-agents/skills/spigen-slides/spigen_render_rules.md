@@ -261,6 +261,47 @@ native BENT connector를 기본값으로 쓰지 않는다.
 카드 밖 gutter 영역에 의미 있는 선이나 바를 남기지 않는다.
 ```
 
+### Dense appendix table 규칙
+
+`mk_kpi_status_detail()`은 보고용 부록/상세 가이드에서 쓰는 dense table component다.
+
+원칙:
+
+```txt
+상단 = KPI 요약 표
+하단 = 정의 / 배경 / 측정식 표
+두 표 모두 같은 페이지 안에서만 의미를 닫는다.
+그룹 헤더 / 컬럼 헤더 / body row 계층을 분리한다.
+```
+
+일반화 입력:
+
+```txt
+summary_title
+summary_groups
+summary_headers
+summary_rows
+detail_title
+detail_headers
+detail_rows
+```
+
+강제 선택 규칙:
+
+```txt
+입력 내용에 KPI / 목표 / 실적 / 달성률 / 가중치 / 측정산식 / 증빙 성격이 있으면
+rule grid / 일반 report table 로 풀지 말고
+mk_kpi_status_detail()을 우선 사용한다.
+```
+
+생성 원칙:
+
+```txt
+실제 업무 디테일을 과도하게 복사하지 않는다.
+형태와 컬럼 구조를 유지하고,
+세부 문구는 그럴듯한 예시 수준으로 정리한다.
+```
+
 ### 선 / 커넥터 / divider 사용 기준
 
 ```txt
@@ -398,6 +439,48 @@ Phase 3개 → 같은 Phase 카드
 
 ## 8. 컴포넌트 선택 가이드
 
+### 컴포넌트 결정 테이블
+
+서술형 해석 없이 입력 데이터 특성으로 결정론적으로 선택한다.
+기획 단계(1-4 아웃라인)에서 이 테이블 기준으로 컴포넌트를 **먼저 확정**하고 이유를 기록한다.
+`select_component()` (spigen_lib.py)가 이 결정을 자동으로 수행한다.
+
+| 우선순위 | 조건 | 컴포넌트 | 함수 |
+|--------|-----|---------|-----|
+| 1 | KPI·실적·달성률·가중치 포함 | kpi-status-detail | `mk_kpi_status_detail()` |
+| 2 | 양방향 비교 (현재 vs 이후, Before/After) | compare-rows | `mk_compare_rows()` |
+| 3 | 단방향 프로세스 ≤4단계 | flow-focus | `mk_flow_focus()` |
+| 4 | 단방향 프로세스 5단계+ | flow | `mk_flow()` |
+| 5 | 동일 속성 비교 (속성이 행/열로 정렬 가능) | compare-rows | `mk_compare_rows()` |
+| 6 | 상태(완료/진행중/대기) 구분 필요 | split-cards | `mk_split_cards()` |
+| 7 | 독립 항목 정확히 3개 | 3col-cards | `mk_3col_cards()` |
+| 8 | 독립 항목 1~2개 | split-layout | `mk_split()` |
+| 9 | 서술형·순차 설명 (기본값) | text-block | `mk_text_block()` |
+
+우선순위 순서대로 조건을 확인한다. 첫 번째로 일치하는 행의 컴포넌트를 사용한다.
+
+판단 원칙:
+
+```
+카드      — 항목이 독립적·동등하고, 비교보다 존재감이 중요할 때 (우선순위 7)
+표/분할   — 동일 속성 비교, 상태 파악, 양방향 대조 (우선순위 2·5·6)
+텍스트 블록 — 순차적 단계·완료 내역·서술형 설명 (기본값)
+```
+
+**mk_split_cards 카드 역할 구분 규칙**
+
+오른쪽 카드 목록에 완료/대기/Next가 섞이는 경우 반드시 구분한다:
+
+```
+완료:      라벨 앞 ✅ 접두사
+진행중/대기: 라벨 앞 ⏳ 접두사
+다음 액션:  primary: True + "→ [동사형]" 형식
+```
+
+같은 스타일로 나열하면 안 된다.
+
+---
+
 ### 빠른 선택 가이드
 
 | 상황 | 컴포넌트 | 함수 | 기본 테마 |
@@ -415,7 +498,8 @@ Phase 3개 → 같은 Phase 카드
 | 분기 / 폴백 구조 | decision-tree | `mk_decision_tree()` | dark |
 | 모듈 ↔ 설정 매핑 | swimlane-mapping | `mk_swimlane_mapping()` | dark |
 | 텍스트 중심 설명 | text-block | `mk_text_block()` | dark |
-| 좌우 비교 / 병렬 | split-layout | `mk_split()` | dark |
+| 행 기반 비교 / Before-After | compare-rows | `mk_compare_rows()` | dark |
+| 좌우 병렬 일반 레이아웃 | split-layout | `mk_split()` | dark |
 | 텍스트 + 우측 카드 스택 | split-cards | `mk_split_cards()` | dark |
 | 임팩트 한 줄 메시지 | quote | `mk_quote()` | dark |
 | 오렌지+테마색 2색 제목 | title-accent | `mk_title_accent()` | dark |
@@ -457,6 +541,25 @@ Graphviz 결과 이미지를 슬라이드에 그대로 삽입
 ```
 
 실제 출력은 항상: Google Slides native shape + dark background + surface card + orange accent + editable text
+
+### 디자인 시스템 강제 범위
+
+디자인 시스템 가이드는 **모든 슬라이드의 exact 모양을 강제하는 용도**가 아니다.  
+대신 아래 3가지를 강제한다:
+
+```txt
+1. 토큰: 색 / 폰트 / 대비 / 여백 계층
+2. 컴포넌트 패밀리: 비교 / 프로세스 / 구조도 / 매핑 / KPI / 텍스트 블록
+3. 선택 규칙: 어떤 내용에서 어떤 패밀리를 써야 하는지
+```
+
+강제하지 않는 것:
+
+```txt
+모든 상황에서 동일 슬라이드 레이아웃 재사용
+HTML 결과를 Slides에 그대로 변환하는 것
+내용 구조가 다른데도 같은 템플릿에 억지로 끼워넣는 것
+```
 
 다이어그램용 기본 함수:
 

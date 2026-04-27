@@ -278,13 +278,25 @@ x + width <= 720
 y + height <= 405
 ```
 
-실패 시 대응:
+실패 시 대응 (내용이 레이아웃을 초과할 때):
 
 ```txt
-1. 카드/블록 높이 재계산
-2. 내부 여백 재분배
-3. 행 수 / 카드 수 재조정
-4. 레이아웃 분리 또는 페이지 분할
+원칙: 내용을 잘라 레이아웃에 맞추지 않는다. 레이아웃을 교체하거나 페이지를 분리한다.
+
+텍스트가 카드 안에서 잘리거나 "…"이 생기는 상황 → 레이아웃 선택 실패 신호
+→ 더 큰 컴포넌트(text-block, split-layout 등)로 교체
+
+카드 내용이 넘침 (항목당 줄 수 초과)
+→ 카드 수를 줄이고 레이아웃을 넓히거나, 페이지 분리
+
+슬라이드 한 장에 담기지 않음
+→ 페이지 분리. 억지로 한 장에 압축하지 않는다
+
+항목 3개 각각 내용이 많음
+→ mk_3col_cards() 대신 mk_split() 또는 mk_text_block()으로 교체
+
+최후 수단으로 카드/블록 높이 재계산 및 내부 여백 재분배를 시도하되,
+그래도 담기지 않으면 반드시 레이아웃 교체 또는 페이지 분리로 해결한다.
 ```
 
 카드 내부 여백 원칙:
@@ -352,6 +364,22 @@ divider / 기준선 / bar 는 카드 내부에만 존재해야 한다.
 카드 밖 gutter 영역에 남아 있으면 FAIL 이다.
 ```
 
+레이아웃 제한 원칙 (강제):
+
+```txt
+[불필요한 선 금지]
+- 카드 밖에 구분선 / 데코 bar / separator line 삽입 금지
+- 텍스트 블록 사이에 장식용 선 추가 금지
+- connector 는 흐름·관계가 명확히 존재할 때만 사용 — 단순 배치 목적 사용 금지
+- _divider() / thin rectangle 은 카드 내부에서만 호출
+
+[불필요한 여백 금지]
+- 공간을 채우기 위한 빈 rect / 투명 shape 삽입 금지
+- top / bottom 여백을 도형으로 추가하는 것 금지
+- 내용이 적으면 레이아웃을 단순화한다 — 빈 공간을 도형으로 채우지 않는다
+- 슬라이드 내 요소 수는 내용이 요구하는 최솟값으로 유지한다
+```
+
 강조 row / 강조 card 실행 규칙:
 
 ```txt
@@ -416,6 +444,60 @@ with open('/tmp/content_req.json', 'w') as f:
     json.dump({"requests": reqs}, f)
 ```
 
+#### 신규 권장 패턴: shared spec → preview / Slides 동시 생성
+
+```python
+from spigen_models import SlideSpec, ComponentSpec
+import spigen_preview as prev
+import spigen_lib as lib
+import json
+
+slides = [
+    SlideSpec(
+        slide_id="slide_decision",
+        label="SLIDE 01 — DECISION",
+        eyebrow="PROCESS",
+        title="자동 선택 실패 시 수동 폴백",
+        page_no=1,
+        components=[
+            ComponentSpec(
+                type="decision-tree",
+                props={
+                    "nodes": {
+                        "input": "CSV 입력",
+                        "decision": "자동 선택 가능?",
+                        "yes": "project.json 자동 선택",
+                        "no": "리스트박스 수동 폴백",
+                        "output": "PDF 출력",
+                    }
+                },
+            )
+        ],
+    )
+]
+
+# 1) preview
+prev.send_specs("/tmp/spigen_preview.html", slides)
+
+# 2) Google Slides requests
+reqs = []
+for idx, slide in enumerate(slides):
+    lib.slide_base(slide.slide_id, slide.title, idx, reqs, page_no=idx + 1, total=len(slides))
+    for component in slide.components:
+        lib.render_component_spec(slide.slide_id, component, reqs, eyebrow=slide.eyebrow, title=slide.title)
+
+with open("/tmp/content_req.json", "w", encoding="utf-8") as f:
+    json.dump({"requests": reqs}, f, ensure_ascii=False)
+```
+
+원칙:
+
+```txt
+HTML을 먼저 만들고 Slides로 변환하지 않는다.
+SlideSpec / ComponentSpec을 먼저 만든다.
+preview HTML과 Google Slides는 같은 spec을 각각 렌더한다.
+```
+
 ### 3-6. batchUpdate 실행
 
 모든 컴포넌트 요청을 하나의 리스트에 모아 실행:
@@ -436,6 +518,56 @@ gws slides presentations batchUpdate \
 슬라이드 수: N장
 URL: https://docs.google.com/presentation/d/$NEW_ID/edit
 ```
+
+
+---
+
+### 3-8. 생성 후 이미지 검수 (getThumbnail)
+
+슬라이드 생성 완료 후, 기획자·디자이너 서브에이전트 spawn 전에 실행한다.
+API 텍스트 데이터만으로 잡을 수 없는 **시각적 문제(오버플로·겹침·오렌지 과다)를 이미지로 직접 확인**한다.
+
+```bash
+# 슬라이드 N번 썸네일 URL 조회 (1-indexed)
+PAGE_IDX=1  # 0-indexed → 1번 슬라이드 = 0
+gws slides presentations pages getThumbnail \
+  --params "{"presentationId":"$NEW_ID", "pageObjectId":"$(gws slides presentations get \
+    --params "{\"presentationId\":\"$NEW_ID\"}" 2>/dev/null | \
+    python3 -c "import json,sys; slides=json.load(sys.stdin)['slides']; print(slides[$PAGE_IDX]['objectId'])")}" \
+  2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin)['contentUrl'])"
+```
+
+실용적 사용 패턴 (전체 슬라이드 URL 일괄 조회):
+
+```bash
+python3 << 'EOF'
+import subprocess, json
+
+result = subprocess.run(
+    ["gws", "slides", "presentations", "get",
+     "--params", f'{{"presentationId":"{NEW_ID}"}}'],
+    capture_output=True, text=True
+)
+slides = json.loads(result.stdout)["slides"]
+
+for i, slide in enumerate(slides):
+    thumb = subprocess.run(
+        ["gws", "slides", "presentations", "pages", "getThumbnail",
+         "--params", json.dumps({"presentationId": NEW_ID, "pageObjectId": slide["objectId"]})],
+        capture_output=True, text=True
+    )
+    url = json.loads(thumb.stdout).get("contentUrl", "")
+    print(f"슬라이드 {i+1}: {url}")
+EOF
+```
+
+Claude가 각 URL을 읽어 시각적으로 확인하는 항목:
+- 텍스트가 도형 밖으로 넘치지 않는가
+- 요소 간 겹침이 없는가
+- 오렌지 강조가 슬라이드당 3개 이하인가
+- 전체 레이아웃이 균형 있는가
+
+썸네일 URL은 발급 후 **1시간** 유효. 검수 즉시 진행한다.
 
 ---
 
@@ -524,6 +656,10 @@ gws slides presentations batchUpdate \
 
 남은 슬라이드의 placeholder를 실제 내용으로 교체:
 
+> **권장**: box index(`0`, `1`, `3` 등)로 채우지 말고, `slide_map`에서 placeholder 텍스트 또는 objectId 역할을 먼저 식별해
+> `{"cover_title": "...", "cover_team": "...", "cover_meta": "..."}` 같은 의미 키로 매핑한 뒤 교체한다.
+> 템플릿 수정 시 box 순서는 쉽게 바뀌지만 의미 기반 object 매핑은 덜 깨진다.
+
 > **중요**: `deleteText → insertText`만 실행하면 텍스트 스타일이 `themeColor: DARK1` 등으로 초기화되어
 > 검정 배경에서 내용이 안 보일 수 있다. 텍스트 교체 후에는 반드시 `updateTextStyle`을 함께 실행하거나,
 > 최종 검증에서 `foregroundColor`가 `TEXT`, `TEXT_DIM`, `ORANGE` 계열인지 확인한다.
@@ -596,7 +732,7 @@ lib 방식 3-7과 동일.
 - `createShape` 실패 → objectId 중복 확인 (슬라이드마다 고유 prefix 사용). **objectId는 최소 5자 이상** 필요 (예: `slide_01`, `sec_01` — `s01` 같은 4자 이하는 API 거부)
 - Google Drive 인증 오류 → `gws auth status` 확인 후 재인증
 
-## 생성 후 검증 — Step A → B → C → D
+## 생성 후 검증 — Step A → Step B → 기획자 → 디자이너 → 대상
 
 슬라이드 생성(`NEW_ID` 확보) 직후 아래 순서로 실행한다.  
 하나라도 FAIL이면 수정 후 Step A부터 재실행한다.
@@ -611,165 +747,75 @@ python3 /Users/harugury/.agents/skills/spigen-slides/spigen_verify.py $NEW_ID
 
 ---
 
-### Step B: 내용 검수 서브에이전트
+### Step B: 이미지 검수 (getThumbnail)
+
+Step A 전원 PASS 이후, 서브에이전트 spawn 전에 반드시 실행한다.  
+API 구조 데이터만으로 놓치기 쉬운 시각적 문제를 여기서 잡는다.
+
+```bash
+python3 << 'EOF'
+import subprocess, json
+
+result = subprocess.run(
+    ["gws", "slides", "presentations", "get",
+     "--params", f'{{"presentationId":"{NEW_ID}"}}'],
+    capture_output=True, text=True
+)
+slides = json.loads(result.stdout)["slides"]
+
+for i, slide in enumerate(slides):
+    thumb = subprocess.run(
+        ["gws", "slides", "presentations", "pages", "getThumbnail",
+         "--params", json.dumps({"presentationId": NEW_ID, "pageObjectId": slide["objectId"]})],
+        capture_output=True, text=True
+    )
+    print(f"슬라이드 {i+1}: {json.loads(thumb.stdout).get('contentUrl', '')}")
+EOF
+```
+
+확인 항목:
+- 텍스트 오버플로
+- 요소 겹침
+- 오렌지 강조 슬라이드당 3개 이하
+- 강조점 1개 원칙 유지
+- 전체 레이아웃 균형
+
+문제 발견 시:
+
+```txt
+수정 → 재생성 → Step A부터 전체 재실행
+```
+
+---
+
+### 기획자: 내용 검수 서브에이전트
 
 메인 에이전트가 아래 프롬프트로 서브에이전트를 spawn한다.  
-**서브에이전트는 생성 컨텍스트를 전달받지 않는다. 슬라이드 ID만 전달한다.**
+**서브에이전트는 생성 컨텍스트를 전달받지 않는다. 단, 슬라이드 ID + COMPONENT_BRIEF는 반드시 전달한다.**
 
+기획자에게 넘기는 최소 입력:
+
+```txt
+- PRESENTATION_ID
+- slide별 COMPONENT_BRIEF
+  (select_component() 입력값 / function_name / rationale)
 ```
-[서브에이전트 프롬프트 — Step B 내용 검수]
 
-너는 Spigen 슬라이드 내용 검수자다. 생성 과정이나 기획 의도는 모른다. 결과물만 본다.
-
-슬라이드 ID: {{PRESENTATION_ID}}
-
-먼저 아래 명령으로 슬라이드 데이터를 읽어라:
-  gws slides presentations get --params '{"presentationId":"{{PRESENTATION_ID}}"}' 2>/dev/null
-
-읽은 데이터를 바탕으로 아래 6가지 항목을 검수한다.
-
-1. 컴포넌트 선택 적합성
-   - 여러 항목의 동일 속성을 비교하는데 카드를 썼는가? → 표가 맞음
-   - 상태(완료/진행중/대기)가 핵심인데 상태 구분 없이 나열됐는가?
-   - 독립적이지 않은 항목에 카드를 썼는가?
-
-2. 페이지별 주제 명확성
-   - 각 슬라이드의 주제가 하나인가?
-   - 제목(eyebrow + title)만 봐도 이 슬라이드가 무엇에 대한 것인지 알 수 있는가?
-   ⚠️ KPI 고정 양식 예외: 슬라이드에 상단 KPI 진행 현황 테이블 + 하단 KPI 정의 테이블이 한 페이지에 공존하는 경우(guide_kpi_status_light 양식), 이는 spigen_execution.md 3-1.b의 고정 양식이므로 "주제 이중화"로 판정하지 않는다. 이 구조는 설계 의도이다.
-
-3. 슬라이드 의도 (무엇을 보여주려는가)
-   - "이 슬라이드를 보고 나서 청중이 무엇을 알아야 하는가?"가 한 문장으로 표현 가능한가?
-   - 정보 나열 / 판단 유도 / 현황 보고 — 의도가 선택한 컴포넌트 형식과 일치하는가?
-
-4. 카드 역할 구분
-   - mk_split_cards 카드에 완료/대기/Next가 섞이면 ✅/⏳/primary로 구분됐는가?
-
-5. 핵심 메시지
-   - 발표자 설명 없이 슬라이드만 봐도 핵심이 파악되는가?
-
-6. 디테일용 기준 (해당 시)
-   - 5~6줄 허용, 수치·근거 생략 없음, 자기완결 기준을 지켰는가?
-
-출력 형식:
-[내용 검수]
-
-슬라이드별 분석:
-- 슬라이드 N: [주제 한 줄] / [의도 한 줄] / [컴포넌트 선택 적합 여부]
-
-확인한 항목:
-- [컴포넌트 선택] ✅ / ❌ (이유)
-- [페이지별 주제] ✅ / ❌ (이유)
-- [슬라이드 의도] ✅ / ❌ (이유)
-- [카드 역할 구분] ✅ / ❌ (이유)
-- [핵심 메시지] ✅ / ❌ (이유)
-- [디테일 기준] ✅ / ❌ / N/A (이유)
-
-판정: ✅ 통과 / ❌ 불통과
-불통과 시: 어떤 슬라이드의 어떤 요소가 문제인지 구체적으로 명시
-```
+→ 프롬프트 원문: `spigen_subagent_prompts.md` 참조
 
 ---
 
-### Step C: 디자이너 시뮬레이션 서브에이전트
+### 디자이너: 시뮬레이션 서브에이전트
 
-```
-[서브에이전트 프롬프트 — Step C 디자이너 검수]
-
-너는 spigen_design_spec.md를 숙지한 Spigen 디자이너다. 생성 과정은 모른다. 결과물만 본다.
-
-슬라이드 ID: {{PRESENTATION_ID}}
-
-먼저 아래 명령으로 슬라이드 데이터를 읽어라:
-  gws slides presentations get --params '{"presentationId":"{{PRESENTATION_ID}}"}' 2>/dev/null
-
-그 다음 ~/.agents/skills/spigen-slides/spigen_design_spec.md 를 읽어라.
-
-슬라이드에 KPI 관련 테이블이 포함된 경우 ~/.agents/skills/spigen-slides/spigen_execution.md 의 3-1.b 섹션도 읽어 KPI 고정 양식 구조(guide_kpi_status_light / light_dense_table_01)를 파악한다.
-
-읽은 데이터를 바탕으로 아래 항목을 검수한다:
-1. 폰트: 한글 포함 → Noto Sans, 그 외 → Proxima Nova
-2. 색상·오렌지: #FF6B1A 계열이 슬라이드당 3개 이하 요소에만 사용됐는가?
-3. 레이아웃: 60-30-10 비율, 캔버스 여백, 오렌지 절제 원칙
-4. 강조 구조: 슬라이드당 강조점 1개, 근거 있는 강조
-5. 형태 차별화: 분석/결론/수치 카드가 구분되는가?
-6. 캔버스 오버플로: 모든 요소가 720×405pt 안에 있는가?
-   ⚠️ KPI 고정 양식 예외: Google Slides native table의 elementProperties.size는 API 저장 기본값(약 236.2pt, 3,000,000 EMU)으로 항상 고정된다. 실제 렌더 크기는 tableRows[].rowHeight 합산값으로 계산한다. KPI 슬라이드(guide_kpi_status_light / light_dense_table_01)에서 elementProperties.size를 근거로 오버플로 판정 금지.
-7. 표 레이아웃 (테이블이 포함된 슬라이드에만 적용)
-   - 표 전체가 캔버스(720×405pt) 안에 들어오는가? (표 x좌표 + 실제 너비 ≤ 720, 표 y좌표 + 실제 높이 ≤ 405)
-   - 셀 안 상하 여백이 텍스트를 읽기에 충분한가? 텍스트가 셀 경계에 붙어있거나 행이 너무 빽빽하지 않은가?
-   - 열 너비 배분이 내용 길이에 적합한가? 짧은 레이블 열에 과도한 너비, 긴 텍스트 열에 부족한 너비가 없는가?
-   - 표 주변 여백이 슬라이드의 다른 요소(제목·설명 텍스트)와 균형있게 배분됐는가?
-   - 복수 테이블 겹침: 같은 슬라이드에 테이블이 2개 이상 있는 경우, 각 테이블의 tableRows[].rowHeight 합산으로 실제 끝 y(translateY + Σ rowHeight)를 계산하고 다음 테이블의 translateY와 비교해 겹침 여부를 확인한다. elementProperties.size는 사용하지 않는다.
-
-위 7가지 항목 외에도, 숙련된 디자이너 직관으로 "이게 이상하다"고 느껴지는 것은 규칙에 없더라도 반드시 자유 관찰로 보고한다.
-자유 관찰 대상 예시 (열거가 아닌 예시일 뿐, 이 외에도 이상하면 모두 지적):
-- 요소가 다른 요소 위에 겹쳐 있음
-- 텍스트나 레이블이 배경 또는 다른 도형에 묻혀 보이지 않음
-- 여백이 한쪽으로 극단적으로 치우침
-- 슬라이드가 전체적으로 어색하거나 비어 보임
-- 의도한 구조가 실제로 망가져 있음
-
-출력 형식:
-[디자이너 검수]
-
-확인한 항목:
-- [폰트] ✅ / ❌ (이유)
-- [색상·오렌지] ✅ / ❌ (이유)
-- [레이아웃] ✅ / ❌ (이유)
-- [강조 구조] ✅ / ❌ (이유)
-- [형태 차별화] ✅ / ❌ (이유)
-- [캔버스 오버플로] ✅ / ❌ (이유)
-- [표 레이아웃] ✅ / ❌ / N/A (이유)
-
-자유 관찰:
-- (규칙 목록에 없더라도 눈에 띄는 이상 있으면 슬라이드별로 구체적으로 기술. 없으면 "없음")
-
-판정: ✅ 통과 / ❌ 불통과
-```
+→ 프롬프트 원문: `spigen_subagent_prompts.md` 참조
 
 ---
 
-### Step D: 청중 시뮬레이션 서브에이전트
+### 대상: 청중 시뮬레이션 서브에이전트
 
 메인 에이전트가 Q2(청중)와 Q4(목적)를 함께 전달한다.
 
-```
-[서브에이전트 프롬프트 — Step D 청중 시뮬레이션]
-
-너는 이 슬라이드를 처음 보는 사람이다.
-청중: {{Q2}}
-목적: {{Q4}}
-
-슬라이드 ID: {{PRESENTATION_ID}}
-
-먼저 아래 명령으로 슬라이드 텍스트를 읽어라:
-  gws slides presentations get --params '{"presentationId":"{{PRESENTATION_ID}}"}' 2>/dev/null
-
-기획 과정, 사용자 지시, 대화 맥락은 일절 참조하지 않는다.
-
-⚠️ KPI 보고서 판단 기준 전환: 슬라이드 내용이 KPI 진행 현황·달성률·핵심과제를 다루는 KPI 보고서인 경우, Q2(청중) 설정과 무관하게 반드시 "대표(경영진)" 입장에서 판단한다.
-- 대표가 이 자료만 보고 KPI 현황, 달성률, 핵심과제를 즉시 파악할 수 있는가?
-- 수치·달성률이 명확하게 드러나는가?
-- KPI 보고서가 아닌 경우에만 {{Q2}} 입장에서 판단한다.
-
-평가 항목:
-1. 이 자료만 보고 무슨 말을 하려는지 파악할 수 있는가?
-2. {{Q4}} 목적이 달성됐는가?
-3. 불명확하거나 빠진 것이 있는가?
-
-출력 형식:
-(KPI 보고서인 경우) [청중: 대표(경영진) / 목적: {{Q4}}]
-(그 외) [청중: {{Q2}} / 목적: {{Q4}}]
-
-이 자료만 보고 느낀 점:
-- (슬라이드별 구체적 반응)
-
-목적 달성 여부: ✅ 충족 / ❌ 미충족
-
-미충족 시 이유:
-- (무엇이 불명확한가, 무엇이 빠졌는가)
-```
+→ 프롬프트 원문: `spigen_subagent_prompts.md` 참조
 
 ---
 
@@ -779,15 +825,22 @@ python3 /Users/harugury/.agents/skills/spigen-slides/spigen_verify.py $NEW_ID
 - 표지는 Spigen 템플릿 그대로 (제목/부서/담당자/날짜/버전 정확히 입력됨).
 - 단순 생성 플로우 페이지에 하단 오렌지 강조 박스를 추가하지 않았다.
 - 동작흐름 + 운영 금액 + 비용표처럼 복합 구조가 필요하면 콘텐츠 템플릿 5페이지 구조를 참고했다.
-- 텍스트 교체 후 검정 배경 위 검정 텍스트가 없는지 확인했다.
+- 텍스트 교체 후 배경색과 같거나 유사한 색의 텍스트가 없는지 확인했다 (dark: 검정 배경 위 검정, light: 흰 배경 위 흰/연회색).
 - 배경색과 동일한 선/박스/테두리가 생성되지 않았는지 확인했다.
-- 검정 배경 위 긴 문장/보조 텍스트가 진한 화색으로 들어가지 않았는지 확인했다.
+- 긴 문장/보조 텍스트가 배경색과 구분되지 않는 색으로 들어가지 않았는지 확인했다 (dark: 진한 화색, light: 연회색·흰색).
 - 각 내용 슬라이드에 보는 사람 기준의 의미 강조점이 1개 있다.
 - 강조 기준이 결론, 상호작용 포인트, 금액, 입력, 출력, 판단 기준 중 하나로 설명 가능하다.
 - 내용 슬라이드는 Q7에서 선택한 테마 + 오렌지 강조 + 해당 테마 카드 구조를 따른다.
 - 마지막 슬라이드는 Spigen 템플릿 인덱스 1, 2 (마지막 2페이지).
 - 모든 텍스트·도형이 구글 슬라이드에서 직접 수정 가능하다.
 - Step 2에서 계획한 모든 슬라이드에 내용이 입력됐다.
+- Step 1에서 확정한 `select_component()` 결과와 실제 렌더 함수가 일치한다.
+- slide별 `COMPONENT_BRIEF`가 저장되고, 기획자 검수 입력에 함께 전달됐다.
+- 슬라이드 텍스트에 함수명·파일명·변수명(`mk_flow()`, `spigen_lib.py` 등)이 그대로 노출되지 않았다.
+- 슬라이드에 장식용 선·구분선이 없다. 카드 밖 gutter에 divider / bar가 없다.
+- 여백을 채우기 위한 빈 rect / 투명 도형이 없다. 요소 수가 내용 기준 최솟값이다.
+- 각 슬라이드의 핵심이 3~5초 안에 파악된다. 경쟁하는 메시지 블록이 없다.
+- 카드·구분선·장식 요소가 구조나 이해에 실질적으로 기여하는가? 그렇지 않으면 삭제했다.
 
 ---
 
@@ -904,7 +957,8 @@ echo "URL: https://docs.google.com/presentation/d/$NEW_ID/edit"
 
 | 규칙 | 상세 |
 |-----|------|
-| 투명 배경 | `propertyState: "NOT_RENDERED"` — 알파 0이 아님 |
+| 투명 배경 | `alpha: 0.0` (solidFill, black base) — `NOT_RENDERED` 사용 금지 |
+| 오렌지 3중 충돌 | eyebrow(항상 ORANGE) + flow hot step + sbox_bar 동시 사용 금지 — hot step 있는 슬라이드의 sbox_bar는 `ORANGE_DIM` 사용 |
 | 반투명 오렌지 테두리 | `alpha=0.549` (원·날짜 배지) |
 | 10% 오렌지 틴트 카드 | `_fill(oid, ORNG, 0.1)` (유료 STEP, Phase current, callout) |
 | 취소선 텍스트 | `_style(oid, WHT, 16.5, strike=True)` |

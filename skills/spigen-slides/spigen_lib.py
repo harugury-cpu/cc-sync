@@ -15,6 +15,8 @@ Compatibility:
     still run, but all visual output now follows the user's current template.
 """
 import math
+from spigen_layout import choose_component
+from spigen_models import ComponentSpec, SelectionInput, SlideSpec
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -25,27 +27,7 @@ def pt(v):
     return int(v * 12700)
 
 
-def _has_korean(text):
-    s = str(text or "")
-    return any(
-        ("\uac00" <= ch <= "\ud7a3")
-        or ("\u1100" <= ch <= "\u11ff")
-        or ("\u3130" <= ch <= "\u318f")
-        for ch in s
-    )
 
-
-def _font_for(text, ff=None):
-    """
-    Font policy:
-      - Korean-containing text -> Noto Sans
-      - Everything else        -> Proxima Nova
-
-    Explicit fontFamily still wins unless ff is None / AUTO.
-    """
-    if ff not in (None, "AUTO"):
-        return ff
-    return "Noto Sans" if _has_korean(text) else "Proxima Nova"
 
 
 def c255(r, g, b):
@@ -72,7 +54,7 @@ THEME_TOKENS = {
     "light": {
         "BG": c255(255, 255, 255),
         "SURFACE": {"red": 1, "green": 1, "blue": 1},
-        "SURFACE_HI": {"red": 1, "green": 1, "blue": 1},
+        "SURFACE_HI": c255(241, 241, 237),
         "BORDER": c255(217, 217, 210),
         "BORDER_HI": c255(191, 192, 184),
         "ORANGE": c255(255, 107, 26),
@@ -88,6 +70,132 @@ THEME_TOKENS = {
 }
 
 CURRENT_THEME = "dark"
+
+
+def select_component(content_type="", item_count=0, has_comparison=False,
+                     is_process=False, has_status=False, is_bilateral=False,
+                     is_kpi=False, audience="", purpose="", detail_mode="",
+                     diagram_kind="", message_shape=""):
+    """Returns (component_name, function_name, rationale) — 결정론적 컴포넌트 선택.
+    spigen_render_rules.md 섹션 8 결정 테이블 코드 구현.
+    기획 단계 1-4에서 호출 후 rationale을 아웃라인에 기록한다."""
+    selection = SelectionInput(
+        content_type=content_type,
+        item_count=item_count,
+        has_comparison=has_comparison,
+        is_process=is_process,
+        has_status=has_status,
+        is_bilateral=is_bilateral,
+        is_kpi=is_kpi,
+        audience=audience,
+        purpose=purpose,
+        detail_mode=detail_mode,
+        diagram_kind=diagram_kind,
+        message_shape=message_shape,
+    )
+    result = choose_component(selection)
+    return result.component_name, result.function_name, result.rationale
+
+
+def render_component_spec(sid, component, reqs, eyebrow="", title=""):
+    """Render a shared component spec into native Google Slides requests."""
+    if isinstance(component, dict):
+        component = ComponentSpec.from_dict(component)
+    ctype = component.type
+    props = component.props
+    if ctype == "flow":
+        return mk_flow(sid, props.get("steps", []), reqs=reqs)
+    if ctype == "flow-focus":
+        return mk_flow_focus(sid, props.get("steps", []), reqs)
+    if ctype == "compare-rows":
+        return mk_compare_rows(
+            sid,
+            props.get("rows", []),
+            reqs,
+            left_label=props.get("left_label", "현재"),
+            right_label=props.get("right_label", "도입 후"),
+            callout=props.get("callout", ""),
+        )
+    if ctype == "decision-tree":
+        return mk_decision_tree(sid, props.get("nodes", {}), reqs, eyebrow=eyebrow, title=title)
+    if ctype == "split-layout":
+        return mk_split(sid, props.get("left", {}), props.get("right", {}), reqs, arrow=props.get("arrow", True))
+    if ctype == "text-block":
+        return mk_text_block(sid, props.get("body_text", ""), reqs)
+    if ctype == "arch-layers":
+        return mk_arch_layers(sid, props.get("layers", []), reqs, eyebrow=eyebrow, title=title)
+    if ctype == "arch-orchestrator":
+        return mk_arch_orchestrator(sid, props.get("nodes", {}), reqs, eyebrow=eyebrow, title=title)
+    if ctype == "swimlane-mapping":
+        return mk_swimlane_mapping(sid, props.get("rows", []), reqs, eyebrow=eyebrow, title=title)
+    if ctype == "split-cards":
+        return mk_split_cards(sid, props.get("text_lines", []), props.get("cards", []), reqs)
+    if ctype == "3col-cards":
+        return mk_3col_cards(sid, props.get("cards", []), reqs)
+    if ctype == "3-col":
+        return mk_3col(sid, props.get("cols", []), reqs)
+    raise ValueError(f"Unsupported component type: {ctype}")
+
+
+def render_slide_spec(slide_spec, insert_index, reqs, total=None):
+    """Render a shared slide spec into Google Slides requests."""
+    if isinstance(slide_spec, dict):
+        slide_spec = SlideSpec.from_dict(slide_spec)
+    if not slide_spec.components:
+        raise ValueError("SlideSpec.components is empty")
+
+    first = slide_spec.components[0]
+    if first.type == "cover":
+        props = first.props
+        return mk_cover(
+            slide_spec.slide_id,
+            props.get("title", ""),
+            insert_index,
+            reqs,
+            subtitle=props.get("subtitle", ""),
+            department=props.get("department", "디자인부문ㅣ패키지디자인팀"),
+            owner=props.get("owner", "한원진 담당"),
+            date_text=props.get("date_text", ""),
+            version=props.get("version", "V1.0"),
+        )
+
+    if first.type == "section-divider":
+        props = first.props
+        return mk_section_divider(
+            slide_spec.slide_id,
+            props.get("num", "01"),
+            props.get("title", ""),
+            insert_index,
+            reqs,
+        )
+
+    slide_base(slide_spec.slide_id, slide_spec.title, insert_index, reqs, page_no=slide_spec.page_no, total=total)
+    for component in slide_spec.components:
+        render_component_spec(slide_spec.slide_id, component, reqs)
+
+
+def mk_compare_rows(sid, rows, reqs, left_label="현재", right_label="도입 후", callout=""):
+    """Compare layout modeled after the system guide page 17 reference."""
+    _text(reqs, sid, f"{sid}_cmp_left_label", 36, 109, 120, 10, left_label, BAD, 5, False, "Noto Sans")
+    _text(reqs, sid, f"{sid}_cmp_right_label", 370.5, 109, 120, 10, right_label, ORANGE, 5, True, "Noto Sans")
+
+    row_y0, row_h, row_gap = 125.2, 40, 5
+    visible = rows[:5]
+    for i, row in enumerate(visible):
+        ry = row_y0 + i * (row_h + row_gap)
+        _rect(reqs, sid, f"{sid}_cmp_lb{i}", 36, ry, 313.5, row_h, SURFACE, BORDER, 0.5)
+        _rect(reqs, sid, f"{sid}_cmp_mid{i}", 349.5, ry, 21, row_h, SURFACE, BORDER, 0.5)
+        _rect(reqs, sid, f"{sid}_cmp_rb{i}", 370.5, ry, 313.5, row_h, ORANGE_DIM, ORANGE, 0.5)
+        _text(reqs, sid, f"{sid}_cmp_ar{i}", 356, ry + 17, 10, 10, "›", ORANGE, 5, False, "Noto Sans", center=True)
+        _text(reqs, sid, f"{sid}_cmp_item{i}", 47, ry + 8, 280, 9, row.get("item", ""), TEXT_FAINT, 5, False, "Noto Sans")
+        _text(reqs, sid, f"{sid}_cmp_before{i}", 47, ry + 18, 280, 14, row.get("before", ""), BAD, 8, False, "Noto Sans")
+        _text(reqs, sid, f"{sid}_cmp_after_label{i}", 382, ry + 8, 280, 9, row.get("after_label", "개선"), ORANGE, 5, True, "Noto Sans")
+        _text(reqs, sid, f"{sid}_cmp_after{i}", 382, ry + 18, 280, 14, row.get("after", ""), TEXT, 8, False, "Noto Sans")
+
+    if callout:
+        cy = row_y0 + len(visible) * (row_h + row_gap) - row_gap + 14
+        _rect(reqs, sid, f"{sid}_cmp_callout_bar", 36, cy, 1, 26, ORANGE, ORANGE, 0)
+        _text(reqs, sid, f"{sid}_cmp_callout", 48, cy + 7, 636, 13, callout, TEXT, 7, False, "Noto Sans")
 
 
 def set_theme(theme="dark"):
@@ -313,6 +421,28 @@ def table_row_height(table_id, row_index, height):
     }
 
 
+def table_border(table_id, rows, cols, color, weight_pt=0.75, position="ALL"):
+    return {
+        "updateTableBorderProperties": {
+            "objectId": table_id,
+            "tableRange": {
+                "location": {"rowIndex": 0, "columnIndex": 0},
+                "rowSpan": rows,
+                "columnSpan": cols,
+            },
+            "borderPosition": position,
+            "tableBorderProperties": {
+                "tableBorderFill": {
+                    "solidFill": {"color": {"rgbColor": color}}
+                },
+                "weight": {"magnitude": weight_pt, "unit": "PT"},
+                "dashStyle": "SOLID",
+            },
+            "fields": "tableBorderFill.solidFill.color,weight,dashStyle",
+        }
+    }
+
+
 def table_cell_fill(table_id, row, col, row_span, col_span, color):
     return {
         "updateTableCellProperties": {
@@ -350,7 +480,7 @@ def table_cell_valign(table_id, row, col, row_span, col_span, valign="MIDDLE"):
 
 
 def table_cell_text(reqs, table_id, row, col, text, color=TEXT, size=7,
-                    bold=False, ff=None, center=False):
+                    bold=False, ff="Noto Sans", center=False):
     reqs += [
         {
             "insertText": {
@@ -368,7 +498,7 @@ def table_cell_text(reqs, table_id, row, col, text, color=TEXT, size=7,
                 "style": {
                     "foregroundColor": {"opaqueColor": {"rgbColor": color}},
                     "fontSize": {"magnitude": _type_scale(size), "unit": "PT"},
-                    "fontFamily": _font_for(text, ff),
+                    "fontFamily": ff,
                     "bold": bold,
                 },
                 "fields": "foregroundColor,fontSize,fontFamily,bold",
@@ -489,12 +619,18 @@ def fill(oid, fg, bg=None, wt=0.4):
 
 
 def clr(oid):
+    # NOT_RENDERED가 테마 기본값(흰 배경)을 상속할 수 있으므로 alpha=0 투명 fill 명시
     return {
         "updateShapeProperties": {
             "objectId": oid,
             "fields": "outline,shapeBackgroundFill",
             "shapeProperties": {
-                "shapeBackgroundFill": {"propertyState": "NOT_RENDERED"},
+                "shapeBackgroundFill": {
+                    "solidFill": {
+                        "color": {"rgbColor": {"red": 0, "green": 0, "blue": 0}},
+                        "alpha": 0.0,
+                    }
+                },
                 "outline": {"propertyState": "NOT_RENDERED"},
             },
         }
@@ -637,19 +773,19 @@ def mk_cover(slide_oid, title, insert_index, reqs, subtitle="",
     team_text = department if not owner else f"{department}\\n{owner}"
 
     _text(reqs, slide_oid, f"{slide_oid}_cover_title",
-          27.6, 34.3, 594.8, 99.5, title_text, TEXT, 36, False, "AUTO")
+          27.6, 34.3, 594.8, 99.5, title_text, TEXT, 36, False, "Noto Sans")
     _text(reqs, slide_oid, f"{slide_oid}_cover_team",
-          27.6, 319.4, 561.4, 50.2, team_text, TEXT, 12, False, "AUTO")
+          27.6, 319.4, 561.4, 50.2, team_text, TEXT, 12, False, "Noto Sans")
     _text(reqs, slide_oid, f"{slide_oid}_cover_meta",
-          507.5, 319.4, 176.6, 50.2, meta_text, TEXT, 12, False, "AUTO")
+          507.5, 319.4, 176.6, 50.2, meta_text, TEXT, 12, False, "Noto Sans")
 
 
 def _text(reqs, sid, oid, x, y, w, h, text, color=TEXT, size=8, bold=False,
-          ff=None, center=False, valign=False):
+          ff="Noto Sans", center=False, valign=True):
     reqs += [
         shape(oid, sid, "TEXT_BOX", x, y, w, h),
         txt(oid, text),
-        txtstyle(oid, color, size, bold=bold, ff=_font_for(text, ff)),
+        txtstyle(oid, color, size, bold=bold, ff=ff),
         clr(oid),
     ]
     if center:
@@ -715,13 +851,25 @@ def _bulleted_text_box(reqs, sid, oid, x, y, w, h, items,
     ]
 
 
+def _contains_korean(text):
+    s = str(text or "")
+    return any(
+        ("\uac00" <= ch <= "\ud7a3")
+        or ("\u1100" <= ch <= "\u11ff")
+        or ("\u3130" <= ch <= "\u318f")
+        for ch in s
+    )
+
+
 def _header(sid, reqs, eyebrow="", title="", page_no=None, total=None, footer=""):
     if eyebrow:
-        _text(reqs, sid, f"{sid}_eyebrow", M, M, 240, 12, eyebrow.upper(),
-              ORANGE, 7, True, "AUTO")
+        # 한국어 포함 → Noto Sans, 그 외(영문/숫자/기호 혼합) → Proxima Nova
+        eyebrow_ff = "Noto Sans" if _contains_korean(eyebrow) else "Proxima Nova"
+        _text(reqs, sid, f"{sid}_eyebrow", M, M, 240, 20, eyebrow.upper(),
+              ORANGE, 7, True, eyebrow_ff, valign=False)
     if title:
         _text(reqs, sid, f"{sid}_title", M, 54, W - M * 2, 40, title,
-              TEXT, 22, True, "AUTO")
+              TEXT, 22, True, "Noto Sans", valign=False)
     # Current template direction: no title underline bar, no top page indicator,
     # no bottom footer/year. Keep only eyebrow + title.
 
@@ -921,10 +1069,8 @@ def mk_section_divider(slide_oid, num, title, insert_index, reqs):
     _new_slide(slide_oid, insert_index, reqs)
     _text(reqs, slide_oid, f"{slide_oid}_num", 51, 103, 120, 82, num,
           ORANGE, 100, True, "Proxima Nova")
-    reqs += [shape(f"{slide_oid}_vline", slide_oid, "RECTANGLE", 154, 121, 0.7, 80),
-             fill(f"{slide_oid}_vline", BORDER_HI, BORDER_HI, 0)]
-    _text(reqs, slide_oid, f"{slide_oid}_label", 172, 163, 100, 12, "Section",
-          TEXT_FAINT, 11.5, False, "Proxima Nova")
+    _text(reqs, slide_oid, f"{slide_oid}_label", 172, 158, 100, 16, "Section",
+          TEXT_FAINT, 14.5, False, "Proxima Nova")
     _text(reqs, slide_oid, f"{slide_oid}_title", 165, 174, 380, 64, title,
           TEXT, 28, True, "Noto Sans")
     _footer(slide_oid, reqs, "Section Divider")
@@ -1011,14 +1157,14 @@ def mk_3col(sid, cols, reqs, theme="dark", align_mode="top_weighted"):
             start_y = _top_weighted_group_start(y0, 190, group_h, top_pad=20, bottom_bias=16)
         cursor_y = start_y
         _text(reqs, sid, f"{sid}_cl{i}", x + 18, cursor_y, card_w - 36, label_h,
-              str(label).upper(), BLACK if hot else (ORANGE if dim_hot else TEXT_FAINT), 7, True, "AUTO", valign=True)
+              str(label).upper(), WHITE if hot else (ORANGE if dim_hot else TEXT_FAINT), 7, True, "Noto Sans", valign=True)
         cursor_y += label_h + label_gap
         _text(reqs, sid, f"{sid}_ct{i}", x + 18, cursor_y, card_w - 36, title_h,
-              title, BLACK if hot else TEXT, 13, True, "Noto Sans", valign=True)
+              title, WHITE if hot else TEXT, 13, True, "Noto Sans", valign=True)
         cursor_y += title_h + (reason_gap if reason else title_gap)
         if reason:
             _text(reqs, sid, f"{sid}_reason{i}", x + 18, cursor_y, card_w - 36, reason_h,
-                  reason, BLACK if hot else ORANGE, 7, True, "AUTO", valign=True)
+                  reason, WHITE if hot else ORANGE, 7, True, "Noto Sans", valign=True)
             cursor_y += reason_h + title_gap
         if items:
             line_y = cursor_y
@@ -1026,7 +1172,7 @@ def mk_3col(sid, cols, reqs, theme="dark", align_mode="top_weighted"):
                 _text(
                     reqs, sid, f"{sid}_items{i}_{j}",
                     x + 18, line_y, card_w - 36, item_h, item,
-                    BLACK if hot else TEXT_DIM,
+                    WHITE if hot else TEXT_DIM,
                     7, False, "Noto Sans", valign=True
                 )
                 line_y += item_h + body_gap
@@ -1121,7 +1267,7 @@ def mk_rule_grid(sid, cards, reqs, x=M, y=CONTENT_TOP, w=None, cols=2, gap_x=12,
                 reqs, sid, f"{sid}_rulegrid_label_{i}",
                 xx + 16, cursor_y, card_w - 32, label_h, label,
                 ORANGE if marked or card.get("accent_bg") else TEXT_FAINT,
-                7, True, "AUTO", valign=True
+                7, True, "Noto Sans", valign=True
             )
             cursor_y += label_h + label_gap
 
@@ -1145,9 +1291,8 @@ def mk_rule_grid(sid, cards, reqs, x=M, y=CONTENT_TOP, w=None, cols=2, gap_x=12,
 
 
 def mk_flow(sid, steps, cost_map=None, reqs=None, theme="dark"):
-    """Horizontal process flow. Compatible with old tuple input and new dict input."""
+    """Dynamic-height horizontal process flow. Returns computed card height (ch)."""
     if reqs is None:
-        # Old signature was mk_flow(sid, steps, cost_map, reqs, theme)
         raise ValueError("reqs is required")
     cost_map = cost_map or {}
     visible_steps = steps[:6]
@@ -1156,22 +1301,76 @@ def mk_flow(sid, steps, cost_map=None, reqs=None, theme="dark"):
     x0, y0 = 54, 132
     total_w = 612
     cw = (total_w - gap * max(0, n - 1)) / max(1, n)
-    ch = 96
+    bw = cw - 16  # inner text width
+
+    # chars-per-100pt for rendered font sizes
+    ST_CPL100 = 13  # name: rendered ~9.5pt
+    SV_CPL100 = 18  # service: rendered ~7pt
+    SD_CPL100 = 18  # desc: rendered ~7pt
+
+    PAD = 8      # top and bottom padding
+    SN_H = 10    # sn fixed height
+    ST_LH = 14   # name line-height
+    SV_LH = 10   # service line-height
+    SD_LH = 10   # desc line-height
+    GAP_SEP = 5  # gap before/after separator line
+    COST_H = 32  # fixed block for cost section
+
+    # ── Pass 1a: unified top-section height (sn+st+sv max across all cards) ──
+    max_top_h = PAD + SN_H
+    for idx, step in enumerate(visible_steps):
+        if isinstance(step, dict):
+            name = step.get("name", step.get("title", ""))
+            svc  = step.get("service", step.get("infra", ""))
+        else:
+            _, name, svc, _ = step[:4]
+        st_lines = _estimate_block_lines(name, bw, ST_CPL100) if name else 1
+        sv_lines = _estimate_block_lines(svc, bw, SV_CPL100) if svc else 1
+        top_h = PAD + SN_H + st_lines * ST_LH + sv_lines * SV_LH
+        max_top_h = max(max_top_h, top_h)
+
+    # ── Pass 1b: max card height using unified max_top_h as base ────────────
+    max_ch = 72
+    for idx, step in enumerate(visible_steps):
+        if isinstance(step, dict):
+            desc = step.get("desc", step.get("detail", ""))
+            cost = step.get("cost", cost_map.get(idx, ""))
+        else:
+            desc = ""
+            cost = cost_map.get(idx, "")
+        h = max_top_h
+        if desc and not cost:
+            sd_lines = _estimate_block_lines(desc, bw, SD_CPL100)
+            h += GAP_SEP + 1 + GAP_SEP + sd_lines * SD_LH
+        elif desc and cost:
+            sd_lines = _estimate_block_lines(desc, bw, SD_CPL100)
+            h += sd_lines * SD_LH
+        if cost:
+            h += COST_H
+        h += PAD
+        max_ch = max(max_ch, h)
+    ch = min(round(max_ch), 405 - y0 - 8)
+
+    # ── Pass 2: render with computed ch ──────────────────────────────
     def _is_marked(step):
         if isinstance(step, dict):
             return (
                 step.get("role") in ("conclusion", "summary")
                 or step.get("style") in ("primary", "conclusion", "summary")
+                or bool(step.get("hot"))
             )
         return False
+
     primary = _primary_index(visible_steps, _is_marked)
+
     for i, step in enumerate(visible_steps):
         if isinstance(step, dict):
             num = step.get("num", f"{i+1:02d}")
             name = step.get("name", step.get("title", ""))
-            svc = step.get("service", step.get("infra", ""))
+            svc  = step.get("service", step.get("infra", ""))
             desc = step.get("desc", step.get("detail", ""))
             cost = step.get("cost", cost_map.get(i, ""))
+            cost_label = step.get("cost_label", "월 예상 비용")
             paid = step.get("paid", step.get("hot", bool(cost and cost != "무료")))
             marked = step.get("primary") or step.get("hot") or step.get("accent") or paid
         else:
@@ -1179,32 +1378,71 @@ def mk_flow(sid, steps, cost_map=None, reqs=None, theme="dark"):
             num = str(raw_step).replace("STEP", "").strip() or f"{i+1:02d}"
             desc = ""
             cost = cost_map.get(i, "")
+            cost_label = "월 예상 비용"
             marked = paid
+
         is_primary = i == primary
         dim_hot = marked and not is_primary
         x = x0 + i * (cw + gap)
+
         _rect(reqs, sid, f"{sid}_step{i}", x, y0, cw, ch,
               ORANGE if is_primary else (ORANGE_DIM if dim_hot else SURFACE),
               ORANGE if marked else BORDER, 0.5)
-        _text(reqs, sid, f"{sid}_sn{i}", x + 8, y0 + 8, cw - 16, 9,
-              f"STEP {num}", BLACK if is_primary else (ORANGE if dim_hot else TEXT_FAINT), 5, False, "Proxima Nova")
-        _text(reqs, sid, f"{sid}_st{i}", x + 8, y0 + 18, cw - 16, 13,
-              name, BLACK if is_primary else TEXT, 8, True, "Noto Sans")
-        _text(reqs, sid, f"{sid}_sv{i}", x + 8, y0 + 31, cw - 16, 10,
-              svc, BLACK if is_primary else TEXT_DIM, 5, False, "Noto Sans")
+
+        # sn — fixed at top
+        _text(reqs, sid, f"{sid}_sn{i}", x + 8, y0 + PAD, bw, SN_H,
+              f"STEP {num}", WHITE if is_primary else (ORANGE if dim_hot else TEXT_FAINT), 5, False, "Proxima Nova")
+
+        # st — fixed anchor below sn
+        st_y = y0 + PAD + SN_H
+        st_lines = _estimate_block_lines(name, bw, ST_CPL100) if name else 1
+        st_h = st_lines * ST_LH
+        _text(reqs, sid, f"{sid}_st{i}", x + 8, st_y, bw, st_h,
+              name, WHITE if is_primary else TEXT, 8, True, "Noto Sans")
+
+        # sv — directly below st (dynamic y)
+        sv_y = st_y + st_h
+        sv_lines = _estimate_block_lines(svc, bw, SV_CPL100) if svc else 1
+        sv_h = sv_lines * SV_LH
+        _text(reqs, sid, f"{sid}_sv{i}", x + 8, sv_y, bw, sv_h,
+              svc, WHITE if is_primary else TEXT_DIM, 5, False, "Noto Sans")
+
+        # desc area — sep and sd anchored to unified max_top_h (same y across all cards)
         if desc:
-            _text(reqs, sid, f"{sid}_sd{i}", x + 8, y0 + 42, cw - 16, 17,
-                  desc, BLACK if is_primary else TEXT_DIM, 5, False, "Noto Sans")
-        reqs += [shape(f"{sid}_sep{i}", sid, "RECTANGLE", x + 8, y0 + 59, cw - 16, 0.5),
-                 fill(f"{sid}_sep{i}", BLACK if is_primary else (ORANGE if dim_hot else BORDER_HI), BLACK if is_primary else (ORANGE if dim_hot else BORDER_HI), 0)]
+            if not cost:
+                sep_y = y0 + max_top_h + GAP_SEP
+                sep_c = WHITE if is_primary else (ORANGE if dim_hot else BORDER_HI)
+                reqs += [shape(f"{sid}_sep_hd{i}", sid, "RECTANGLE", x + 8, sep_y, bw, 0.5),
+                         fill(f"{sid}_sep_hd{i}", sep_c, sep_c, 0)]
+                sd_y = sep_y + 1 + GAP_SEP
+                sd_lines = _estimate_block_lines(desc, bw, SD_CPL100)
+                sd_h = sd_lines * SD_LH
+                _text(reqs, sid, f"{sid}_sd{i}", x + 8, sd_y, bw, sd_h,
+                      desc, WHITE if is_primary else TEXT_DIM, 5, False, "Noto Sans")
+            else:
+                sd_lines = _estimate_block_lines(desc, bw, SD_CPL100)
+                sd_h = sd_lines * SD_LH
+                _text(reqs, sid, f"{sid}_sd{i}", x + 8, y0 + max_top_h, bw, sd_h,
+                      desc, WHITE if is_primary else TEXT_DIM, 5, False, "Noto Sans")
+
+        # cost section — anchored at bottom of card
         if cost:
-            _text(reqs, sid, f"{sid}_costl{i}", x + 8, y0 + 63, cw - 16, 8,
-                  "월 예상 비용", BLACK if is_primary else (ORANGE if dim_hot else TEXT_FAINT), 4, False, "Noto Sans")
-            _text(reqs, sid, f"{sid}_cost{i}", x + 8, y0 + 71, cw - 16, 10,
-                  cost, BLACK if is_primary else TEXT, 7, True, "Noto Sans")
+            cost_y = y0 + ch - COST_H
+            reqs += [shape(f"{sid}_sep{i}", sid, "RECTANGLE", x + 8, cost_y, bw, 0.5),
+                     fill(f"{sid}_sep{i}",
+                          WHITE if is_primary else (ORANGE if dim_hot else BORDER_HI),
+                          WHITE if is_primary else (ORANGE if dim_hot else BORDER_HI), 0)]
+            _text(reqs, sid, f"{sid}_costl{i}", x + 8, cost_y + 4, bw, 8,
+                  cost_label, WHITE if is_primary else (ORANGE if dim_hot else TEXT_FAINT), 4, False, "Noto Sans")
+            _text(reqs, sid, f"{sid}_cost{i}", x + 8, cost_y + 12, bw, 10,
+                  cost, WHITE if is_primary else TEXT, 7, True, "Noto Sans")
+
+        # arrow — vertically centered
         if i < min(len(steps), 6) - 1:
-            _text(reqs, sid, f"{sid}_arr{i}", x + cw - 5, y0 + 39, 10, 8,
-                  "›", ORANGE, 5, False, "Proxima Nova", center=True)
+            _text(reqs, sid, f"{sid}_arr{i}", x + cw - 5, y0 + ch // 2 - 4, 10, 8,
+                  "›", TEXT_FAINT, 5, False, "Proxima Nova", center=True)
+
+    return ch
 
 
 def mk_flow_focus(sid, steps, reqs, x=54, y=136, w=612, cols=3):
@@ -1306,18 +1544,24 @@ def mk_text_block(sid, body_text, reqs, y_start=128, font_size=10, theme="dark")
 
 
 def mk_split(sid, left, right, reqs, theme="dark", arrow=True):
-    _rect(reqs, sid, f"{sid}_leftbox", M, 128, 313, 170, SURFACE, BORDER, 0.5)
-    _rect(reqs, sid, f"{sid}_rightbox", 371, 128, 313, 170, ORANGE_DIM, ORANGE, 0.5)
-    _text(reqs, sid, f"{sid}_lt", M + 18, 150, 280, 24, left.get("title", ""),
+    left_x = 54
+    top_y = 120
+    card_w = 278
+    card_h = 236
+    right_x = 388
+    body_w = 242
+    _rect(reqs, sid, f"{sid}_leftbox", left_x, top_y, card_w, card_h, SURFACE, BORDER, 0.5)
+    _rect(reqs, sid, f"{sid}_rightbox", right_x, top_y, card_w, card_h, ORANGE_DIM, ORANGE, 0.5)
+    _text(reqs, sid, f"{sid}_lt", left_x + 18, top_y + 24, body_w, 24, left.get("title", ""),
           TEXT, 14, True)
-    _text(reqs, sid, f"{sid}_lb", M + 18, 184, 280, 80, left.get("body", ""),
+    _text(reqs, sid, f"{sid}_lb", left_x + 18, top_y + 66, body_w, 136, left.get("body", ""),
           TEXT_DIM, 8, False)
-    _text(reqs, sid, f"{sid}_rt", 389, 150, 280, 24, right.get("title", ""),
+    _text(reqs, sid, f"{sid}_rt", right_x + 18, top_y + 24, body_w, 24, right.get("title", ""),
           TEXT, 14, True)
-    _text(reqs, sid, f"{sid}_rb", 389, 184, 280, 80, right.get("body", ""),
+    _text(reqs, sid, f"{sid}_rb", right_x + 18, top_y + 66, body_w, 136, right.get("body", ""),
           TEXT_DIM, 8, False)
     if arrow:
-        _text(reqs, sid, f"{sid}_arrow", 352, 198, 16, 16, "›", ORANGE, 11, True, center=True)
+        _text(reqs, sid, f"{sid}_arrow", 348, 228, 16, 16, "›", ORANGE, 11, True, center=True)
 
 
 def mk_title_accent(sid, accent_part, rest_part, reqs, theme="dark",
@@ -1438,11 +1682,11 @@ def mk_kpi_dashboard(sid, kpis, reqs, y=128):
               ORANGE if hot else (ORANGE_DIM if dim_hot else SURFACE),
               ORANGE if marked else BORDER, 0.5)
         _text(reqs, sid, f"{sid}_kpi_label{i}", x + 14, y + 18, card_w - 28, 12,
-              k.get("label", ""), BLACK if hot else (ORANGE if dim_hot else TEXT_FAINT), 7, True, "AUTO")
+              k.get("label", ""), BLACK if hot else (ORANGE if dim_hot else TEXT_FAINT), 7, True, "Noto Sans")
         _text(reqs, sid, f"{sid}_kpi_value{i}", x + 14, y + 46, card_w - 28, 40,
               k.get("value", ""), BLACK if hot else TEXT, 26, True, "Proxima Nova")
         _text(reqs, sid, f"{sid}_kpi_sub{i}", x + 14, y + 91, card_w - 28, 20,
-              k.get("sub", ""), BLACK if hot else TEXT_DIM, 7, False, "AUTO")
+              k.get("sub", ""), BLACK if hot else TEXT_DIM, 7, False, "Noto Sans")
 
 
 def mk_bar_chart(sid, bars, reqs, x=M, y=144, w=420, h=150,
@@ -1620,7 +1864,7 @@ def mk_kpi_status_detail(sid, reqs, eyebrow="APPENDIX", title="KPI 진행 현황
     # Native editable table path.
     top_y = y
     if summary_title:
-        _text(reqs, sid, f"{sid}_sec1", x, y, w, 12, summary_title, TEXT, 8, True, "AUTO")
+        _text(reqs, sid, f"{sid}_sec1", x, y, w, 12, summary_title, TEXT, 8, True, "Noto Sans")
         top_y += 18
 
     col_ratios = [0.165, 0.155, 0.06, 0.185, 0.06, 0.06, 0.185, 0.06, 0.07]
@@ -1680,23 +1924,23 @@ def mk_kpi_status_detail(sid, reqs, eyebrow="APPENDIX", title="KPI 진행 현황
 
     top_group_labels = [("KPI 정보", 0), ("상반기 목표/실적", 3), ("연간 목표/실적", 6)]
     for label, ci in top_group_labels:
-        table_cell_text(reqs, top_tbl, 0, ci, label, TEXT, 7, True, "AUTO", center=True)
+        table_cell_text(reqs, top_tbl, 0, ci, label, TEXT, 7, True, "Noto Sans", center=True)
     for ci, head in enumerate(summary_headers):
-        table_cell_text(reqs, top_tbl, 1, ci, head, TEXT, 7, True, "AUTO", center=True)
+        table_cell_text(reqs, top_tbl, 1, ci, head, TEXT, 7, True, "Noto Sans", center=True)
 
     # merged goal cells
-    table_cell_text(reqs, top_tbl, 2, 0, summary_rows[0].get("goal", ""), TEXT, 7.5, True, "AUTO", center=True)
-    table_cell_text(reqs, top_tbl, 4, 0, summary_rows[2].get("goal", ""), TEXT, 7.5, True, "AUTO", center=True)
+    table_cell_text(reqs, top_tbl, 2, 0, summary_rows[0].get("goal", ""), TEXT, 7.5, True, "Noto Sans", center=True)
+    table_cell_text(reqs, top_tbl, 4, 0, summary_rows[2].get("goal", ""), TEXT, 7.5, True, "Noto Sans", center=True)
     top_value_keys = ["kpi", "weight", "half_target", "half_actual", "half_rate", "year_target", "year_actual", "year_rate"]
     for r, row in enumerate(summary_rows[:3], start=2):
         for ci, key in enumerate(top_value_keys, start=1):
             table_cell_text(
                 reqs, top_tbl, r, ci, row.get(key, ""),
-                TEXT, 7.5 if ci == 1 else 7, ci == 1, "AUTO", center=True
+                TEXT, 7.5 if ci == 1 else 7, ci == 1, "Noto Sans", center=True
             )
 
     sec2_y = top_y + top_h + 14
-    _text(reqs, sid, f"{sid}_sec2", x, sec2_y, w, 12, detail_title, TEXT, 8, True, "AUTO")
+    _text(reqs, sid, f"{sid}_sec2", x, sec2_y, w, 12, detail_title, TEXT, 8, True, "Noto Sans")
     detail_y = sec2_y + 14
     detail_ratios = [0.19, 0.32, 0.30, 0.19]
     _, detail_ws = _grid_columns(x, w, detail_ratios)
@@ -1722,13 +1966,13 @@ def mk_kpi_status_detail(sid, reqs, eyebrow="APPENDIX", title="KPI 진행 현황
         for ci in range(4):
             reqs.append(table_cell_fill(detail_tbl, ri, ci, 1, 1, table_fill))
     for ci, head in enumerate(detail_headers):
-        table_cell_text(reqs, detail_tbl, 0, ci, head, TEXT, 7, True, "AUTO", center=True)
+        table_cell_text(reqs, detail_tbl, 0, ci, head, TEXT, 7, True, "Noto Sans", center=True)
     detail_keys = ["kpi", "definition", "formula", "evidence"]
     for ri, row in enumerate(detail_rows[:3], start=1):
         for ci, key in enumerate(detail_keys):
             table_cell_text(
                 reqs, detail_tbl, ri, ci, row.get(key, ""),
-                TEXT, 7 if ci else 7.5, ci == 0, "AUTO", center=(ci == 0)
+                TEXT, 7 if ci else 7.5, ci == 0, "Noto Sans", center=(ci == 0)
             )
     return
 
@@ -1737,7 +1981,7 @@ def mk_kpi_status_detail(sid, reqs, eyebrow="APPENDIX", title="KPI 진행 현황
     if summary_title:
         _text(reqs, sid, f"{sid}_sec1", x, y, w, 12,
               summary_title,
-              TEXT, 8, True, "AUTO")
+              TEXT, 8, True, "Noto Sans")
         top_y += 18
 
     group_h = 20
@@ -1783,13 +2027,13 @@ def mk_kpi_status_detail(sid, reqs, eyebrow="APPENDIX", title="KPI 진행 현황
         gw = sum(ws[start:start + span])
         _rect(reqs, sid, f"{sid}_t1_group{i}", gx, top_y, gw, group_h, table_head_fill, table_border, 0.5)
         _text(reqs, sid, f"{sid}_t1_group_txt{i}", gx + 6, top_y + 4, gw - 12, 12,
-              label, TEXT, 7, True, "AUTO", center=True, valign=True)
+              label, TEXT, 7, True, "Noto Sans", center=True, valign=True)
 
     head_y = top_y + group_h
     for i, head in enumerate(summary_headers):
         _rect(reqs, sid, f"{sid}_t1_head{i}", xs[i], head_y, ws[i], head_h, table_fill, table_border, 0.4)
         _text(reqs, sid, f"{sid}_t1_head_txt{i}", xs[i] + 4, head_y + 4, ws[i] - 8, 12,
-              head, TEXT, 7, True, "AUTO", center=True, valign=True)
+              head, TEXT, 7, True, "Noto Sans", center=True, valign=True)
 
     current_y = head_y + head_h
     for r, row in enumerate(summary_rows[:3]):
@@ -1800,7 +2044,7 @@ def mk_kpi_status_detail(sid, reqs, eyebrow="APPENDIX", title="KPI 진행 현황
             gh = sum(row_heights[r:r + span])
             _rect(reqs, sid, f"{sid}_t1_goal_{r}", xs[0], ry, ws[0], gh, table_fill, BORDER, 0.4)
             _text(reqs, sid, f"{sid}_t1_goal_txt_{r}", xs[0] + 6, ry + 4, ws[0] - 12, gh - 8,
-                  row.get("goal", ""), TEXT, 7.5, True, "AUTO", center=True, valign=True)
+                  row.get("goal", ""), TEXT, 7.5, True, "Noto Sans", center=True, valign=True)
         values = [
             row.get("kpi", ""),
             row.get("weight", ""),
@@ -1815,12 +2059,12 @@ def mk_kpi_status_detail(sid, reqs, eyebrow="APPENDIX", title="KPI 진행 현황
             _rect(reqs, sid, f"{sid}_t1_cell_{r}_{offset}", xs[offset], ry, ws[offset], body_h, table_fill, BORDER, 0.4)
             size = 7.5 if offset == 1 else 7
             _text(reqs, sid, f"{sid}_t1_txt_{r}_{offset}", xs[offset] + 4, ry + 4, ws[offset] - 8, body_h - 8,
-                  val or " ", TEXT, size, offset == 1, "AUTO", center=True, valign=True)
+                  val or " ", TEXT, size, offset == 1, "Noto Sans", center=True, valign=True)
         current_y += body_h
 
     # Section 2
     sec2_y = top_y + table1_h + 14
-    _text(reqs, sid, f"{sid}_sec2", x, sec2_y, w, 12, detail_title, TEXT, 8, True, "AUTO")
+    _text(reqs, sid, f"{sid}_sec2", x, sec2_y, w, 12, detail_title, TEXT, 8, True, "Noto Sans")
 
     table2_y = sec2_y + 14
     col2 = [0.19, 0.32, 0.30, 0.19]
@@ -1828,7 +2072,7 @@ def mk_kpi_status_detail(sid, reqs, eyebrow="APPENDIX", title="KPI 진행 현황
     for i, head in enumerate(detail_headers):
         _rect(reqs, sid, f"{sid}_t2_head{i}", xs2[i], table2_y, ws2[i], 20, table_head_fill, table_border, 0.5)
         _text(reqs, sid, f"{sid}_t2_head_txt{i}", xs2[i] + 4, table2_y + 4, ws2[i] - 8, 12,
-              head, TEXT, 7, True, "AUTO", center=True, valign=True)
+              head, TEXT, 7, True, "Noto Sans", center=True, valign=True)
 
     detail_heights = []
     for row in detail_rows[:3]:
@@ -1864,7 +2108,7 @@ def mk_kpi_status_detail(sid, reqs, eyebrow="APPENDIX", title="KPI 진행 현황
             size = 7 if c else 7.5
             _text(reqs, sid, f"{sid}_t2_txt_{r}_{c}", xs2[c] + (4 if not align_center else 6), ry + 4,
                   ws2[c] - (8 if not align_center else 12), row2_h - 8, val or " ",
-                  TEXT, size, c == 0, "AUTO", center=align_center, valign=True)
+                  TEXT, size, c == 0, "Noto Sans", center=align_center, valign=True)
         current_y += row2_h
 
 
@@ -1985,7 +2229,7 @@ def mk_kpi_key_task_table(sid, reqs, eyebrow="APPENDIX", title="KPI 핵심 과�
     for ci in range(4):
         reqs.append(table_cell_fill(table_id, 0, ci, 1, 1, table_head_fill))
         reqs.append(table_cell_valign(table_id, 0, ci, 1, 1, "MIDDLE"))
-        table_cell_text(reqs, table_id, 0, ci, headers[ci], TEXT, 7, True, "AUTO", center=True)
+        table_cell_text(reqs, table_id, 0, ci, headers[ci], TEXT, 7, True, "Noto Sans", center=True)
 
     for ri, row in enumerate(fitted_rows, start=1):
         span = int(row.get("kpi_span", 1))
@@ -1995,7 +2239,7 @@ def mk_kpi_key_task_table(sid, reqs, eyebrow="APPENDIX", title="KPI 핵심 과�
                 reqs.append(table_cell_valign(table_id, ri, 0, span, 1, "MIDDLE"))
             else:
                 reqs.append(table_cell_valign(table_id, ri, 0, 1, 1, "MIDDLE"))
-            table_cell_text(reqs, table_id, ri, 0, row.get("kpi", ""), TEXT, 7.5, True, "AUTO", center=True)
+            table_cell_text(reqs, table_id, ri, 0, row.get("kpi", ""), TEXT, 7.5, True, "Noto Sans", center=True)
 
     for ri, row in enumerate(fitted_rows, start=1):
         for ci in range(4):
@@ -2016,7 +2260,7 @@ def mk_kpi_key_task_table(sid, reqs, eyebrow="APPENDIX", title="KPI 핵심 과�
                 TEXT,
                 7.5 if ci == 1 else 7,
                 ci == 1,
-                "AUTO",
+                "Noto Sans",
                 center=(ci == 1),
             )
 
@@ -2260,7 +2504,7 @@ def mk_arch_orchestrator(sid, nodes, reqs, eyebrow="", title="", x=54, y=146):
         _rect(reqs, sid, f"{sid}_orc_rbox{i}", x + 428, yy, 184, 36,
               SURFACE, ORANGE if accent else BORDER, 0.4)
         _text(reqs, sid, f"{sid}_orc_rtxt{i}", x + 444, yy + 12, 152, 12,
-              item.get("label", ""), TEXT, 7.5, True, "AUTO", valign=True)
+              item.get("label", ""), TEXT, 7.5, True, "Noto Sans", valign=True)
 
     _rect(reqs, sid, f"{sid}_orc_engine", x + 200, engine_y, 160, 40, SURFACE, BORDER, 0.4)
     _text(reqs, sid, f"{sid}_orc_engine_txt", x + 200, engine_y + 14, 160, 12, engine_text,
@@ -2268,7 +2512,7 @@ def mk_arch_orchestrator(sid, nodes, reqs, eyebrow="", title="", x=54, y=146):
 
     _rect(reqs, sid, f"{sid}_orc_out", x + 428, output_y, 184, 36, SURFACE, BORDER, 0.4)
     _text(reqs, sid, f"{sid}_orc_out_txt", x + 444, output_y + 12, 152, 12, output_text,
-          TEXT, 7.5, True, "AUTO", valign=True)
+          TEXT, 7.5, True, "Noto Sans", valign=True)
 
     in_rect = (x, input_y, 120, 44)
     main_rect = (x + 200, main_y, 160, 64)
@@ -2393,22 +2637,28 @@ def mk_swimlane_mapping(sid, rows, reqs, eyebrow="", title="", x=54, y=148):
         _text(reqs, sid, f"{sid}_map_left{i}", x + 18, yy + 8, left_w - 36, 16,
               row.get("left", ""), TEXT, 13, True, "Noto Sans", valign=True)
         _text(reqs, sid, f"{sid}_map_mid{i}", mid_x + 16, yy + 10, mid_w - 32, 12,
-              row.get("middle", ""), ORANGE if accent else TEXT_DIM, 7, accent, "AUTO", center=True, valign=True)
+              row.get("middle", ""), ORANGE if accent else TEXT_DIM, 7, accent, "Noto Sans", center=True, valign=True)
         _text(reqs, sid, f"{sid}_map_right{i}", right_x + 18, yy + 8, right_w - 36, 16,
               row.get("right", ""), TEXT, 13, True, "Noto Sans", valign=True)
 
 
 def _dyn_row_h(cells_ws, font_size=7, pad_v=8, line_h=10, min_h=28):
-    """셀 내용 기반 동적 행 높이 계산. cells_ws: [(text, col_width), ...]"""
+    """셀 내용 기반 동적 행 높이 계산. cells_ws: [(text, col_width), ...]
+    한글/CJK 글자는 ASCII 대비 약 1.5배 폭으로 계산해 실제 렌더링 높이 추정.
+    """
     max_lines = 1
+    char_w = max(1.0, font_size * 0.65)
     for text, col_w in cells_ws:
         if not text:
             continue
-        char_w = max(1.0, font_size * 0.65)
         chars_per_line = max(3, int(max(10.0, col_w - 10) / char_w))
         lines = 0
         for para in str(text).split('\n'):
-            lines += max(1, math.ceil(len(para) / chars_per_line)) if para.strip() else 1
+            if not para.strip():
+                lines += 1
+                continue
+            eff_len = sum(1.5 if '가' <= c <= '힣' else 1.0 for c in para)
+            lines += max(1, math.ceil(eff_len / chars_per_line))
         max_lines = max(max_lines, max(1, lines))
     return max(min_h, pad_v * 2 + max_lines * line_h)
 
@@ -2446,6 +2696,7 @@ def mk_kpi_dense_table(sid, rows, reqs, y=96):
     total_h = HEAD_H + sum(row_hs)
 
     reqs.append(table(tbl_id, sid, 1 + n, 4, TABLE_X, y, TABLE_W, total_h))
+    reqs.append(table_border(tbl_id, 1 + n, 4, BORDER))
 
     for j, cw in enumerate(COL_WS):
         reqs.append(table_col_width(tbl_id, j, cw))
@@ -2525,18 +2776,36 @@ def mk_kpi_status_light(sid, reqs,
     _KEYS_TOP = ["objective", "kpi", "weight",
                  "h_target", "h_actual", "h_rate",
                  "y_target", "y_actual", "y_rate"]
+    TOP_ROW_H   = 28   # 고정 행 높이 (guide_kpi_status_light 기준)
+    DEF_ROW_H   = 32   # def table 고정 행 높이
+
+    def _row_font(cells_ws, fixed_h, base=7.0, pad_v=6, line_h=10):
+        avail = max(1.0, (fixed_h - pad_v * 2) / line_h)
+        max_lines = 1
+        for text, col_w in cells_ws:
+            if not text:
+                continue
+            char_w = max(1.0, base * 0.65)
+            cpl = max(3, int(max(10.0, col_w - 10) / char_w))
+            lines = 0
+            for para in str(text).split('\n'):
+                if not para.strip():
+                    lines += 1
+                    continue
+                eff = sum(1.5 if '가' <= c <= '힣' else 1.0 for c in para)
+                lines += max(1, math.ceil(eff / cpl))
+            max_lines = max(max_lines, lines)
+        if max_lines <= avail:
+            return base
+        return max(5.0, round(base * avail / max_lines, 1))
+
     n_top       = len(kpi_rows)
-    kpi_row_hs  = [
-        _dyn_row_h(
-            [(str(row.get(k, "") or ""), TOP_COL_WS[j]) for j, k in enumerate(_KEYS_TOP)],
-            font_size=7.5, pad_v=6, line_h=10, min_h=33
-        )
-        for row in kpi_rows
-    ]
+    kpi_row_hs  = [TOP_ROW_H] * n_top
     total_top_h = GRP_H + HEAD_H + sum(kpi_row_hs)
 
     # ── 상단 테이블 생성 ──────────────────────────────────────────────
     reqs.append(table(top_id, sid, 2 + n_top, 9, TABLE_X, y, TABLE_W, total_top_h))
+    reqs.append(table_border(top_id, 2 + n_top, 9, BORDER))
 
     for j, cw in enumerate(TOP_COL_WS):
         reqs.append(table_col_width(top_id, j, cw))
@@ -2585,6 +2854,9 @@ def mk_kpi_status_light(sid, reqs,
                 "y_target", "y_actual", "y_rate"]
     DONE_MAP = {5: "h_done", 8: "y_done"}
     for i, row in enumerate(kpi_rows):
+        cells_ws = [(str(row.get(k, "") or ""), TOP_COL_WS[j])
+                    for j, k in enumerate(_KEYS_TOP)]
+        fs = _row_font(cells_ws, TOP_ROW_H)
         for j, key in enumerate(KEYS):
             val = str(row.get(key, "") or "")
             if not val:
@@ -2597,32 +2869,30 @@ def mk_kpi_status_light(sid, reqs,
                 clr  = TEXT
                 bold = (j == 1)
             table_cell_text(reqs, top_id, 2 + i, j, val,
-                            clr, 7, bold, "Noto Sans", center=(j >= 2))
+                            clr, fs, bold, "Noto Sans", center=(j >= 2))
 
     # ── KPI 세부정보 레이블 ────────────────────────────────────────────
-    def_label_y = y + total_top_h + 10
+    def_label_y = y + total_top_h + 24
     _text(reqs, sid, f"{sid}_ksl_deflabel",
           TABLE_X + 6, def_label_y, 200, 12,
           "■ KPI 세부정보", TEXT_FAINT, 7, False, "Noto Sans")
 
     # ── 하단 KPI 세부정보 테이블 ──────────────────────────────────────
     DEF_COL_WS  = [125.4, 211.1, 197.6, 124.9]
-    DEF_TABLE_X = 28.6
+    DEF_TABLE_X = 25.0
     DEF_TABLE_W = sum(DEF_COL_WS)
     DEF_HEAD_H  = 20
     DEF_KEYS    = ["kpi", "definition", "formula", "evidence"]
     DEF_HEADERS = ["KPI", "정의 및 선정배경", "달성률 측정산식", "증빙"]
     def_id      = f"{sid}_ksd"
 
-    n_def = len(def_rows)
-    def_row_hs = []
-    for row in def_rows:
-        cells_ws = [(row.get(k, ""), DEF_COL_WS[jj]) for jj, k in enumerate(DEF_KEYS)]
-        def_row_hs.append(_dyn_row_h(cells_ws, font_size=7, pad_v=8, line_h=10, min_h=28))
+    n_def       = len(def_rows)
+    def_row_hs  = [DEF_ROW_H] * n_def
     total_def_h = DEF_HEAD_H + sum(def_row_hs)
 
-    def_tbl_y = def_label_y + 14
+    def_tbl_y = def_label_y + 24
     reqs.append(table(def_id, sid, 1 + n_def, 4, DEF_TABLE_X, def_tbl_y, DEF_TABLE_W, total_def_h))
+    reqs.append(table_border(def_id, 1 + n_def, 4, BORDER))
 
     for j, cw in enumerate(DEF_COL_WS):
         reqs.append(table_col_width(def_id, j, cw))
@@ -2641,8 +2911,11 @@ def mk_kpi_status_light(sid, reqs,
         table_cell_text(reqs, def_id, 0, j, htxt, TEXT_FAINT, 7, False, "Noto Sans")
 
     for i, row in enumerate(def_rows):
+        cells_ws = [(str(row.get(k, "") or ""), DEF_COL_WS[jj])
+                    for jj, k in enumerate(DEF_KEYS)]
+        fs = _row_font(cells_ws, DEF_ROW_H, base=7.0, pad_v=6, line_h=10)
         for j, key in enumerate(DEF_KEYS):
             val = row.get(key, "")
             if val:
                 table_cell_text(reqs, def_id, 1 + i, j, val,
-                                TEXT, 7, j == 0, "Noto Sans")
+                                TEXT, fs, j == 0, "Noto Sans")
