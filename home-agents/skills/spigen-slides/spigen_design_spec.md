@@ -3,7 +3,7 @@
 > 기준 템플릿: `1rh_2NNwM2CeZxFaZFfgoK3s1RAU2SyzZd794480hrVo`
 > 시스템 가이드 시트: `https://docs.google.com/presentation/d/1HJbTWXPCr38gXDQuarglSLrkheDQXAojlrYUKcfVgAc/edit`
 > 캔버스: **720 × 405pt** · Google Slides 16:9
-> 방향: **Dark only + Orange accent + Native editable shapes**
+> 방향: **Theme-aware (dark / light) + Orange accent + Native editable shapes**
 
 ---
 
@@ -12,6 +12,8 @@
 네 가지 원칙이 모든 생성 결정의 기준이다.
 
 **① 템플릿 우선** — 완성형 1~6번 슬라이드를 복사 후 텍스트만 교체한다. 새로 그리기는 마지막 수단이다.
+
+**①-a 테마 규칙** — KPI / 실적 / 상세 수치 보고서는 `light`, 제안서 / 임팩트 중심 발표는 `dark`를 기본값으로 한다.
 
 **② 페이지당 메시지 하나** — 한 슬라이드에 경쟁하는 강조점이 2개 이상 있으면 분리하거나 하나를 제거한다.
 
@@ -57,6 +59,40 @@ cover 구조:
 | `BAD` | `#FF7A7A` | 부정·삭제·위험 |
 
 > Google Slides API는 alpha 채널 미지원. 반투명 오렌지는 `ACCENT_DIM` 솔리드로 근사한다.
+
+### 2.1.a Theme variants
+
+시스템은 **하나의 레이아웃 규칙 + 두 개의 테마 토큰 집합**으로 운영한다.
+
+#### Dark
+
+- `BG`: `#000000`
+- `SURFACE`: `#0E0E0E`
+- `TEXT`: `#F0F0F0`
+- `TEXT_DIM`: `#AAAAAA`
+- `TEXT_FAINT`: `#6E6E6E`
+- `ACCENT`: `#FF6B1A`
+- `ACCENT_DIM`: `#3D1A05`
+
+#### Light
+
+- `BG`: `#F7F7F5`
+- `SURFACE`: `#FFFFFF`
+- `SURFACE_HI`: `#F1F1ED`
+- `BORDER`: `#D9D9D2`
+- `BORDER_HI`: `#BFC0B8`
+- `TEXT`: `#171717`
+- `TEXT_DIM`: `#5F615B`
+- `TEXT_FAINT`: `#8A8D84`
+- `ACCENT`: `#FF6B1A`
+- `ACCENT_DIM`: `#FFE6D6`
+
+원칙:
+
+```txt
+dark / light 에서 바뀌는 것은 token 값뿐이다.
+폰트 규칙, 간격 규칙, 컴포넌트 선택 규칙은 그대로 유지한다.
+```
 
 ### 2.2 색상 비율 원칙 (60-30-10)
 
@@ -223,6 +259,54 @@ overflow 해결 순서:
 텍스트 그룹 높이 = x
 상·하단 padding 이 각각 x보다 작은 tight 상태
 → 텍스트 그룹을 카드 세로 중앙 기준으로 재배치
+```
+
+### 4.6 Dense appendix table component
+
+보고용 가이드 / appendix / KPI reference page 에서는 `mk_kpi_status_detail()` 컴포넌트를 사용한다.
+
+구성:
+
+- KPI 요약 group header row
+- KPI 요약 column header row
+- KPI 요약 body rows (목표 / KPI / 가중치 / 반기 / 연간)
+- 하단 섹션 타이틀
+- 정의 / 측정산식 / 증빙 상세 표
+
+입력 데이터 구조:
+
+```txt
+summary_groups  = [(label, start_col, span), ...]
+summary_headers = [col1, col2, ...]
+summary_rows    = [
+  {
+    goal, goal_span?,
+    kpi, weight,
+    half_target, half_actual, half_rate,
+    year_target, year_actual, year_rate
+  },
+  ...
+]
+
+detail_headers  = [col1, col2, col3, col4]
+detail_rows     = [
+  {kpi, definition, formula, evidence},
+  ...
+]
+```
+
+용도:
+
+- KPI 진행 현황
+- 평가 기준표
+- 정의 / 선정배경 / 산식 appendix
+- dense report형 시스템 가이드 부록
+
+선택 규칙:
+
+```txt
+KPI / 목표 / 실적 / 달성률 / 가중치 / 측정산식 / 증빙 성격의 페이지
+→ mk_kpi_status_detail() 우선
 ```
 
 의도:

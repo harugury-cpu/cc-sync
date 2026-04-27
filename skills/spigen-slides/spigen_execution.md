@@ -509,7 +509,43 @@ gws slides presentations batchUpdate \
   python3 -c "import json,sys; d=json.load(sys.stdin); print('완료:', len(d.get('replies',[])), '항목')"
 ```
 
-### 3-7. 결과 출력
+
+### 3-7. 템플릿 잔여 슬라이드 삭제
+
+템플릿 복사 시 원본 슬라이드가 뒤에 남는다. batchUpdate 완료 직후 삭제한다.
+`ex_` 또는 `slide_` 로 시작하지 않는 objectId가 잔여 슬라이드다.
+
+```python
+import subprocess, json
+
+r = subprocess.run(
+    ["gws", "slides", "presentations", "get",
+     "--params", json.dumps({"presentationId": NEW_ID})],
+    capture_output=True, text=True
+)
+slides = json.loads(r.stdout).get("slides", [])
+
+# 우리가 만든 슬라이드 이외는 모두 삭제
+OUR_PREFIXES = ("ex_", "slide_")
+leftover = [s["objectId"] for s in slides
+            if not any(s["objectId"].startswith(p) for p in OUR_PREFIXES)]
+
+if leftover:
+    reqs = [{"deleteObject": {"objectId": oid}} for oid in leftover]
+    subprocess.run(
+        ["gws", "slides", "presentations", "batchUpdate",
+         "--params", json.dumps({"presentationId": NEW_ID}),
+         "--json", json.dumps({"requests": reqs})],
+        capture_output=True
+    )
+    print(f"템플릿 잔여 {len(leftover)}장 삭제 완료")
+```
+
+> objectId prefix 규칙: `render_slide_spec()` 호출 시 `slide_id`에 `ex_` 또는 `slide_` 로 시작하는 값을 사용한다.
+
+---
+
+### 3-8. 결과 출력
 
 ```
 프레젠테이션 생성 완료
@@ -522,7 +558,7 @@ URL: https://docs.google.com/presentation/d/$NEW_ID/edit
 
 ---
 
-### 3-8. 생성 후 이미지 검수 (getThumbnail)
+### 3-9. 생성 후 이미지 검수 (getThumbnail)
 
 슬라이드 생성 완료 후, 기획자·디자이너 서브에이전트 spawn 전에 실행한다.
 API 텍스트 데이터만으로 잡을 수 없는 **시각적 문제(오버플로·겹침·오렌지 과다)를 이미지로 직접 확인**한다.
@@ -799,9 +835,30 @@ EOF
 - PRESENTATION_ID
 - slide별 COMPONENT_BRIEF
   (select_component() 입력값 / function_name / rationale)
+  (ui_position_dependent / evidence_mode / render_scope 포함)
 ```
 
 → 프롬프트 원문: `spigen_subagent_prompts.md` 참조
+
+### 입력 자산 부족 예외 처리
+
+planning 단계에서 아래 조건이면 생성 전에 범위를 낮춘다.
+
+```txt
+- ui_position_dependent = true
+- evidence_mode = text_only
+```
+
+이 경우 허용:
+- 개념 흐름 설명
+- 역할 분담 설명
+- 상태 전이 설명
+
+이 경우 금지:
+- 실제 보드 화면의 칼럼 위치/버튼 위치/패널 배치 단정
+- 스크린샷을 본 것처럼 보이는 UI 상세 설명
+
+즉, 이 경우 대상 검수 FAIL은 우선 **컴포넌트 선택 실패**가 아니라 **입력 자산 부족** 가능성을 먼저 확인한다.
 
 ---
 

@@ -23,6 +23,32 @@ metadata:
 
 ## Google Slides 생성 정책
 
+### 외부 디자인 스킬 통합 원칙
+
+설치된 외부 디자인 스킬은 `spigen-slides`를 대체하지 않는다.  
+역할은 아래처럼 **보조 엔진**으로만 제한한다.
+
+```txt
+ckm-slides     = 레이아웃 패턴 추천기
+ui-ux-pro-max = 디자인 규칙 / 안티패턴 사전
+impeccable    = 결과물 critique / polish 검수 엔진
+```
+
+금지:
+
+```txt
+ckm-slides가 만든 HTML을 최종 결과물로 채택
+ui-ux-pro-max를 슬라이드 직접 생성기로 사용
+impeccable을 컴포넌트 선택기로 사용
+```
+
+원칙:
+
+```txt
+최종 생성은 항상 spigen_preview.py + spigen_lib.py
+외부 스킬은 planning / rules / review 단계에만 개입
+```
+
 ### 신규 기본 원칙 (중요)
 
 이제 `HTML -> Slides 변환`을 source of truth로 사용하지 않는다.

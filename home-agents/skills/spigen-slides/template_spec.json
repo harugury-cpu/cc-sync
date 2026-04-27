@@ -12,9 +12,9 @@
       "x": 36,
       "y": 36,
       "w": 240,
-      "h": 12,
+      "h": 20,
       "font_size": 7,
-      "font_family": "Noto Sans",
+      "font_family": "AUTO",
       "bold": true
     },
     "title": {
@@ -23,7 +23,7 @@
       "w": 648,
       "h": 40,
       "font_size": 22,
-      "font_family": "Noto Sans",
+      "font_family": "AUTO",
       "bold": true
     }
   },
@@ -32,23 +32,17 @@
       "x": 51,
       "y": 103,
       "w": 120,
-      "h": 82,
-      "font_size": 100,
+      "h": 100,
+      "font_size": 80,
       "font_family": "Proxima Nova",
       "bold": true
     },
-    "vline": {
-      "x": 154,
-      "y": 121,
-      "w": 0.7,
-      "h": 80
-    },
     "label": {
       "x": 172,
-      "y": 163,
+      "y": 158,
       "w": 100,
-      "h": 12,
-      "font_size": 11.5,
+      "h": 16,
+      "font_size": 14.5,
       "font_family": "Proxima Nova",
       "bold": false
     },
@@ -67,10 +61,9 @@
       "x0": 54,
       "y0": 132,
       "total_w": 612,
-      "ch": 96,
       "gap_le4": 12,
       "gap_gt4": 8,
-      "_note": "n<=4: gap=12, n>4: gap=8 / cw=(total_w - gap*(n-1))/n"
+      "_note": "n<=4: gap=12, n>4: gap=8 / cw=(total_w - gap*(n-1))/n / ch is dynamic"
     },
     "step": {
       "rel_x": 0,
@@ -82,7 +75,7 @@
       "rel_y": 8,
       "w_shrink": 16,
       "h": 9,
-      "font_size": 5,
+      "font_size": 7,
       "font_family": "Proxima Nova",
       "bold": false
     },
@@ -91,16 +84,15 @@
       "rel_y": 18,
       "w_shrink": 16,
       "h": 13,
-      "font_size": 8,
+      "font_size": 9.5,
       "font_family": "Noto Sans",
       "bold": true
     },
     "sv": {
       "rel_x": 8,
-      "rel_y": 31,
       "w_shrink": 16,
       "h": 10,
-      "font_size": 5,
+      "font_size": 7,
       "font_family": "Noto Sans",
       "bold": false
     },
@@ -109,7 +101,7 @@
       "rel_y": 42,
       "w_shrink": 16,
       "h": 17,
-      "font_size": 5,
+      "font_size": 7,
       "font_family": "Noto Sans",
       "bold": false
     },
@@ -166,7 +158,6 @@
       "w": 170,
       "h": 12,
       "font_size": 7,
-      "font_family": "Proxima Nova",
       "bold": true
     },
     "ct": {

@@ -445,26 +445,39 @@ Phase 3개 → 같은 Phase 카드
 기획 단계(1-4 아웃라인)에서 이 테이블 기준으로 컴포넌트를 **먼저 확정**하고 이유를 기록한다.
 `select_component()` (spigen_lib.py)가 이 결정을 자동으로 수행한다.
 
+**컴포넌트 선택 전 선행 질문 (필수)**
+
+```
+Q. 이 슬라이드에서 청중이 해야 할 것은?
+  → 이해/파악  : 아래 결정 테이블로 진행
+  → 판단/결정  : mk_decision_tree() 우선 검토
+  → 실행/액션  : mk_flow_focus() 또는 mk_split_cards() 우선 검토
+```
+
+"비교처럼 생긴 내용"이라도 청중이 **직접 경로를 선택해야 하는 상황**이면 `mk_compare_rows`가 아니라 `mk_decision_tree`다.
+
 | 우선순위 | 조건 | 컴포넌트 | 함수 |
 |--------|-----|---------|-----|
 | 1 | KPI·실적·달성률·가중치 포함 | kpi-status-detail | `mk_kpi_status_detail()` |
-| 2 | 양방향 비교 (현재 vs 이후, Before/After) | compare-rows | `mk_compare_rows()` |
-| 3 | 단방향 프로세스 ≤4단계 | flow-focus | `mk_flow_focus()` |
-| 4 | 단방향 프로세스 5단계+ | flow | `mk_flow()` |
-| 5 | 동일 속성 비교 (속성이 행/열로 정렬 가능) | compare-rows | `mk_compare_rows()` |
-| 6 | 상태(완료/진행중/대기) 구분 필요 | split-cards | `mk_split_cards()` |
-| 7 | 독립 항목 정확히 3개 | 3col-cards | `mk_3col_cards()` |
-| 8 | 독립 항목 1~2개 | split-layout | `mk_split()` |
-| 9 | 서술형·순차 설명 (기본값) | text-block | `mk_text_block()` |
+| 2 | 청중이 직접 경로를 선택/판단해야 하는 분기 상황 | decision-tree | `mk_decision_tree()` |
+| 3 | 양방향 비교 (현재 vs 이후, Before/After) — 청중은 이해만 하면 됨 | compare-rows | `mk_compare_rows()` |
+| 4 | 단방향 프로세스 ≤4단계 | flow-focus | `mk_flow_focus()` |
+| 5 | 단방향 프로세스 5단계+ | flow | `mk_flow()` |
+| 6 | 동일 속성 비교 (속성이 행/열로 정렬 가능) — 청중은 이해만 하면 됨 | compare-rows | `mk_compare_rows()` |
+| 7 | 상태(완료/진행중/대기) 구분 필요 | split-cards | `mk_split_cards()` |
+| 8 | 독립 항목 정확히 3개 | 3col-cards | `mk_3col_cards()` |
+| 9 | 독립 항목 1~2개 | split-layout | `mk_split()` |
+| 10 | 서술형·순차 설명 (기본값) | text-block | `mk_text_block()` |
 
 우선순위 순서대로 조건을 확인한다. 첫 번째로 일치하는 행의 컴포넌트를 사용한다.
 
 판단 원칙:
 
 ```
-카드      — 항목이 독립적·동등하고, 비교보다 존재감이 중요할 때 (우선순위 7)
-표/분할   — 동일 속성 비교, 상태 파악, 양방향 대조 (우선순위 2·5·6)
-텍스트 블록 — 순차적 단계·완료 내역·서술형 설명 (기본값)
+decision-tree — 청중이 스스로 판단/선택해야 하는 분기 (우선순위 2)
+카드          — 항목이 독립적·동등하고, 비교보다 존재감이 중요할 때 (우선순위 8)
+표/분할       — 동일 속성 비교, 상태 파악, 양방향 대조 (우선순위 3·6·7)
+텍스트 블록   — 순차적 단계·완료 내역·서술형 설명 (기본값)
 ```
 
 **mk_split_cards 카드 역할 구분 규칙**
@@ -559,6 +572,36 @@ Graphviz 결과 이미지를 슬라이드에 그대로 삽입
 모든 상황에서 동일 슬라이드 레이아웃 재사용
 HTML 결과를 Slides에 그대로 변환하는 것
 내용 구조가 다른데도 같은 템플릿에 억지로 끼워넣는 것
+```
+
+### ui-ux-pro-max 흡수 규칙
+
+`ui-ux-pro-max`는 생성기가 아니라 **디자인 규칙 사전**으로만 사용한다.
+
+우선 흡수 대상:
+
+```txt
+1. hierarchy가 평평한 구성 금지
+2. 동일 카드 반복 남발 금지
+3. gradient text 금지
+4. 장식용 glassmorphism 기본값 금지
+5. color-only meaning 금지
+6. spacing rhythm 없는 균일 패딩 금지
+```
+
+적용 위치:
+
+```txt
+select_component() 이후 layout 검토
+preview 검수
+review checklist
+```
+
+즉 `ui-ux-pro-max`의 역할은:
+
+```txt
+새 레이아웃을 직접 만들기보다
+구린 레이아웃 / AI스러운 레이아웃을 걸러내는 것
 ```
 
 다이어그램용 기본 함수:

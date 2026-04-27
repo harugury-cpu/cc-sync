@@ -14,10 +14,11 @@ spigen_verify.py — Google Slides 생성 결과를 template_spec.json 기준으
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 
-GWS = "/Users/harugury/.nvm/versions/node/v24.12.0/bin/gws"
+GWS = shutil.which("gws") or ""
 SPEC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "template_spec.json")
 EMU = 12700
 
@@ -28,12 +29,24 @@ def emu_pt(v):
     return v / EMU
 
 
+def has_korean(text):
+    s = str(text or "")
+    return any(
+        ("\uac00" <= ch <= "\ud7a3")
+        or ("\u1100" <= ch <= "\u11ff")
+        or ("\u3130" <= ch <= "\u318f")
+        for ch in s
+    )
+
+
 def load_spec():
     with open(SPEC_PATH, encoding="utf-8") as f:
         return json.load(f)
 
 
 def get_presentation(pres_id):
+    if not GWS:
+        raise RuntimeError("gws 바이너리를 찾을 수 없습니다. 'which gws' 또는 PATH를 확인하세요.")
     cmd = [GWS, "slides", "presentations", "get",
            "--params", json.dumps({"presentationId": pres_id})]
     r = subprocess.run(cmd, capture_output=True, text=True)
@@ -55,13 +68,29 @@ def parse_el(el):
 
     Google Slides API는 크기를 size × scaleX/scaleY 로 인코딩한다.
     실제 렌더 크기 = size.width * scaleX (EMU) / 12700 (pt)
+
+    native table의 경우 elementProperties.size는 createTable 기본값(~236pt)이며
+    실제 렌더 크기는 tableRows[].rowHeight 와 tableColumns[].columnWidth 합산이다.
     """
     t = el.get("transform", {})
     sz = el.get("size", {})
     x = emu_pt(t.get("translateX", 0))
     y = emu_pt(t.get("translateY", 0))
-    w = emu_pt(sz.get("width", {}).get("magnitude", 0) * t.get("scaleX", 1.0))
-    h = emu_pt(sz.get("height", {}).get("magnitude", 0) * t.get("scaleY", 1.0))
+
+    tbl = el.get("table", {})
+    if tbl:
+        # native table: 실제 크기를 row/col 합산으로 계산
+        w = sum(
+            emu_pt(col.get("columnWidth", {}).get("magnitude", 0))
+            for col in tbl.get("tableColumns", [])
+        )
+        h = sum(
+            emu_pt(row.get("rowHeight", {}).get("magnitude", 0))
+            for row in tbl.get("tableRows", [])
+        )
+    else:
+        w = emu_pt(sz.get("width", {}).get("magnitude", 0) * t.get("scaleX", 1.0))
+        h = emu_pt(sz.get("height", {}).get("magnitude", 0) * t.get("scaleY", 1.0))
 
     # 빈 run / paragraphMarker 건너뛰고 실제 내용 있는 첫 textRun 사용
     style = {}
@@ -76,15 +105,73 @@ def parse_el(el):
             style = {"font_size": fs, "font_family": ff, "bold": s.get("bold")}
             break
 
+    text_buf = ""
+    for te in el.get("shape", {}).get("text", {}).get("textElements", []):
+        text_buf += te.get("textRun", {}).get("content", "")
+
     return {
         "x": round(x, 1), "y": round(y, 1),
         "w": round(w, 1), "h": round(h, 1),
+        "text": text_buf.strip(),
         **style,
     }
 
 
 def build_elmap(slide):
     return {el["objectId"]: parse_el(el) for el in slide.get("pageElements", [])}
+
+
+def verify_global_bounds(elmap):
+    results = []
+    for oid, el in elmap.items():
+        x = el.get("x", 0)
+        y = el.get("y", 0)
+        w = el.get("w", 0)
+        h = el.get("h", 0)
+        if x < -0.1 or y < -0.1 or x + w > 720.1 or y + h > 405.1:
+            results.append(("FAIL", f"global_bounds.{oid}: off-canvas x={x}, y={y}, w={w}, h={h}"))
+    return results
+
+
+def verify_cover_contract(slide, idx):
+    """
+    First slide must use either:
+      - the template cover element IDs
+      - or the standard mk_cover() element suffixes
+    """
+    if idx != 0:
+        return []
+    oids = {el["objectId"] for el in slide.get("pageElements", [])}
+    template_cover_dark = {
+        "g9001df85b1_0_1",
+        "g9001df85b1_0_2",
+        "ga85705c0f7_0_1",
+    }
+    template_cover_dark_v2 = {
+        "g9001df85b1_0_3",
+        "g3e66e3c2180_1_2",
+        "g3e66e3c2180_1_3",
+        "g3e66e3c2180_1_4",
+    }
+    template_cover_light = {
+        "g8f47d50608_1_1",
+        "g8f47d50608_1_3",
+        "gb12e07a716_0_0",
+    }
+    helper_cover_suffixes = [
+        "_cover_title",
+        "_cover_team",
+        "_cover_meta",
+    ]
+    if (
+        template_cover_dark.issubset(oids)
+        or template_cover_dark_v2.issubset(oids)
+        or template_cover_light.issubset(oids)
+    ):
+        return [("PASS", "cover_contract: template cover IDs detected")]
+    if all(any(oid.endswith(sfx) for oid in oids) for sfx in helper_cover_suffixes):
+        return [("PASS", "cover_contract: mk_cover helper IDs detected")]
+    return [("FAIL", "cover_contract: first slide is not using template cover or mk_cover() structure")]
 
 
 # ── 체크 헬퍼 ────────────────────────────────────────────────────────
@@ -119,7 +206,10 @@ def _check_element(results, el, sp, prefix, tol=2.5):
     if "font_size" in sp:
         _chk(results, f"{prefix}.font_size", el.get("font_size"), sp["font_size"], tol=0.6)
     if "font_family" in sp:
-        _chk_str(results, f"{prefix}.font_family", el.get("font_family"), sp["font_family"])
+        expected_ff = sp["font_family"]
+        if expected_ff == "AUTO":
+            expected_ff = "Noto Sans" if has_korean(el.get("text", "")) else "Proxima Nova"
+        _chk_str(results, f"{prefix}.font_family", el.get("font_family"), expected_ff)
     if "bold" in sp and sp["bold"] is not None:
         actual_bold = el.get("bold")
         if actual_bold is None:
@@ -132,21 +222,53 @@ def _check_element(results, el, sp, prefix, tol=2.5):
 
 # ── 컴포넌트 감지 ────────────────────────────────────────────────────
 
+_SID_ANCHOR_SUFFIXES = [
+    "_focus_bg0", "_step0", "_leftbox", "_sc0", "_bodybox",
+    "_col0", "_kpi_bg0", "_kst", "_kdt", "_quote_mark", "_eyebrow",
+    "_cmp_left_label",
+]
+
+def _infer_sid(elmap, oid):
+    """createSlide objectId(oid)와 mk_* sid가 다를 때 실제 sid를 추론한다."""
+    for key in elmap:
+        for suf in _SID_ANCHOR_SUFFIXES:
+            if key.endswith(suf):
+                candidate = key[: -len(suf)]
+                if candidate:
+                    return candidate
+    return oid
+
+
 def detect_components(elmap, oid):
+    sid = _infer_sid(elmap, oid)
     comps = []
-    if f"{oid}_num" in elmap and f"{oid}_label" in elmap:
+    if f"{sid}_num" in elmap and f"{sid}_label" in elmap:
         comps.append("section_divider")
-    if f"{oid}_step0" in elmap:
+    if f"{sid}_step0" in elmap:
         comps.append("flow")
-    if f"{oid}_col0" in elmap:
+    if f"{sid}_focus_bg0" in elmap:
+        comps.append("flow_focus")
+    if f"{sid}_col0" in elmap:
         comps.append("3col")
-    if f"{oid}_kpi_bg0" in elmap:
+    if f"{sid}_kpi_bg0" in elmap:
         comps.append("kpi_dashboard")
-    if f"{oid}_quote_mark" in elmap:
+    if f"{sid}_leftbox" in elmap and f"{sid}_rightbox" in elmap:
+        comps.append("split")
+    if f"{sid}_cmp_lb0" in elmap:
+        comps.append("compare_rows")
+    if f"{sid}_sc0" in elmap:
+        comps.append("split_cards")
+    if f"{sid}_bodybox" in elmap:
+        comps.append("text_block")
+    if f"{sid}_kst" in elmap:
+        comps.append("kpi_status_light")
+    if f"{sid}_kdt" in elmap:
+        comps.append("kpi_dense_table")
+    if f"{sid}_quote_mark" in elmap:
         comps.append("quote")
-    if f"{oid}_eyebrow" in elmap:
+    if f"{sid}_eyebrow" in elmap:
         comps.append("slide_base")
-    elif f"{oid}_title" in elmap and "section_divider" not in comps:
+    elif f"{sid}_title" in elmap and "section_divider" not in comps:
         comps.append("slide_base")
     return comps
 
@@ -206,7 +328,8 @@ def verify_flow(elmap, oid, spec, tol):
             _chk(results, f"{pfx}.x", card.get("x"), round(x, 1), tol)
             _chk(results, f"{pfx}.y", card.get("y"), y0, tol)
             _chk(results, f"{pfx}.w", card.get("w"), round(cw, 1), tol)
-            _chk(results, f"{pfx}.h", card.get("h"), ch, tol)
+            if "ch" in layout:
+                _chk(results, f"{pfx}.h", card.get("h"), ch, tol)
         else:
             results.append(("MISS", f"{pfx} 카드 요소 없음"))
 
@@ -217,12 +340,54 @@ def verify_flow(elmap, oid, spec, tol):
             if not el or not sp:
                 continue
             _chk(results, f"{pfx}{suffix}.x", el.get("x"), round(x + sp.get("rel_x", 0), 1), tol)
-            _chk(results, f"{pfx}{suffix}.y", el.get("y"), y0 + sp.get("rel_y", 0), tol)
+            if "rel_y" in sp:
+                _chk(results, f"{pfx}{suffix}.y", el.get("y"), y0 + sp["rel_y"], tol)
             _chk(results, f"{pfx}{suffix}.w", el.get("w"), round(cw - sp.get("w_shrink", 0), 1), tol)
             if "font_size" in sp:
                 _chk(results, f"{pfx}{suffix}.font_size", el.get("font_size"), sp["font_size"], tol=0.6)
             if "font_family" in sp:
                 _chk_str(results, f"{pfx}{suffix}.font_family", el.get("font_family"), sp["font_family"])
+
+    return results
+
+
+def verify_flow_focus(elmap, oid, tol):
+    results = []
+    n = sum(1 for i in range(10) if f"{oid}_focus_bg{i}" in elmap)
+    if n == 0:
+        return results
+
+    x0, y0, total_w = 54, 136, 612
+    gap = 8
+    card_w = (total_w - gap * max(0, n - 1)) / max(1, n)
+
+    for i in range(n):
+        x = x0 + i * (card_w + gap)
+        card = elmap.get(f"{oid}_focus_bg{i}")
+        if card:
+            _chk(results, f"flow_focus.card{i}.x", card.get("x"), round(x, 1), tol)
+            _chk(results, f"flow_focus.card{i}.y", card.get("y"), y0, tol)
+            _chk(results, f"flow_focus.card{i}.w", card.get("w"), round(card_w, 1), tol)
+        else:
+            results.append(("MISS", f"flow_focus.card{i}: 카드 요소 없음"))
+
+        num = elmap.get(f"{oid}_focus_num{i}")
+        if num:
+            _chk(results, f"flow_focus.num{i}.x", num.get("x"), round(x + 12, 1), tol)
+            _chk(results, f"flow_focus.num{i}.w", num.get("w"), 56, tol)
+            _chk(results, f"flow_focus.num{i}.font_size", num.get("font_size"), 7, tol=0.6)
+
+        title = elmap.get(f"{oid}_focus_title{i}")
+        if title:
+            _chk(results, f"flow_focus.title{i}.x", title.get("x"), round(x + 12, 1), tol)
+            _chk(results, f"flow_focus.title{i}.w", title.get("w"), round(card_w - 24, 1), tol)
+            _chk(results, f"flow_focus.title{i}.font_size", title.get("font_size"), 12.5, tol=0.6)
+
+        svc = elmap.get(f"{oid}_focus_svc{i}")
+        if svc:
+            _chk(results, f"flow_focus.svc{i}.x", svc.get("x"), round(x + 12, 1), tol)
+            _chk(results, f"flow_focus.svc{i}.w", svc.get("w"), round(card_w - 24, 1), tol)
+            _chk(results, f"flow_focus.svc{i}.font_size", svc.get("font_size"), 7, tol=0.6)
 
     return results
 
@@ -259,6 +424,156 @@ def verify_3col(elmap, oid, spec, tol):
             if "font_family" in sp:
                 _chk_str(results, f"{pfx}{suffix}.font_family", el.get("font_family"), sp["font_family"])
 
+    return results
+
+
+def verify_split(elmap, oid, tol):
+    results = []
+    checks = [
+        (f"{oid}_leftbox", 36, 128, 313, 220),
+        (f"{oid}_rightbox", 371, 128, 313, 220),
+        (f"{oid}_lt", 54, 150, 280, 24),
+        (f"{oid}_lb", 54, 184, 280, 140),
+        (f"{oid}_rt", 389, 150, 280, 24),
+        (f"{oid}_rb", 389, 184, 280, 140),
+    ]
+    for key, x, y, w, h in checks:
+        el = elmap.get(key)
+        if not el:
+            results.append(("MISS", f"split.{key}: 요소 없음"))
+            continue
+        label = key.replace(f"{oid}_", "")
+        _chk(results, f"split.{label}.x", el.get("x"), x, tol)
+        _chk(results, f"split.{label}.y", el.get("y"), y, tol)
+        _chk(results, f"split.{label}.w", el.get("w"), w, tol)
+        _chk(results, f"split.{label}.h", el.get("h"), h, tol)
+
+    arrow = elmap.get(f"{oid}_arrow")
+    if arrow:
+        _chk(results, "split.arrow.x", arrow.get("x"), 352, tol)
+        _chk(results, "split.arrow.y", arrow.get("y"), 226, tol)
+        _chk(results, "split.arrow.w", arrow.get("w"), 16, tol)
+        _chk(results, "split.arrow.h", arrow.get("h"), 16, tol)
+    return results
+
+
+def verify_compare_rows(elmap, oid, tol):
+    results = []
+
+    left = elmap.get(f"{oid}_cmp_left_label")
+    right = elmap.get(f"{oid}_cmp_right_label")
+    if left:
+        _chk(results, "compare_rows.left_label.x", left.get("x"), 36, tol)
+        _chk(results, "compare_rows.left_label.y", left.get("y"), 109, tol)
+        _chk(results, "compare_rows.left_label.w", left.get("w"), 120, tol)
+        _chk(results, "compare_rows.left_label.h", left.get("h"), 10, tol)
+        _chk(results, "compare_rows.left_label.font_size", left.get("font_size"), 7, tol=0.6)
+    else:
+        results.append(("MISS", "compare_rows.left_label: 요소 없음"))
+
+    if right:
+        _chk(results, "compare_rows.right_label.x", right.get("x"), 370.5, tol)
+        _chk(results, "compare_rows.right_label.y", right.get("y"), 109, tol)
+        _chk(results, "compare_rows.right_label.w", right.get("w"), 120, tol)
+        _chk(results, "compare_rows.right_label.h", right.get("h"), 10, tol)
+        _chk(results, "compare_rows.right_label.font_size", right.get("font_size"), 7, tol=0.6)
+    else:
+        results.append(("MISS", "compare_rows.right_label: 요소 없음"))
+
+    row_y0, row_h, row_gap = 125.2, 40, 5
+    n = sum(1 for i in range(10) if f"{oid}_cmp_lb{i}" in elmap)
+    for i in range(n):
+        ry = row_y0 + i * (row_h + row_gap)
+
+        for suffix, x, w in [
+            ("_cmp_lb", 36, 313.5),
+            ("_cmp_mid", 349.5, 21),
+            ("_cmp_rb", 370.5, 313.5),
+        ]:
+            el = elmap.get(f"{oid}{suffix}{i}")
+            name = suffix[1:]
+            if not el:
+                results.append(("MISS", f"compare_rows.{name}{i}: 요소 없음"))
+                continue
+            _chk(results, f"compare_rows.{name}{i}.x", el.get("x"), x, tol)
+            _chk(results, f"compare_rows.{name}{i}.y", el.get("y"), ry, tol)
+            _chk(results, f"compare_rows.{name}{i}.w", el.get("w"), w, tol)
+            _chk(results, f"compare_rows.{name}{i}.h", el.get("h"), row_h, tol)
+
+        ar = elmap.get(f"{oid}_cmp_ar{i}")
+        if ar:
+            _chk(results, f"compare_rows.arrow{i}.x", ar.get("x"), 356, tol)
+            _chk(results, f"compare_rows.arrow{i}.y", ar.get("y"), ry + 17, tol)
+
+        item = elmap.get(f"{oid}_cmp_item{i}")
+        before = elmap.get(f"{oid}_cmp_before{i}")
+        after_label = elmap.get(f"{oid}_cmp_after_label{i}")
+        after = elmap.get(f"{oid}_cmp_after{i}")
+
+        if item:
+            _chk(results, f"compare_rows.item{i}.x", item.get("x"), 47, tol)
+            _chk(results, f"compare_rows.item{i}.y", item.get("y"), ry + 8, tol)
+        if before:
+            _chk(results, f"compare_rows.before{i}.x", before.get("x"), 47, tol)
+            _chk(results, f"compare_rows.before{i}.y", before.get("y"), ry + 18, tol)
+        if after_label:
+            _chk(results, f"compare_rows.after_label{i}.x", after_label.get("x"), 382, tol)
+            _chk(results, f"compare_rows.after_label{i}.y", after_label.get("y"), ry + 8, tol)
+        if after:
+            _chk(results, f"compare_rows.after{i}.x", after.get("x"), 382, tol)
+            _chk(results, f"compare_rows.after{i}.y", after.get("y"), ry + 18, tol)
+
+    return results
+
+
+def verify_split_cards(elmap, oid, tol):
+    results = []
+    for i in range(5):
+        tl = elmap.get(f"{oid}_tl{i}")
+        if not tl:
+            continue
+        _chk(results, f"split_cards.tl{i}.x", tl.get("x"), 36, tol)
+        _chk(results, f"split_cards.tl{i}.y", tl.get("y"), 140 + i * 24, tol)
+        _chk(results, f"split_cards.tl{i}.w", tl.get("w"), 260, tol)
+        _chk(results, f"split_cards.tl{i}.h", tl.get("h"), 18, tol)
+
+    for i in range(4):
+        sc = elmap.get(f"{oid}_sc{i}")
+        if not sc:
+            continue
+        y = 140 + i * (44 + 8)
+        _chk(results, f"split_cards.card{i}.x", sc.get("x"), 370, tol)
+        _chk(results, f"split_cards.card{i}.y", sc.get("y"), y, tol)
+        _chk(results, f"split_cards.card{i}.w", sc.get("w"), 314, tol)
+        _chk(results, f"split_cards.card{i}.h", sc.get("h"), 44, tol)
+        sct = elmap.get(f"{oid}_sct{i}")
+        if sct:
+            _chk(results, f"split_cards.title{i}.x", sct.get("x"), 388, tol)
+            _chk(results, f"split_cards.title{i}.y", sct.get("y"), y + 13, tol)
+            _chk(results, f"split_cards.title{i}.w", sct.get("w"), 278, tol)
+            _chk(results, f"split_cards.title{i}.h", sct.get("h"), 18, tol)
+            _chk(results, f"split_cards.title{i}.font_size", sct.get("font_size"), 12.5, tol=0.6)
+
+    return results
+
+
+def verify_text_block(elmap, oid, tol):
+    results = []
+    bodybox = elmap.get(f"{oid}_bodybox")
+    body = elmap.get(f"{oid}_body")
+    if not bodybox:
+        results.append(("MISS", "text_block.bodybox: 요소 없음"))
+        return results
+
+    _chk(results, "text_block.bodybox.x", bodybox.get("x"), 36, tol)
+    _chk(results, "text_block.bodybox.y", bodybox.get("y"), 128, tol)
+    _chk(results, "text_block.bodybox.w", bodybox.get("w"), 648, tol)
+    if body:
+        _chk(results, "text_block.body.x", body.get("x"), 56, tol)
+        _chk(results, "text_block.body.y", body.get("y"), 150, tol)
+        _chk(results, "text_block.body.w", body.get("w"), 608, tol)
+    else:
+        results.append(("MISS", "text_block.body: 요소 없음"))
     return results
 
 
@@ -339,7 +654,11 @@ def main():
     tol = spec.get("_meta", {}).get("tolerance_pt", 2.5)
 
     print(f"프레젠테이션 로드 중: {pres_id}")
-    data = get_presentation(pres_id)
+    try:
+        data = get_presentation(pres_id)
+    except RuntimeError as e:
+        print(f"오류: {e}")
+        sys.exit(1)
     slides = data.get("slides", [])
     print(f"슬라이드 {len(slides)}장 확인\n")
 
@@ -351,27 +670,47 @@ def main():
 
         oid = slide.get("objectId", f"slide_{idx}")
         elmap = build_elmap(slide)
+        sid = _infer_sid(elmap, oid)  # mk_* 함수에 넘긴 sid — oid와 다를 수 있음
         comps = detect_components(elmap, oid)
+        results = []
+        results += verify_cover_contract(slide, idx)
+        results += verify_global_bounds(elmap)
 
-        print(f"── Slide {idx}  ({oid})")
+        sid_note = f" sid={sid}" if sid != oid else ""
+        print(f"── Slide {idx}  ({oid}{sid_note})")
         if not comps:
-            print("    (인식된 컴포넌트 없음 — 건너뜀)\n")
+            if results:
+                counts = print_results(results)
+                print(f"    → PASS:{counts['PASS']} FAIL:{counts['FAIL']} SKIP:{counts['SKIP']} MISS:{counts['MISS']}\n")
+                for k, v in counts.items():
+                    total[k] = total.get(k, 0) + v
+            else:
+                print("    (인식된 컴포넌트 없음 — 건너뜀)\n")
             continue
         print(f"    컴포넌트: {', '.join(comps)}")
 
-        results = []
-        if "slide_base" in comps:
-            results += verify_slide_base(elmap, oid, spec, tol)
+        if "slide_base" in comps and idx != 0:  # 표지(idx=0)는 template cover — 폰트 체크 제외
+            results += verify_slide_base(elmap, sid, spec, tol)
         if "section_divider" in comps:
-            results += verify_section_divider(elmap, oid, spec, tol)
+            results += verify_section_divider(elmap, sid, spec, tol)
         if "flow" in comps:
-            results += verify_flow(elmap, oid, spec, tol)
+            results += verify_flow(elmap, sid, spec, tol)
+        if "flow_focus" in comps:
+            results += verify_flow_focus(elmap, sid, tol)
         if "3col" in comps:
-            results += verify_3col(elmap, oid, spec, tol)
+            results += verify_3col(elmap, sid, spec, tol)
+        if "split" in comps:
+            results += verify_split(elmap, sid, tol)
+        if "compare_rows" in comps:
+            results += verify_compare_rows(elmap, sid, tol)
+        if "split_cards" in comps:
+            results += verify_split_cards(elmap, sid, tol)
+        if "text_block" in comps:
+            results += verify_text_block(elmap, sid, tol)
         if "kpi_dashboard" in comps:
-            results += verify_kpi(elmap, oid, spec, tol)
+            results += verify_kpi(elmap, sid, spec, tol)
         if "quote" in comps:
-            results += verify_quote(elmap, oid, spec, tol)
+            results += verify_quote(elmap, sid, spec, tol)
 
         counts = print_results(results)
         print(f"    → PASS:{counts['PASS']} FAIL:{counts['FAIL']} SKIP:{counts['SKIP']} MISS:{counts['MISS']}\n")
@@ -381,13 +720,24 @@ def main():
     print("══════════════════════════════════════════════")
     print(f"최종: PASS={total['PASS']}  FAIL={total['FAIL']}  SKIP={total['SKIP']}  MISS={total['MISS']}")
 
+    total_checks = total["PASS"] + total["FAIL"] + total["SKIP"]
+    skip_ratio = total["SKIP"] / total_checks if total_checks > 0 else 0
+
     if total["FAIL"] > 0 or total["MISS"] > 0:
         print("❌ 검증 실패 — spigen_lib.py 수정 후 슬라이드 재생성 필요")
         sys.exit(1)
-    elif total["PASS"] == 0:
+    elif total_checks == 0:
         print("⚠  검증 대상 없음 — objectId 패턴 확인 필요")
         sys.exit(0)
+    elif skip_ratio > 0.4:
+        print(
+            f"⚠  SKIP 비율 과다 ({total['SKIP']}건, {skip_ratio:.0%})"
+            " — API 응답에 누락된 속성이 많습니다. objectId 패턴 또는 spigen_lib.py 버전을 확인하세요."
+        )
+        sys.exit(1)
     else:
+        if total["SKIP"] > 0:
+            print(f"⚠  SKIP {total['SKIP']}건 — 일부 속성이 API 응답에 없습니다.")
         print("✓  모든 검증 통과 — 완료 보고 가능")
         sys.exit(0)
 

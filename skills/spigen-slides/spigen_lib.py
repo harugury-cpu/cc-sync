@@ -115,6 +115,7 @@ def render_component_spec(sid, component, reqs, eyebrow="", title=""):
             left_label=props.get("left_label", "현재"),
             right_label=props.get("right_label", "도입 후"),
             callout=props.get("callout", ""),
+            is_bilateral=props.get("is_bilateral", False),
         )
     if ctype == "decision-tree":
         return mk_decision_tree(sid, props.get("nodes", {}), reqs, eyebrow=eyebrow, title=title)
@@ -174,9 +175,14 @@ def render_slide_spec(slide_spec, insert_index, reqs, total=None):
         render_component_spec(slide_spec.slide_id, component, reqs)
 
 
-def mk_compare_rows(sid, rows, reqs, left_label="현재", right_label="도입 후", callout=""):
-    """Compare layout modeled after the system guide page 17 reference."""
-    _text(reqs, sid, f"{sid}_cmp_left_label", 36, 109, 120, 10, left_label, BAD, 5, False, "Noto Sans")
+def mk_compare_rows(sid, rows, reqs, left_label="현재", right_label="도입 후", callout="", is_bilateral=False):
+    """Compare layout modeled after the system guide page 17 reference.
+
+    is_bilateral=True: 두 경로가 대등한 분기일 때. 좌측에 BAD 색상을 쓰지 않고
+    오렌지를 우측 헤더 1개로만 절제한다.
+    """
+    left_header_color = TEXT_DIM if is_bilateral else BAD
+    _text(reqs, sid, f"{sid}_cmp_left_label", 36, 109, 120, 10, left_label, left_header_color, 5, False, "Noto Sans")
     _text(reqs, sid, f"{sid}_cmp_right_label", 370.5, 109, 120, 10, right_label, ORANGE, 5, True, "Noto Sans")
 
     row_y0, row_h, row_gap = 125.2, 40, 5
@@ -186,11 +192,15 @@ def mk_compare_rows(sid, rows, reqs, left_label="현재", right_label="도입 �
         _rect(reqs, sid, f"{sid}_cmp_lb{i}", 36, ry, 313.5, row_h, SURFACE, BORDER, 0.5)
         _rect(reqs, sid, f"{sid}_cmp_mid{i}", 349.5, ry, 21, row_h, SURFACE, BORDER, 0.5)
         _rect(reqs, sid, f"{sid}_cmp_rb{i}", 370.5, ry, 313.5, row_h, ORANGE_DIM, ORANGE, 0.5)
-        _text(reqs, sid, f"{sid}_cmp_ar{i}", 356, ry + 17, 10, 10, "›", ORANGE, 5, False, "Noto Sans", center=True)
-        _text(reqs, sid, f"{sid}_cmp_item{i}", 47, ry + 8, 280, 9, row.get("item", ""), TEXT_FAINT, 5, False, "Noto Sans")
-        _text(reqs, sid, f"{sid}_cmp_before{i}", 47, ry + 18, 280, 14, row.get("before", ""), BAD, 8, False, "Noto Sans")
-        _text(reqs, sid, f"{sid}_cmp_after_label{i}", 382, ry + 8, 280, 9, row.get("after_label", "개선"), ORANGE, 5, True, "Noto Sans")
-        _text(reqs, sid, f"{sid}_cmp_after{i}", 382, ry + 18, 280, 14, row.get("after", ""), TEXT, 8, False, "Noto Sans")
+        # 화살표 기호는 Proxima Nova (기호 전용 폰트 규칙)
+        _text(reqs, sid, f"{sid}_cmp_ar{i}", 356, ry + 17, 10, 10, "›", TEXT_DIM, 5, False, "Proxima Nova", center=True)
+        _text(reqs, sid, f"{sid}_cmp_item{i}", 47, ry + 6, 280, 11, row.get("item", ""), TEXT_DIM, 8, False, "Noto Sans")
+        left_text_color = TEXT_DIM if is_bilateral else BAD
+        _text(reqs, sid, f"{sid}_cmp_before{i}", 47, ry + 18, 280, 16, row.get("before", ""), left_text_color, 9, False, "Noto Sans")
+        # is_bilateral: after_label에 ORANGE 남발 방지 — 레이블 없이 TEXT_DIM으로 절제
+        after_label_color = TEXT_DIM if is_bilateral else ORANGE
+        _text(reqs, sid, f"{sid}_cmp_after_label{i}", 382, ry + 6, 280, 11, row.get("after_label", "개선"), after_label_color, 8, True, "Noto Sans")
+        _text(reqs, sid, f"{sid}_cmp_after{i}", 382, ry + 18, 280, 16, row.get("after", ""), TEXT, 9, False, "Noto Sans")
 
     if callout:
         cy = row_y0 + len(visible) * (row_h + row_gap) - row_gap + 14
@@ -768,9 +778,9 @@ def mk_cover(slide_oid, title, insert_index, reqs, subtitle="",
       - bottom-right date / version
     """
     _new_slide(slide_oid, insert_index, reqs)
-    title_text = title if not subtitle else f"{title}\\n{subtitle}"
-    meta_text = version if not date_text else f"{date_text}\\n{version}"
-    team_text = department if not owner else f"{department}\\n{owner}"
+    title_text = title if not subtitle else f"{title}\n{subtitle}"
+    meta_text = version if not date_text else f"{date_text}\n{version}"
+    team_text = department if not owner else f"{department}\n{owner}"
 
     _text(reqs, slide_oid, f"{slide_oid}_cover_title",
           27.6, 34.3, 594.8, 99.5, title_text, TEXT, 36, False, "Noto Sans")
@@ -782,14 +792,13 @@ def mk_cover(slide_oid, title, insert_index, reqs, subtitle="",
 
 def _text(reqs, sid, oid, x, y, w, h, text, color=TEXT, size=8, bold=False,
           ff="Noto Sans", center=False, valign=True):
-    reqs += [
-        shape(oid, sid, "TEXT_BOX", x, y, w, h),
-        txt(oid, text),
-        txtstyle(oid, color, size, bold=bold, ff=ff),
-        clr(oid),
-    ]
-    if center:
-        reqs.append(align(oid, "CENTER"))
+    reqs.append(shape(oid, sid, "TEXT_BOX", x, y, w, h))
+    if text:
+        reqs.append(txt(oid, text))
+        reqs.append(txtstyle(oid, color, size, bold=bold, ff=ff))
+        if center:
+            reqs.append(align(oid, "CENTER"))
+    reqs.append(clr(oid))
     if valign:
         reqs.append(middle(oid))
 
@@ -861,12 +870,14 @@ def _contains_korean(text):
     )
 
 
-def _header(sid, reqs, eyebrow="", title="", page_no=None, total=None, footer=""):
+def _header(sid, reqs, eyebrow="", title="", page_no=None, total=None, footer="", eyebrow_dim=False):
     if eyebrow:
         # 한국어 포함 → Noto Sans, 그 외(영문/숫자/기호 혼합) → Proxima Nova
         eyebrow_ff = "Noto Sans" if _contains_korean(eyebrow) else "Proxima Nova"
         _text(reqs, sid, f"{sid}_eyebrow", M, M, 240, 20, eyebrow.upper(),
               ORANGE, 7, True, eyebrow_ff, valign=False)
+        if eyebrow_dim:
+            reqs.append(fill(f"{sid}_eyebrow", ACCENT_DIM, wt=0))
     if title:
         _text(reqs, sid, f"{sid}_title", M, 54, W - M * 2, 40, title,
               TEXT, 22, True, "Noto Sans", valign=False)
@@ -888,6 +899,22 @@ def _primary_index(items, predicate):
         if predicate(item):
             return i
     return None
+
+
+def _primary_set(items, predicate):
+    """Return set of indices allowed to use 100% orange. Supports multiple primaries.
+    Explicit primary=True keys take priority; if none exist, collect all predicate matches.
+    """
+    result = set()
+    for i, item in enumerate(items):
+        if isinstance(item, dict) and item.get("primary"):
+            result.add(i)
+    if result:
+        return result
+    for i, item in enumerate(items):
+        if predicate(item):
+            result.add(i)
+    return result
 
 
 def _estimate_lines(text, card_w, chars_per_line_at_100=11):
@@ -1052,7 +1079,7 @@ def orth_connector(reqs, sid, oid, x1, y1, x2, y2, color=ORANGE, weight=1.0,
 # ─────────────────────────────────────────────────────────────────────
 
 def slide_base(slide_oid, title_text, insert_index, reqs, theme="dark",
-               page_label="", page_no=None, total=None, footer=""):
+               page_label="", page_no=None, total=None, footer="", eyebrow_dim=False):
     _new_slide(slide_oid, insert_index, reqs)
     _header(
         slide_oid,
@@ -1062,13 +1089,17 @@ def slide_base(slide_oid, title_text, insert_index, reqs, theme="dark",
         page_no=page_no,
         total=total,
         footer=footer or title_text,
+        eyebrow_dim=eyebrow_dim,
     )
 
 
 def mk_section_divider(slide_oid, num, title, insert_index, reqs):
     _new_slide(slide_oid, insert_index, reqs)
-    _text(reqs, slide_oid, f"{slide_oid}_num", 51, 103, 120, 82, num,
-          ORANGE, 100, True, "Proxima Nova")
+    _text(reqs, slide_oid, f"{slide_oid}_num", 51, 103, 120, 100, num,
+          ORANGE, 80, True, "Proxima Nova")
+    # 숫자와 텍스트 영역 사이 세로 구분선
+    reqs += [shape(f"{slide_oid}_vline", slide_oid, "RECTANGLE", 162, 155, 1.5, 86),
+             fill(f"{slide_oid}_vline", BORDER_HI, BORDER_HI, 0)]
     _text(reqs, slide_oid, f"{slide_oid}_label", 172, 158, 100, 16, "Section",
           TEXT_FAINT, 14.5, False, "Proxima Nova")
     _text(reqs, slide_oid, f"{slide_oid}_title", 165, 174, 380, 64, title,
@@ -1478,7 +1509,7 @@ def mk_flow_focus(sid, steps, reqs, x=54, y=136, w=612, cols=3):
         max_group_h = max(max_group_h, group_h)
     card_h = max(96, max_group_h + 28)
     card_h = _fit_height_to_content(y, card_h, min_h=72)
-    primary = _primary_index(
+    primary_set = _primary_set(
         visible_steps,
         lambda s: isinstance(s, dict) and (
             s.get("role") in ("conclusion", "summary")
@@ -1492,12 +1523,17 @@ def mk_flow_focus(sid, steps, reqs, x=54, y=136, w=612, cols=3):
             num = step.get("num", f"{i+1:02d}")
             name = step.get("name", step.get("title", ""))
             svc = step.get("service", step.get("infra", ""))
-            marked = step.get("primary") or step.get("accent") or step.get("hot")
+            # style="auto"/"system": 자동 처리 step — 배경 동일하되 name 텍스트 dim 처리
+            auto = step.get("style") in ("auto", "system")
+            marked = step.get("primary") or step.get("accent") or step.get("hot") or (i in primary_set)
         else:
             raw_step, name, svc = step[:3]
             num = str(raw_step).replace("STEP", "").strip() or f"{i+1:02d}"
+            auto = False
             marked = False
-        hot = i == primary
+        # primary가 여러 개여도 첫 번째만 풀 오렌지 — 동시 2개 이상 ACCENT 금지
+        primary_main = min(primary_set) if primary_set else -1
+        hot = i == primary_main
         dim_hot = marked and not hot
         title_size = 10
         title_lines = _estimate_lines(name, card_w - 24, chars_per_line_at_100=8)
@@ -1515,13 +1551,13 @@ def mk_flow_focus(sid, steps, reqs, x=54, y=136, w=612, cols=3):
               ORANGE if hot else (ORANGE_DIM if dim_hot else SURFACE),
               ORANGE if marked else BORDER, 0.5)
         _text(reqs, sid, f"{sid}_focus_num{i}", xx + 12, num_y, 56, num_h,
-              f"STEP {num}", BLACK if hot else (ORANGE if dim_hot else TEXT_FAINT),
+              f"STEP {num}", WHITE if hot else (ORANGE if dim_hot else TEXT_FAINT),
               7, True, "Proxima Nova", valign=True)
         _text(reqs, sid, f"{sid}_focus_title{i}", xx + 12, title_y, card_w - 24, title_h,
-              name, BLACK if hot else TEXT, title_size, True, "Noto Sans", valign=True)
+              name, WHITE if hot else (TEXT_DIM if auto else TEXT), title_size, True, "Noto Sans", valign=True)
         if svc:
             _text(reqs, sid, f"{sid}_focus_svc{i}", xx + 12, svc_y, card_w - 24, svc_h,
-                  svc, BLACK if hot else TEXT_DIM, 7, False, "Noto Sans", valign=True)
+                  svc, WHITE if hot else TEXT_DIM, 7, False, "Noto Sans", valign=True)
         if i < len(visible_steps) - 1:
             nx = x + (i + 1) * (card_w + gap_x)
             x1, y1 = _face_center(xx, yy, card_w, card_h, "right")
@@ -1529,7 +1565,7 @@ def mk_flow_focus(sid, steps, reqs, x=54, y=136, w=612, cols=3):
             connector(
                 reqs, sid, f"{sid}_focus_arrow{i}",
                 x1, y1, x2, y2,
-                color=ORANGE if (marked or i + 1 == primary) else BORDER_HI,
+                color=BORDER_HI,
                 weight=1.0,
                 start_arrow="NONE",
                 end_arrow="FILL_ARROW",
@@ -1544,6 +1580,11 @@ def mk_text_block(sid, body_text, reqs, y_start=128, font_size=10, theme="dark")
 
 
 def mk_split(sid, left, right, reqs, theme="dark", arrow=True):
+    # body는 문자열이어야 함 — 리스트로 넘어온 경우 자동 변환
+    if isinstance(left.get("body"), list):
+        left = {**left, "body": "\n".join(left["body"])}
+    if isinstance(right.get("body"), list):
+        right = {**right, "body": "\n".join(right["body"])}
     left_x = 54
     top_y = 120
     card_w = 278

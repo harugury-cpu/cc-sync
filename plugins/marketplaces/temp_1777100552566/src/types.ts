@@ -1,0 +1,155 @@
+export interface ToolCall {
+  id: string;
+  exchangeId: string;
+  toolName: string;
+  toolInput?: any;
+  toolResult?: string;
+  isError: boolean;
+  timestamp: string;
+}
+
+export interface ConversationExchange {
+  id: string;
+  project: string;
+  timestamp: string;
+  userMessage: string;
+  assistantMessage: string;
+  archivePath: string;
+  lineStart: number;
+  lineEnd: number;
+
+  // Conversation structure
+  parentUuid?: string;
+  isSidechain?: boolean;
+
+  // Session context
+  sessionId?: string;
+  cwd?: string;
+  gitBranch?: string;
+  claudeVersion?: string;
+
+  // Thinking metadata
+  thinkingLevel?: string;
+  thinkingDisabled?: boolean;
+  thinkingTriggers?: string; // JSON array
+
+  // Coding agent that generated this exchange
+  codingAgent?: string; // e.g., 'claude-code', 'codex', 'opencode', 'custom-agent'
+
+  // Tool calls (populated separately)
+  toolCalls?: ToolCall[];
+}
+
+export interface SearchResult {
+  exchange: ConversationExchange;
+  similarity: number;
+  snippet: string;
+}
+
+export interface MultiConceptResult {
+  exchange: ConversationExchange;
+  snippet: string;
+  conceptSimilarities: number[];
+  averageSimilarity: number;
+}
+
+// === Fact Types ===
+
+export type FactCategory = 'decision' | 'preference' | 'pattern' | 'knowledge' | 'constraint';
+export type FactScopeType = 'global' | 'project';
+export type FactRelation = 'DUPLICATE' | 'CONTRADICTION' | 'EVOLUTION' | 'INDEPENDENT';
+
+export interface Fact {
+  id: string;
+  fact: string;
+  category: FactCategory;
+  scope_type: FactScopeType;
+  scope_project: string | null;
+  source_exchange_ids: string[];
+  embedding: Float32Array | null;
+  created_at: string;
+  updated_at: string;
+  consolidated_count: number;
+  is_active: boolean;
+  ontology_category_id?: string | null;
+  coding_agent?: string | null; // e.g., 'claude-code', 'codex', 'opencode'
+}
+
+export interface FactRevision {
+  id: string;
+  fact_id: string;
+  previous_fact: string;
+  new_fact: string;
+  reason: string | null;
+  source_exchange_id: string | null;
+  created_at: string;
+}
+
+export interface FactSearchResult {
+  fact: Fact;
+  similarity: number;
+}
+
+export interface ExtractedFact {
+  fact: string;
+  category: FactCategory;
+  scope_type: FactScopeType;
+  confidence: number;
+}
+
+export interface ConsolidationResult {
+  relation: FactRelation;
+  merged_fact: string;
+  reason: string;
+}
+
+// === Ontology Types ===
+
+export interface OntologyDomain {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+}
+
+export interface OntologyCategory {
+  id: string;
+  domain_id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+}
+
+export type RelationType = 'INFLUENCES' | 'SUPERSEDES' | 'SUPPORTS' | 'CONTRADICTS';
+
+export interface OntologyRelation {
+  id: string;
+  source_fact_id: string;
+  relation_type: RelationType;
+  target_fact_id: string;
+  reasoning: string | null;
+  created_at: string;
+}
+
+export interface AvatarResponse {
+  answer: string;
+  sources: Array<{
+    fact: Fact;
+    domain: string;
+    category: string;
+    relevance: number;
+  }>;
+  confidence: number;
+  relatedDecisions: Array<{
+    fact: Fact;
+    relation: RelationType;
+  }>;
+}
+
+export interface DomainTree {
+  domain: OntologyDomain;
+  categories: Array<{
+    category: OntologyCategory;
+    facts: Fact[];
+  }>;
+}
