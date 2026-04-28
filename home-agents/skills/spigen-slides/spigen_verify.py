@@ -620,6 +620,85 @@ def verify_quote(elmap, oid, spec, tol):
     return results
 
 
+# ── 오렌지 카운트 + 겹침 감지 ──────────────────────────────────────────
+
+_ORG_R = (0.95, 1.01)   # #FF ≈ 1.0
+_ORG_G = (0.36, 0.47)   # #6B ≈ 0.42
+_ORG_B = (0.07, 0.14)   # #1A ≈ 0.10
+
+
+def _is_orange(rgb):
+    if not rgb:
+        return False
+    return (
+        _ORG_R[0] <= rgb.get("red", 0) <= _ORG_R[1]
+        and _ORG_G[0] <= rgb.get("green", 0) <= _ORG_G[1]
+        and _ORG_B[0] <= rgb.get("blue", 0) <= _ORG_B[1]
+    )
+
+
+def _shape_fill_rgb(el):
+    sp = el.get("shape", {}).get("shapeProperties", {})
+    solid = sp.get("shapeBackgroundFill", {}).get("solidFill", {})
+    return solid.get("color", {}).get("rgbColor")
+
+
+def _shape_outline_rgb(el):
+    sp = el.get("shape", {}).get("shapeProperties", {})
+    solid = sp.get("outline", {}).get("solidFill", {})
+    return solid.get("color", {}).get("rgbColor")
+
+
+def verify_orange_count(slide, idx):
+    """슬라이드당 오렌지(#FF6B1A) fill/outline 요소 수. 3 초과 시 FAIL. Slide 0 제외."""
+    if idx == 0:
+        return []
+    flagged = [
+        el.get("objectId", "?")
+        for el in slide.get("pageElements", [])
+        if _is_orange(_shape_fill_rgb(el)) or _is_orange(_shape_outline_rgb(el))
+    ]
+    if len(flagged) > 3:
+        return [("FAIL", f"orange_overuse: {len(flagged)}개 (한도 3개) → {', '.join(flagged[:6])}")]
+    if flagged:
+        return [("PASS", f"orange_count: {len(flagged)}개 ≤ 3")]
+    return []
+
+
+def verify_element_overlap(elmap, idx):
+    """슬라이드 내 요소 겹침 검사 (배경·완전포함 제외). Slide 0 제외."""
+    if idx == 0:
+        return []
+    results = []
+    # 전체화면 배경(w≥680 or h≥380) 및 면적 0 제외
+    els = [
+        (oid, el) for oid, el in elmap.items()
+        if el.get("w", 0) < 680 and el.get("h", 0) < 380
+        and el.get("w", 0) > 1 and el.get("h", 0) > 1
+    ]
+    for i, (oid1, el1) in enumerate(els):
+        x1, y1, w1, h1 = el1["x"], el1["y"], el1["w"], el1["h"]
+        for oid2, el2 in els[i + 1:]:
+            x2, y2, w2, h2 = el2["x"], el2["y"], el2["w"], el2["h"]
+            ox = min(x1 + w1, x2 + w2) - max(x1, x2)
+            oy = min(y1 + h1, y2 + h2) - max(y1, y2)
+            if ox <= 0 or oy <= 0:
+                continue
+            # 완전 포함(텍스트-인-카드)은 스킵
+            if (
+                (x1 <= x2 and y1 <= y2 and x1 + w1 >= x2 + w2 and y1 + h1 >= y2 + h2)
+                or (x2 <= x1 and y2 <= y1 and x2 + w2 >= x1 + w1 and y2 + h2 >= y1 + h1)
+            ):
+                continue
+            # 겹침 면적이 작은 요소 넓이의 8% 이상이면 FAIL
+            smaller = min(w1 * h1, w2 * h2)
+            if smaller > 0 and (ox * oy) / smaller >= 0.08:
+                results.append(("FAIL",
+                    f"overlap: {oid1}[{x1:.0f},{y1:.0f} {w1:.0f}×{h1:.0f}] ∩ "
+                    f"{oid2}[{x2:.0f},{y2:.0f} {w2:.0f}×{h2:.0f}] ({ox:.0f}×{oy:.0f}pt)"))
+    return results
+
+
 # ── 출력 ─────────────────────────────────────────────────────────────
 
 ICONS = {"PASS": "✓", "FAIL": "✗", "SKIP": "·", "MISS": "?"}
@@ -675,6 +754,8 @@ def main():
         results = []
         results += verify_cover_contract(slide, idx)
         results += verify_global_bounds(elmap)
+        results += verify_orange_count(slide, idx)
+        results += verify_element_overlap(elmap, idx)
 
         sid_note = f" sid={sid}" if sid != oid else ""
         print(f"── Slide {idx}  ({oid}{sid_note})")

@@ -607,6 +607,59 @@ Claude가 각 URL을 읽어 시각적으로 확인하는 항목:
 
 ---
 
+### 3-10. 강제 postgen hook
+
+이미지 검수 직후, 아래 훅을 **반드시** 실행한다.
+
+```bash
+python3 /Users/harugury/.agents/skills/spigen-slides/spigen_postgen_hook.py "$NEW_ID" \
+  --audience "$Q2" \
+  --purpose "$Q4" \
+  --strict
+```
+
+strict 결과 해석:
+
+- `VERIFY_FAILED` → 생성 실패, 코드 수정 후 같은 presentation ID에 반영
+- `SUBAGENT_REVIEWS_PENDING` → 정상, 이제 서브에이전트 3종 검수 진행
+
+생성 완료로 인정되는 최소 산출물:
+
+- `review_manifest.json`
+- `verify.txt`
+- `thumbnails/*.png`
+
+위 3종이 없으면 **완료 보고 금지**.
+
+---
+
+### ⛔ 3-11. 검수 FAIL 시 인플레이스 수정 — 새 presentation 생성 절대 금지
+
+검수 FAIL(기획자 / 디자이너 / 대상 어느 하나라도) 시 아래를 엄수한다.
+
+**절대 금지 (예외 없음):**
+- `gws drive files copy` 재실행으로 새 파일 생성
+- 새 `presentationId` 로 URL 교체
+- 이미 공유된 링크를 버리는 행위
+
+**유일한 수정 경로: `spigen_inplace_update.py`**
+
+```bash
+python3 /Users/harugury/.agents/skills/spigen-slides/spigen_inplace_update.py \
+  "$NEW_ID" \
+  /path/to/updated_requests.json \
+  --prefix slide_
+```
+
+수정 반영 후 반드시 Step A → Step B → 서브에이전트 검수 전 과정 재실행.
+
+**3회 이상 FAIL 반복 시:**
+- 새 파일을 만들지 않는다.
+- 아웃라인(1-4) 기획 품질 게이트(1-4.a)로 돌아가 근본 원인을 확인한다.
+- "데이터 없는 주장" / "컴포넌트 선택 근거 불명확" / "내러티브 단절" 중 무엇이 원인인지 먼저 진단한다.
+
+---
+
 ---
 
 ## 템플릿 방식 (제안서·시안)
@@ -879,6 +932,9 @@ planning 단계에서 아래 조건이면 생성 전에 범위를 낮춘다.
 ## Done when
 
 - 새 프레젠테이션 URL이 출력됐다.
+- `spigen_postgen_hook.py --strict` 가 실행됐다.
+- `review_manifest.json`, `verify.txt`, `thumbnails/` 가 생성됐다.
+- 기획자 / 디자이너 / 대상 서브에이전트 검수가 모두 수행됐다.
 - 표지는 Spigen 템플릿 그대로 (제목/부서/담당자/날짜/버전 정확히 입력됨).
 - 단순 생성 플로우 페이지에 하단 오렌지 강조 박스를 추가하지 않았다.
 - 동작흐름 + 운영 금액 + 비용표처럼 복합 구조가 필요하면 콘텐츠 템플릿 5페이지 구조를 참고했다.
