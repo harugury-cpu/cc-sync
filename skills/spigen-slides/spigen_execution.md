@@ -232,6 +232,57 @@ lib.mk_cover(
 )
 ```
 
+### 3-5.a preview preflight 검증 (권장 → 상세 흐름에서는 필수)
+
+`huashu-design`의 verify 흐름을 이식했다.  
+즉 Google Slides 생성 전에 **preview HTML 자체를 먼저 브라우저로 검증**할 수 있다.
+
+```bash
+python3 ~/.agents/skills/spigen-slides/spigen_preview_verify.py \
+  /tmp/preview.html \
+  --slides 10 \
+  --output /tmp/spigen_preview_check
+```
+
+용도:
+
+```txt
+1. ArrowRight 기준 슬라이드 전환 확인
+2. console/page error 확인
+3. slide별 screenshot 확보
+4. preview 단계에서 레이아웃 깨짐 조기 발견
+```
+
+원칙:
+
+```txt
+preview가 깨졌는데 Google Slides 생성으로 넘어가지 않는다.
+preview verify FAIL이면 먼저 spec / preview renderer를 수정한다.
+```
+
+### 3-5.b postgen hook에 preview verify 결과까지 연결
+
+strict 완료 기준에서는 생성 직후 hook 호출 시 preview HTML도 같이 넘긴다.
+
+```bash
+python3 ~/.agents/skills/spigen-slides/spigen_postgen_hook.py <PRESENTATION_ID> \
+  --audience "영상팀" \
+  --purpose "웹훅 이후 동작 흐름 이해" \
+  --preview-html /tmp/preview.html \
+  --preview-slides 10 \
+  --strict
+```
+
+이제 hard gate는 아래 4개다.
+
+```txt
+1. preview verify PASS
+2. Google Slides verify PASS
+3. thumbnail bundle 생성
+4. planner PASS + designer PASS (규격 이탈 / 요소 겹침 / 강조·컬러 남발)
+   → audience review는 판정 없음 — 피드백만 기록
+```
+
 #### 공통 헬퍼 (spigen_lib.py)
 
 | 함수 | 역할 |
@@ -558,6 +609,47 @@ URL: https://docs.google.com/presentation/d/$NEW_ID/edit
 
 ---
 
+### 품질 우선 원칙
+
+```txt
+자동 검증에 잘 걸린다는 이유만으로 더 부적합한 컴포넌트로 후퇴하지 않는다.
+```
+
+예: `decision_tree / swimlane`이 청중 이해에 더 맞는데 verifier가 `flow_focus / compare_rows`를 더 잘 본다 → 후퇴 금지. 올바른 컴포넌트를 유지하고 verifier 누락을 메운다.
+
+우선순위: 청중 이해도 → 컴포넌트 선택 타당성 → 디자인 스펙 준수 → verifier coverage
+
+### 생성 후 검증 흐름
+
+```
+1. 슬라이드 생성
+2. Step A: spigen_verify.py 수치 검증
+   ├─ FAIL/MISS → 수정 → 같은 presentation ID 반영 → 2번으로
+   └─ PASS → Step B로
+3. Step B: getThumbnail 이미지 검수
+   ├─ 문제 발견 → 수정 → 2번으로
+   └─ 이상 없음 → postgen hook strict
+4. postgen hook strict
+   ├─ VERIFY_FAILED → 수정 → 2번으로
+   └─ SUBAGENT_REVIEWS_PENDING → 서브에이전트 3종 spawn
+5. 기획자·디자이너·대상 하나의 메시지에서 동시 spawn
+6. 기획자·디자이너 전원 ✅ → 완료 / 기획자·디자이너 ❌ → 수정 후 Step A 재실행 / 대상 → 판정 없음, 피드백 내용을 사용자에게 전달
+```
+
+**Step A + Step B + 서브에이전트 3종 판정 전까지 절대 "완료"라고 말하지 않는다.**
+
+서브에이전트 프롬프트 원문: `spigen_subagent_prompts.md` 참조.
+
+| 서브에이전트 | 입력 | 검수 핵심 |
+|------------|------|---------|
+| 기획자 | 슬라이드 ID + COMPONENT_BRIEF | 컴포넌트 선택 적합성, 주제 명확성, 의도 |
+| 디자이너 | 슬라이드 ID | 규격 이탈 / 요소 겹침 / 강조·컬러 남발 (3가지) |
+| 대상 | 슬라이드 ID + Q2 + Q4 | 판정 없음 — 피드백만 제공 |
+
+생성 컨텍스트는 서브에이전트에 전달하지 않는다 — 결과물만 보고 판단하게 한다.
+
+---
+
 ### 3-9. 생성 후 이미지 검수 (getThumbnail)
 
 슬라이드 생성 완료 후, 기획자·디자이너 서브에이전트 spawn 전에 실행한다.
@@ -635,7 +727,7 @@ strict 결과 해석:
 
 ### ⛔ 3-11. 검수 FAIL 시 인플레이스 수정 — 새 presentation 생성 절대 금지
 
-검수 FAIL(기획자 / 디자이너 / 대상 어느 하나라도) 시 아래를 엄수한다.
+검수 FAIL(기획자 / 디자이너 ❌ 시) 아래를 엄수한다. (대상은 판정 없음 — 피드백만 기록)
 
 **절대 금지 (예외 없음):**
 - `gws drive files copy` 재실행으로 새 파일 생성
@@ -911,7 +1003,7 @@ planning 단계에서 아래 조건이면 생성 전에 범위를 낮춘다.
 - 실제 보드 화면의 칼럼 위치/버튼 위치/패널 배치 단정
 - 스크린샷을 본 것처럼 보이는 UI 상세 설명
 
-즉, 이 경우 대상 검수 FAIL은 우선 **컴포넌트 선택 실패**가 아니라 **입력 자산 부족** 가능성을 먼저 확인한다.
+즉, 이 경우 대상 서브에이전트 피드백에서 "위치 안내 부정확"이 나오면 **컴포넌트 선택 실패**가 아니라 **입력 자산 부족**으로 분류한다.
 
 ---
 

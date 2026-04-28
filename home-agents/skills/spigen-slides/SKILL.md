@@ -61,6 +61,24 @@ final delivery = spigen_lib.py / Google Slides API
 
 즉 HTML은 미리보기 렌더러이고, Google Slides와 **같은 spec**을 소비해야 한다.
 
+### huashu-design 이식 원칙
+
+`huashu-design`에서 가져온 것은 아래 3개만 사용한다.
+
+```txt
+1. preview stage shell
+2. preview playwright verify
+3. export / verify / review 분리 사고방식
+```
+
+가져오지 않는 것:
+
+```txt
+1. HTML을 최종 truth로 두는 철학
+2. HTML -> PPTX를 메인 납품 경로로 두는 방식
+3. 문서 규칙만으로 품질을 통제하는 방식
+```
+
 ### 기본 선택
 
 제안서·시안·CrossCheck Bot·Google Chat Bot류 자료는 **콘텐츠 템플릿 방식**을 우선 사용한다.
@@ -195,193 +213,10 @@ KPI / 목표 / 실적 / 달성률 / 가중치 / 측정산식 / 증빙
 
 ## 생성 후 검증 (필수)
 
-슬라이드 생성 직후, 완료 보고 전에 **Step A → Step B → 기획자·디자이너·대상 병렬 동시 spawn** 순서로 실행한다.
+검증 흐름·품질 우선 원칙·서브에이전트 상세: **`spigen_execution.md`** 품질 우선 원칙·생성 후 검증 흐름 섹션 참조.  
+서브에이전트 프롬프트 원문: **`spigen_subagent_prompts.md`** 참조.
 
-```
-1. 슬라이드 생성
-2. Step A: spigen_verify.py 수치 검증
-   ├─ FAIL / MISS → spigen_lib.py 수정 → 재생성 → 2번으로
-   └─ 전원 PASS → Step B로
-3. Step B: getThumbnail 이미지 검수 (시각적 오버플로·겹침·오렌지 과다 확인)
-   ├─ 문제 발견 → 수정 → 재생성 → 2번으로
-   └─ 이상 없음 → 서브에이전트 spawn으로
-4. Agent 도구로 기획자·디자이너·대상 3개를 **하나의 메시지에서 동시에** spawn
-5. 세 에이전트 결과 수집 후 종합 판정
-   - 기획자/디자이너 ❌ → AI가 수정 → Step A부터 재실행
-   - 대상 ❌ → 사용자에게 미통과 항목 제시 → 수정 방향 확정 후 재실행
-```
-
-### Step A: 수치 검증 (spigen_verify.py)
-
-```bash
-python3 /Users/harugury/.agents/skills/spigen-slides/spigen_verify.py <PRESENTATION_ID>
-```
-
-### Step B: 이미지 검수 (getThumbnail)
-
-전체 슬라이드 썸네일 URL을 일괄 조회하고, Claude가 각 이미지를 직접 확인한다.
-
-```bash
-python3 << 'EOF'
-import subprocess, json
-NEW_ID = "<PRESENTATION_ID>"
-result = subprocess.run(["gws", "slides", "presentations", "get",
-    "--params", f'{{"presentationId":"{NEW_ID}"}}'], capture_output=True, text=True)
-slides = json.loads(result.stdout)["slides"]
-for i, slide in enumerate(slides):
-    thumb = subprocess.run(["gws", "slides", "presentations", "pages", "getThumbnail",
-        "--params", json.dumps({"presentationId": NEW_ID, "pageObjectId": slide["objectId"]})],
-        capture_output=True, text=True)
-    url = json.loads(thumb.stdout).get("contentUrl", "")
-    print(f"슬라이드 {i+1}: {url}")
-EOF
-```
-
-확인 항목: 텍스트 오버플로 / 요소 겹침 / 오렌지 강조 슬라이드당 3개 이하 / 전체 레이아웃 균형
-썸네일 URL은 발급 후 **1시간** 유효 — 검수 즉시 진행.
-
-### 기획자: 내용 검수 (룰 준수 체크)
-
-메인 에이전트가 `spigen_execution.md`의 **기획자 서브에이전트 프롬프트 템플릿**으로 서브에이전트를 spawn한다.  
-서브에이전트는 **슬라이드 ID + COMPONENT_BRIEF**를 받고, 생성 컨텍스트(기획 과정·사용자 지시·대화 내용)는 전달하지 않는다.  
-서브에이전트가 슬라이드를 처음 보는 상태에서 규칙과 대조하도록 하여 생성 편향을 차단한다.
-
-**제약 (반드시 준수)**:
-- 의도나 지시가 아니라 결과물이 규칙을 준수하는지만 판단한다.
-- "만들려고 했다"는 이유로 PASS 주지 않는다.
-
-**검수 항목**:
-
-1. **컴포넌트 선택 적합성**: 기획 단계 COMPONENT_BRIEF와 실제 사용된 컴포넌트가 일치하는가? (`spigen_render_rules.md` 섹션 8 결정 테이블 기준)
-   - COMPONENT_BRIEF가 `mk_split_cards()`를 명시했는데 `mk_3col_cards()`를 쓰지 않았는가?
-   - 여러 항목의 동일 속성 비교 → 표가 맞는데 카드를 쓰지 않았는가?
-   - 상태(완료/진행중/대기)가 핵심 → 상태 구분된 형식인가?
-   - 독립적이지 않은 항목에 카드를 쓰지 않았는가?
-
-2. **페이지별 주제 명확성**: 각 슬라이드에서 주제가 하나인가?
-   - 제목(eyebrow + title)만 봐도 이 슬라이드가 무엇에 대한 것인지 알 수 있는가?
-   - 경쟁하는 주제가 한 슬라이드 안에 들어가지 않았는가?
-
-3. **슬라이드 의도 (무엇을 보여주려는가)**:
-   - 각 슬라이드가 청중에게 무엇을 전달하려는지 명확한가?
-   - "이 슬라이드를 보고 나서 청중이 무엇을 알아야 하는가?"가 한 문장으로 표현 가능한가?
-   - 정보 나열 / 판단 유도 / 현황 보고 — 의도가 선택한 컴포넌트 형식과 일치하는가?
-
-4. **카드 역할 구분**: mk_split_cards 카드에 완료/대기/Next가 섞이면 `✅`/`⏳`/`primary`로 구분됐는가?
-
-5. **핵심 메시지**: 발표자 설명 없이 슬라이드만 봐도 핵심이 파악되는가?
-
-6. **디테일용 기준** (Q2-1 디테일용 선택 시): 5~6줄 허용·수치 생략 없음·자기완결 기준을 지켰는가?
-
-**판정**: 결과를 종합 판정 단계로 전달한다. ❌ 항목이 있으면 명시.
-
-피드백 출력 형식:
-```
-[내용 검수]
-
-슬라이드별 분석:
-- 슬라이드 N: [주제 한 줄] / [의도 한 줄] / [컴포넌트 선택 적합 여부]
-
-확인한 항목:
-- [컴포넌트 선택] ✅ / ❌ (이유)
-- [페이지별 주제] ✅ / ❌ (이유)
-- [슬라이드 의도] ✅ / ❌ (이유)
-- [카드 역할 구분] ✅ / ❌ (이유)
-- [핵심 메시지] ✅ / ❌ (이유)
-- [디테일 기준] ✅ / ❌ / N/A (이유)
-
-판정: ✅ 통과 / ❌ 불통과
-불통과 시: 어떤 슬라이드의 어떤 요소가 문제인지 구체적으로 명시
-```
-
----
-
-### 디자이너: 시뮬레이션
-
-메인 에이전트가 `spigen_execution.md`의 **디자이너 서브에이전트 프롬프트 템플릿**으로 서브에이전트를 spawn한다.  
-서브에이전트는 슬라이드 ID를 받고, 생성 컨텍스트는 전달하지 않는다.  
-서브에이전트는 `spigen_design_spec.md`를 숙지한 Spigen 디자이너 페르소나로 슬라이드를 검수한다.
-
-**제약 (반드시 준수)**:
-- 입력은 Google Slides API로 읽은 슬라이드 텍스트·구조·색상·폰트 데이터만 사용한다.
-- 기획 과정, 사용자 지시, 대화 맥락은 일절 참조하지 않는다.
-- `spigen_design_spec.md` 규칙만 기준으로 판단한다.
-
-**검수 항목**:
-1. 폰트·색상·캔버스 bounds가 스펙에 맞는가? (Step A 통과 기준 재확인)
-2. 레이아웃이 디자인 원칙(60-30-10, 오렌지 절제, 캔버스 여백)에 맞는가?
-3. 강조 구조가 올바른가? (슬라이드당 강조점 1개, 근거 있는 강조)
-4. 의미 역할별 형태 차별화가 됐는가? (분석/결론/수치 카드가 구분되는가)
-5. 화면 밖으로 나간 요소가 없는가?
-
-**판정**: 결과를 종합 판정 단계로 전달한다. ❌ 항목이 있으면 명시.
-
-피드백 출력 형식:
-```
-[디자이너 검수]
-
-확인한 항목:
-- [폰트] ✅ / ❌ (이유)
-- [색상·오렌지] ✅ / ❌ (이유)
-- [레이아웃] ✅ / ❌ (이유)
-- [강조 구조] ✅ / ❌ (이유)
-- [형태 차별화] ✅ / ❌ (이유)
-- [캔버스 오버플로] ✅ / ❌ (이유)
-
-판정: ✅ 통과 / ❌ 불통과
-```
-
-### 대상: 청중 시뮬레이션 피드백
-
-메인 에이전트가 `spigen_execution.md`의 **대상 서브에이전트 프롬프트 템플릿**으로 서브에이전트를 spawn한다.  
-기획 시 결정한 `{{Q2}}`(청중)와 `{{Q4}}`(목적)를 템플릿 변수에 주입한다.  
-서브에이전트는 슬라이드 ID + Q2/Q4 값만 받고, 그 외 생성 컨텍스트는 전달하지 않는다.
-
-**제약 (반드시 준수)**:
-- 입력은 Google Slides API로 읽은 슬라이드 텍스트·구조만 사용한다.
-- 기획 과정, 사용자 지시, 대화 맥락은 일절 참조하지 않는다.
-- 이 슬라이드를 처음 보는 사람의 눈으로만 판단한다.
-
-**평가 항목**:
-1. 이 자료만 보고 무슨 말을 하려는지 파악할 수 있는가?
-2. Q4 목적(동기부여 / 사용법 전수 / 조직 설득 / 홍보·소개)이 달성됐는가?
-3. 청중 입장에서 불명확하거나 빠진 것이 있는가?
-
-**판정**: 결과를 종합 판정 단계로 전달한다. ❌ 항목이 있으면 명시.
-
-피드백 출력 형식:
-```
-[청중: 경영진 / 목적: 조직 설득]
-
-이 자료만 보고 느낀 점:
-- (구체적 반응)
-
-목적 달성 여부: ✅ 충족 / ❌ 미충족
-
-미충족 시 이유:
-- (무엇이 불명확한가, 무엇이 빠졌는가)
-```
-
-### 종합 판정 (병렬 결과 수집 후)
-
-기획자·디자이너·대상 3개 에이전트 결과를 모두 수집한 후 아래 형식으로 종합 보고한다:
-
-```
-[검증 결과 요약]
-
-기획자:   ✅ 통과 / ❌ 불통과 — {한 줄 판정}
-디자이너: ✅ 통과 / ❌ 불통과 — {한 줄 판정}
-대상:     ✅ 통과 / ❌ 불통과 — {한 줄 판정}
-```
-
-**전원 ✅** → "완료" 보고 및 Google Slides 링크 공유.  
-**기획자/디자이너 ❌** → FAIL 항목 명시 → AI가 수정 → Step A부터 전체 재실행.  
-**대상 ❌** → 미통과 항목을 사용자에게 제시 → 수정 방향 확정 후 Step A부터 재실행.
-
----
-
-**Step A + Step B + 기획자 + 디자이너 + 대상 목적 충족 판정 전까지 절대 "완료"라고 말하지 않는다.**
-
+**Step A + preview verify + Step B + 서브에이전트 3종 판정 전까지 절대 "완료"라고 말하지 않는다.**
 
 ---
 
@@ -393,10 +228,13 @@ EOF
 | `spigen_lib.py` | 컴포넌트 Python 코드 | 슬라이드 생성 시 `cp` 후 import |
 | `template_spec.json` | 컴포넌트별 위치·크기·폰트 기준값 | 검증 기준 참조 |
 | `spigen_verify.py` | 생성된 슬라이드 자동 검증 스크립트 | 슬라이드 생성 직후 실행 |
+| `spigen_preview_verify.py` | preview HTML Playwright 검증 + 슬라이드별 screenshot | preview 생성 직후 실행 |
+| `spigen_inplace_update.py` | 같은 presentation ID에 슬라이드 수정 반영 | 검수 FAIL 후 새 덱 대신 기존 덱 갱신 |
+| `spigen_postgen_hook.py` | verify + thumbnail + review manifest 강제 훅 | Step B 직후, 서브에이전트 spawn 전 |
 | `spigen_review_checklist.md` | 완료 전 수동/자동 검수 체크리스트 | `spigen_verify.py` PASS 후 검수 |
 | `skill-status.md` | 현재 스킬화 완료 규칙 요약 | 스킬 상태 확인 시 |
 | `spigen_detailed_guide.md` | 디테일용 슬라이드 상세 기준 가이드 | Q2-1 디테일용 선택 시 참조 |
 | `spigen_planning.md` | Step 1~2 기획·구성 계획 | 전체 PPT 제작 시작 시 |
 | `spigen_execution.md` | Step 3 API 실행 코드 | 실제 Google Slides 생성 시 |
 | `spigen_design_spec.md` | 슬라이드 유형별 시각 규격 | HTML 디자인 생성 시 |
-| `spigen_subagent_prompts.md` | 기획자·디자이너·대상 서브에이전트 프롬프트 원문 | 검수 서브에이전트 spawn 시 |
+| `spigen_subagent_prompts.md` | 기획자·디자이너·대상(피드백용) 서브에이전트 프롬프트 원문 | 검수 서브에이전트 spawn 시 |

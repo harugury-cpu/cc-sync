@@ -1,7 +1,8 @@
 # Spigen Slides Review Checklist
 
 PPT 제작 완료 후 완료 보고 전 반드시 실행한다.  
-`spigen_verify.py` PASS + 이 체크리스트 전 항목 통과 → 그때만 "완료"라고 말한다.
+`spigen_verify.py` PASS + 기획자 PASS + 디자이너(hard QA) PASS → 그때만 "완료"라고 말한다.  
+대상 검수는 PASS/FAIL이 아니라 피드백 수집용이다.
 
 ---
 

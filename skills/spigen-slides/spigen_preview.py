@@ -17,6 +17,7 @@ spigen_preview.py — 슬라이드 내용 → HTML 프리뷰 생성기
 """
 import subprocess, json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 from spigen_models import ComponentSpec, SlideSpec
 
@@ -507,64 +508,53 @@ def _wrap_slide(slide: Slide) -> str:
     if slide.page_no is not None:
         pg = _mono(W - M - 30, H - 18, 30, 10, str(slide.page_no), T["TEXT_FAINT"], 7)
     return f"""
-<div class="slide-wrapper">
+<section class="spigen-slide-page" data-screen-label="{_esc(slide.label)}">
   <div class="slide-label">{_esc(slide.label)}</div>
-  <div class="slide-scaler">
-    <div class="slide">
-      {header}
-      {slide.content_html}
-      {pg}
-    </div>
+  <div class="slide">
+    {header}
+    {slide.content_html}
+    {pg}
   </div>
-</div>"""
+</section>"""
 
-
-SCALE = 2
-SW, SH = W * SCALE, H * SCALE  # 1440 × 810
 
 _CSS = f"""
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=DM+Sans:wght@400;700&display=swap');
 *{{box-sizing:border-box;margin:0;padding:0;}}
-body{{
-  background:#0a0a0a;
-  font-family:'Noto Sans KR',system-ui,sans-serif;
-  display:flex;flex-direction:column;align-items:center;
-  gap:64px;padding:64px 20px;
-}}
-.slide-wrapper{{display:flex;flex-direction:column;align-items:flex-start;gap:10px;}}
+html,body{{width:100%;height:100%;}}
+body{{background:#0a0a0a;font-family:'Noto Sans KR',system-ui,sans-serif;overflow:hidden;}}
+.spigen-slide-page{{position:relative;width:{W}px;height:{H}px;background:{T["BG"]};overflow:hidden;}}
 .slide-label{{
-  color:{T["TEXT_FAINT"]};font-size:13px;letter-spacing:0.06em;
+  position:absolute;left:16px;bottom:12px;z-index:2;
+  color:{T["TEXT_FAINT"]};font-size:9px;letter-spacing:0.06em;
   font-family:'DM Sans',system-ui,sans-serif;
-}}
-.slide-scaler{{
-  width:{SW}px;height:{SH}px;
-  position:relative;overflow:hidden;
-  border:1px solid {T["BORDER_HI"]};
-  box-shadow:0 12px 48px rgba(0,0,0,0.7);
+  opacity:0.8;
 }}
 .slide{{
   width:{W}px;height:{H}px;
   background:{T["BG"]};
-  position:absolute;top:0;left:0;
-  transform:scale({SCALE});
-  transform-origin:top left;
-  overflow:hidden;
+  position:absolute;top:0;left:0;overflow:hidden;
 }}
 """
 
 
 def build_html(slides: list[Slide]) -> str:
+    stage_script_path = Path(__file__).resolve().parent / "spigen_preview_stage.js"
+    stage_script = stage_script_path.read_text(encoding="utf-8")
     body = "\n".join(_wrap_slide(s) for s in slides)
     return f"""<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=1440">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Spigen Slides Preview</title>
 <style>{_CSS}</style>
 </head>
 <body>
+<spigen-deck-stage width="{W}" height="{H}">
 {body}
+</spigen-deck-stage>
+<script>{stage_script}</script>
 </body>
 </html>"""
 
