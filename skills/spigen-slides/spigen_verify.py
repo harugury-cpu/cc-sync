@@ -699,6 +699,33 @@ def verify_element_overlap(elmap, idx):
     return results
 
 
+def verify_text_contrast(slide, idx):
+    """dark 배경 슬라이드에서 어두운 텍스트(밝기<0.2) 감지. Slide 0 제외."""
+    if idx == 0:
+        return []
+    bg = slide.get("pageProperties", {}).get("pageBackgroundFill", {})
+    bg_rgb = bg.get("solidFill", {}).get("color", {}).get("rgbColor")
+    if not bg_rgb:
+        return []
+    bg_lum = (bg_rgb.get("red", 1) + bg_rgb.get("green", 1) + bg_rgb.get("blue", 1)) / 3.0
+    if bg_lum >= 0.30:  # light 테마 슬라이드는 검사 안 함
+        return []
+    bad = []
+    for el in slide.get("pageElements", []):
+        for te in el.get("shape", {}).get("text", {}).get("textElements", []):
+            style = te.get("textRun", {}).get("style", {})
+            fc = style.get("foregroundColor", {}).get("opaqueColor", {}).get("rgbColor")
+            if not fc:
+                continue
+            fc_lum = (fc.get("red", 0) + fc.get("green", 0) + fc.get("blue", 0)) / 3.0
+            if fc_lum < 0.20:
+                bad.append(el.get("objectId", "?"))
+                break
+    if bad:
+        return [("FAIL", f"dark_text_on_dark_bg: {len(bad)}개 요소 → {', '.join(bad[:4])}")]
+    return []
+
+
 # ── 출력 ─────────────────────────────────────────────────────────────
 
 ICONS = {"PASS": "✓", "FAIL": "✗", "SKIP": "·", "MISS": "?"}
@@ -756,6 +783,7 @@ def main():
         results += verify_global_bounds(elmap)
         results += verify_orange_count(slide, idx)
         results += verify_element_overlap(elmap, idx)
+        results += verify_text_contrast(slide, idx)
 
         sid_note = f" sid={sid}" if sid != oid else ""
         print(f"── Slide {idx}  ({oid}{sid_note})")
