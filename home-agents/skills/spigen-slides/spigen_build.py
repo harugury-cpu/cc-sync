@@ -54,7 +54,7 @@ def _rgb(c):
 
 
 class SpigenBuilder:
-    def __init__(self, presentation_id, theme="dark"):
+    def __init__(self, presentation_id, theme="light"):
         self.pid = presentation_id
         self.c = COLORS[theme]
         self.reqs = []

@@ -17,7 +17,7 @@ shutil.copy2("/Users/harugury/.agents/skills/spigen-slides/spigen_build.py",
 sys.path.insert(0, "/tmp")
 from spigen_build import SpigenBuilder
 
-THEME = "dark"  # 또는 "light"
+THEME = "light"  # 또는 "dark"
 TITLE = "(PPT 제목)"
 
 # 1. 새 프레젠테이션 생성
