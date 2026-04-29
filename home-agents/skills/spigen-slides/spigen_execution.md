@@ -1007,6 +1007,50 @@ planning 단계에서 아래 조건이면 생성 전에 범위를 낮춘다.
 
 ---
 
+### 대상 검수 FAIL 반영 규칙
+
+대상 서브에이전트의 피드백을 자유 감상문으로만 받지 않는다.  
+아래 5개 슬롯 기준으로 받은 뒤, 슬롯별 수정 명령으로 즉시 변환한다.
+
+```txt
+actor        → 누가 하는가가 안 보이면 제목/step/card에 주체 명시
+condition    → 언제/어떤 경우인지 안 보이면 분기 조건 문장 1개 추가
+action       → 무엇을 하는지 안 보이면 동사형으로 재작성
+state_change → 무엇이 어떻게 바뀌는지 안 보이면 전/후 상태를 한 줄로 추가
+next_action  → 다음에 무엇을 하는지 안 보이면 후속 단계 또는 결과 노드 추가
+```
+
+반복 FAIL 처리:
+
+```txt
+- 같은 슬롯(actor/condition/action/state_change/next_action)이 2회 연속 FAIL이면
+  문장만 고치지 말고 컴포넌트 또는 덱 구조가 틀린 것으로 간주한다
+```
+
+슬롯별 컴포넌트 매핑 (반복 FAIL 시 검토 기준):
+
+```txt
+actor        → eyebrow / 제목에 주체 명시 / people 카드 검토
+condition    → decision_tree / compare_rows 재검토
+action       → flow_focus primary step 강조 재검토
+state_change → split_cards before/after 구조 재검토
+next_action  → closing 슬라이드 / 후속 flow 슬라이드 추가 검토
+```
+
+이전 라운드 FAIL 이월 규칙:
+
+```txt
+- 재빌드 시, 이전 라운드에서 FAIL 판정된 슬롯을 COMPONENT_BRIEF에 기록한다
+- 형식: "previous_fail_slots": ["condition", "next_action"]
+- 서브에이전트는 이 항목을 받으면 해당 슬롯을 우선 체크한다
+- 같은 슬롯이 previous_fail_slots에 이미 있고 이번에도 FAIL이면 → 구조 승격
+```
+
+즉 대상 FAIL은 "더 매끈한 문장으로 재작성"이 아니라
+**어떤 정보 슬롯이 비었는지 채우는 수정 작업**으로 반영한다.
+
+---
+
 ### 디자이너: 시뮬레이션 서브에이전트
 
 → 프롬프트 원문: `spigen_subagent_prompts.md` 참조

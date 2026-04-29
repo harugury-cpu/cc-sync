@@ -874,7 +874,7 @@ def _header(sid, reqs, eyebrow="", title="", page_no=None, total=None, footer=""
     if eyebrow:
         # 한국어 포함 → Noto Sans, 그 외(영문/숫자/기호 혼합) → Proxima Nova
         eyebrow_ff = "Noto Sans" if _contains_korean(eyebrow) else "Proxima Nova"
-        _text(reqs, sid, f"{sid}_eyebrow", M, M, 240, 20, eyebrow.upper(),
+        _text(reqs, sid, f"{sid}_eyebrow", M, M, 240, 16, eyebrow.upper(),
               ORANGE, 7, True, eyebrow_ff, valign=False)
         if eyebrow_dim:
             reqs.append(fill(f"{sid}_eyebrow", ACCENT_DIM, wt=0))
@@ -1098,11 +1098,11 @@ def mk_section_divider(slide_oid, num, title, insert_index, reqs):
     _text(reqs, slide_oid, f"{slide_oid}_num", 51, 103, 120, 100, num,
           ORANGE, 80, True, "Proxima Nova")
     # 숫자와 텍스트 영역 사이 세로 구분선
-    reqs += [shape(f"{slide_oid}_vline", slide_oid, "RECTANGLE", 162, 155, 1.5, 86),
+    reqs += [shape(f"{slide_oid}_vline", slide_oid, "RECTANGLE", 174, 155, 1.5, 86),
              fill(f"{slide_oid}_vline", BORDER_HI, BORDER_HI, 0)]
-    _text(reqs, slide_oid, f"{slide_oid}_label", 172, 158, 100, 16, "Section",
+    _text(reqs, slide_oid, f"{slide_oid}_label", 178, 158, 100, 16, "Section",
           TEXT_FAINT, 14.5, False, "Proxima Nova")
-    _text(reqs, slide_oid, f"{slide_oid}_title", 165, 174, 380, 64, title,
+    _text(reqs, slide_oid, f"{slide_oid}_title", 178, 174, 380, 64, title,
           TEXT, 28, True, "Noto Sans")
     _footer(slide_oid, reqs, "Section Divider")
 

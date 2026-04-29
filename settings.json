@@ -115,7 +115,7 @@
     "nopal@gptaku-plugins": true,
     "telegram@claude-plugins-official": false,
     "git-teacher@gptaku-plugins": true,
-    "memory-bank@memory-bank-dev": true,
+    "memory-bank@memory-bank-dev": false,
     "superpowers@claude-plugins-official": true,
     "agent-skills@addy-agent-skills": true,
     "insane-search@insane-search": true,

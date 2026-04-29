@@ -314,8 +314,8 @@ def html_cover(title: str, subtitle="", department="디자인부문ㅣ패키지�
 def html_section_divider(num: str, title: str, label="SECTION") -> str:
     return "\n".join([
         _mono(51, 103, 120, 82, num, T["ORANGE"], 100, bold=True),
-        _mono(172, 158, 100, 16, label, T["TEXT_DIM"], 14.5),
-        _txt(165, 174, 380, 64, title, T["TEXT"], 28, bold=True),
+        _mono(178, 158, 100, 16, label, T["TEXT_DIM"], 14.5),
+        _txt(178, 174, 380, 64, title, T["TEXT"], 28, bold=True),
     ])
 
 
