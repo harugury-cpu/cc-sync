@@ -6,12 +6,19 @@ spigen_build.py — Spigen Slides v5.3
 """
 import subprocess, json, uuid
 
-# ── 라이트 템플릿 ────────────────────────────────────────────────
-TEMPLATE_ID      = "1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk"
-COVER_TITLE_OID  = "g3e66e3c2180_1_2"   # 제목
-COVER_META_OID   = "g3e66e3c2180_1_3"   # 부서 | 담당자
-COVER_DATE_OID   = "g3e66e3c2180_1_4"   # 날짜
-LIGHT_CLOSING_OID = "g8fc223892e_0_29"  # 클로징 슬라이드 (삭제 대상)
+# ── 라이트 표지 템플릿 (KPI 기준) ────────────────────────────────
+LIGHT_TEMPLATE_ID  = "1BBG9PR6ZBsEABbJLhbUUfRMkgGYQtNMOWAmLQgPhr70"
+LIGHT_COVER_TITLE_OID = "g3d96284c9ce_0_1"
+LIGHT_COVER_META_OID  = "g3d96284c9ce_0_2"
+LIGHT_COVER_DATE_OID  = "g3d96284c9ce_0_3"
+LIGHT_GUIDE_SLIDES    = [
+    "test_rule",
+    "test_flow",
+    "test_arch",
+    "test_map",
+    "guide_kpi_status_light",
+    "guide_kpi_key_tasks_light",
+]
 
 # ── 다크 템플릿 ────────────────────────────────────────────────
 DARK_TEMPLATE_ID      = "1HJbTWXPCr38gXDQuarglSLrkheDQXAojlrYUKcfVgAc"
@@ -30,7 +37,7 @@ DARK_GUIDE_SLIDES     = [
     "g3e667bf10ea_0_24",
 ]
 
-KPI_TEMPLATE_ID     = "1BBG9PR6ZBsEABbJLhbUUfRMkgGYQtNMOWAmLQgPhr70"
+KPI_TEMPLATE_ID     = LIGHT_TEMPLATE_ID
 KPI_COVER_TITLE_OID = "g3d96284c9ce_0_1"
 KPI_COVER_META_OID  = "g3d96284c9ce_0_2"
 KPI_COVER_DATE_OID  = "g3d96284c9ce_0_3"
@@ -91,11 +98,33 @@ def _rgb(c):
     return {"rgbColor": c}
 
 
+# ── 오버플로우 방지 헬퍼 ──────────────────────────────────────────
+_BODY_H = 310   # slide() 본문 박스 높이 pt
+_COL_H  = 274   # two_col() 컬럼 본문 높이 pt
+_LINE_H = {10: 14, 11: 15, 12: 17, 13: 18, 14: 20, 16: 23}
+
+
+def _line_count(text: str) -> int:
+    return max(len(text.splitlines()), 1)
+
+
+def _fits(h_avail: int, lines: int, size: int) -> bool:
+    return lines * _LINE_H.get(size, int(size * 1.4)) <= h_avail
+
+
+def _safe_size(h_avail: int, lines: int, start: int = 14) -> int:
+    """박스에 들어오는 최대 font_size 반환. 최소 10pt."""
+    for s in (start, 13, 12, 11, 10):
+        if _fits(h_avail, lines, s):
+            return s
+    return 10
+
+
 class SpigenBuilder:
     def __init__(self, title, theme="light", template="standard"):
         """템플릿을 복사해 새 프레젠테이션 생성.
-        template="standard": 테마별 템플릿 커버만 복사, 불필요 슬라이드 삭제.
-          theme="light" → 라이트 템플릿 (클로징 삭제)
+        template="standard": 테마별 지정 템플릿 커버만 복사, 불필요 슬라이드 삭제.
+          theme="light" → KPI 라이트 템플릿 cover 기준
           theme="dark"  → 다크 템플릿 (가이드 슬라이드 전체 삭제)
         template="kpi": 라이트 KPI 템플릿. cover + kpi_status + kpi_tasks.
         """
@@ -108,8 +137,8 @@ class SpigenBuilder:
             tmpl_id = DARK_TEMPLATE_ID
             self._cover_oids = (DARK_COVER_TITLE_OID, DARK_COVER_TEAM_OID, DARK_COVER_META_OID)
         else:
-            tmpl_id = TEMPLATE_ID
-            self._cover_oids = (COVER_TITLE_OID, COVER_META_OID, COVER_DATE_OID)
+            tmpl_id = LIGHT_TEMPLATE_ID
+            self._cover_oids = (LIGHT_COVER_TITLE_OID, LIGHT_COVER_META_OID, LIGHT_COVER_DATE_OID)
         r = subprocess.run(
             ["gws", "drive", "files", "copy",
              "--params", json.dumps({"fileId": tmpl_id}),
@@ -129,7 +158,8 @@ class SpigenBuilder:
             for oid in DARK_GUIDE_SLIDES:
                 self.reqs.append({"deleteObject": {"objectId": oid}})
         else:
-            self.reqs.append({"deleteObject": {"objectId": LIGHT_CLOSING_OID}})
+            for oid in LIGHT_GUIDE_SLIDES:
+                self.reqs.append({"deleteObject": {"objectId": oid}})
 
     def _next(self):
         """콘텐츠 슬라이드용 (oid, idx) 반환 후 카운터 증가."""
@@ -372,6 +402,51 @@ class SpigenBuilder:
         self._shape(oid, rb, 375, 108, 310, 274)
         self._text(rb, right_body)
         self._style(rb, 13)
+
+    def auto_slide(self, role, heading,
+                   body=None,
+                   left_title=None, left_body=None,
+                   right_title=None, right_body=None,
+                   steps=None, items=None,
+                   question=None,
+                   yes_label=None, yes_body=None,
+                   no_label=None, no_body=None):
+        """역할 기반 자동 컴포넌트 선택 + 오버플로우 방지.
+
+        role: "설명" | "결정유도" | "비교" | "순서" | "체크" | "분기"
+        내용이 박스를 초과하면 font_size를 자동 축소 (최소 10pt).
+        내용은 절대 자르지 않는다.
+        """
+        if role in ("설명", "결정유도"):
+            lines = _line_count(body or "")
+            size = _safe_size(_BODY_H, lines, start=14)
+            self.slide(heading, body or "", body_size=size)
+
+        elif role == "비교":
+            self.two_col(
+                heading,
+                left_title or "", left_body or "",
+                right_title or "", right_body or "",
+            )
+
+        elif role == "순서":
+            self.flow(heading, steps or [])
+
+        elif role == "체크":
+            self.checklist(heading, items or [])
+
+        elif role == "분기":
+            self.decision(
+                heading,
+                question or "",
+                yes_label or "", yes_body or "",
+                no_label or "", no_body or "",
+            )
+
+        else:
+            lines = _line_count(body or "")
+            size = _safe_size(_BODY_H, lines, start=14)
+            self.slide(heading, body or "", body_size=size)
 
     def flow(self, heading, steps):
         """흐름 슬라이드: 헤더 + 번호 단계 목록. steps = [(label, desc), ...]"""
