@@ -1,15 +1,34 @@
 """
-spigen_build.py — Spigen Slides v5
+spigen_build.py — Spigen Slides v5.3
 
-표지/마지막 슬라이드: 템플릿 복사 후 텍스트 교체 (고정)
+표지: 테마별 템플릿 복사 후 텍스트 교체 (클로징 없음)
 중간 콘텐츠 슬라이드: createSlide로 직접 생성
 """
 import subprocess, json, uuid
 
-TEMPLATE_ID     = "1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk"
-COVER_TITLE_OID = "g3e66e3c2180_1_2"   # 제목
-COVER_META_OID  = "g3e66e3c2180_1_3"   # 부서 | 담당자
-COVER_DATE_OID  = "g3e66e3c2180_1_4"   # 날짜
+# ── 라이트 템플릿 ────────────────────────────────────────────────
+TEMPLATE_ID      = "1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk"
+COVER_TITLE_OID  = "g3e66e3c2180_1_2"   # 제목
+COVER_META_OID   = "g3e66e3c2180_1_3"   # 부서 | 담당자
+COVER_DATE_OID   = "g3e66e3c2180_1_4"   # 날짜
+LIGHT_CLOSING_OID = "g8fc223892e_0_29"  # 클로징 슬라이드 (삭제 대상)
+
+# ── 다크 템플릿 ────────────────────────────────────────────────
+DARK_TEMPLATE_ID      = "1HJbTWXPCr38gXDQuarglSLrkheDQXAojlrYUKcfVgAc"
+DARK_COVER_TITLE_OID  = "rebuild_cover_title"
+DARK_COVER_TEAM_OID   = "rebuild_cover_team"   # 부서 | 담당자
+DARK_COVER_META_OID   = "rebuild_cover_meta"   # 날짜
+DARK_GUIDE_SLIDES     = [
+    "ref_toc", "g3dab74f0851_0_70", "g3e667bf10ea_0_0",
+    "SLIDES_API1345277958_51", "SLIDES_API1345277958_78",
+    "SLIDES_API1345277958_156", "g3e667bf10ea_0_97",
+    "dsgv31_10_flow", "SLIDES_API1345277958_241",
+    "gal_8e928ff12b09", "g3dab74f0851_0_37",
+    "SLIDES_API1345277958_269", "SLIDES_API1345277958_296",
+    "gal_572682a9c20e", "gal_bf0db096e52a",
+    "guide_last_selection_v2", "g3e667bf10ea_0_135",
+    "g3e667bf10ea_0_24",
+]
 
 KPI_TEMPLATE_ID     = "1BBG9PR6ZBsEABbJLhbUUfRMkgGYQtNMOWAmLQgPhr70"
 KPI_COVER_TITLE_OID = "g3d96284c9ce_0_1"
@@ -75,14 +94,19 @@ def _rgb(c):
 class SpigenBuilder:
     def __init__(self, title, theme="light", template="standard"):
         """템플릿을 복사해 새 프레젠테이션 생성.
-        template="standard": cover(0) + closing(1) 2장 고정.
-        template="kpi": cover(0) + kpi_status + kpi_tasks 구조.
+        template="standard": 테마별 템플릿 커버만 복사, 불필요 슬라이드 삭제.
+          theme="light" → 라이트 템플릿 (클로징 삭제)
+          theme="dark"  → 다크 템플릿 (가이드 슬라이드 전체 삭제)
+        template="kpi": 라이트 KPI 템플릿. cover + kpi_status + kpi_tasks.
         """
         if theme not in COLORS:
             theme = "light"
         if template == "kpi":
             tmpl_id = KPI_TEMPLATE_ID
             self._cover_oids = (KPI_COVER_TITLE_OID, KPI_COVER_META_OID, KPI_COVER_DATE_OID)
+        elif theme == "dark":
+            tmpl_id = DARK_TEMPLATE_ID
+            self._cover_oids = (DARK_COVER_TITLE_OID, DARK_COVER_TEAM_OID, DARK_COVER_META_OID)
         else:
             tmpl_id = TEMPLATE_ID
             self._cover_oids = (COVER_TITLE_OID, COVER_META_OID, COVER_DATE_OID)
@@ -96,16 +120,21 @@ class SpigenBuilder:
         self.pid = json.loads(r.stdout)["id"]
         self.c = COLORS[theme]
         self.reqs = []
-        self._n = 0  # 콘텐츠 슬라이드 카운터 (closing 앞에 삽입)
+        self._n = 0
         self.template = template
         if template == "kpi":
             for oid in KPI_TEST_SLIDES:
                 self.reqs.append({"deleteObject": {"objectId": oid}})
+        elif theme == "dark":
+            for oid in DARK_GUIDE_SLIDES:
+                self.reqs.append({"deleteObject": {"objectId": oid}})
+        else:
+            self.reqs.append({"deleteObject": {"objectId": LIGHT_CLOSING_OID}})
 
     def _next(self):
         """콘텐츠 슬라이드용 (oid, idx) 반환 후 카운터 증가."""
-        oid = _uid()         # _uid()로 충돌 방지
-        idx = 1 + self._n   # 커버(0) 뒤, closing 앞에 삽입
+        oid = _uid()
+        idx = 1 + self._n   # 커버(0) 뒤에 순서대로 삽입
         self._n += 1
         return oid, idx
 
@@ -290,10 +319,6 @@ class SpigenBuilder:
                     "fields": "fontSize,bold,fontFamily,foregroundColor",
                 }},
             ]
-
-    def closing(self, **kwargs):
-        """마지막 슬라이드: 템플릿 슬라이드 그대로 유지. 아무것도 하지 않음."""
-        pass
 
     def slide(self, heading, body, body_size=14):
         """본문: 헤더 + 오렌지 가로선 + 텍스트박스"""

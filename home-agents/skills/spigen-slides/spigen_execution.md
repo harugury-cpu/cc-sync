@@ -39,9 +39,6 @@ b.two_col(
     right_title="(오른쪽 제목)",
     right_body="(오른쪽 내용)")
 
-# 마지막 슬라이드 — 항상 마지막, 생략 불가 (실제로는 no-op)
-b.closing()
-
 # 3. 실행
 ok = b.flush()
 if ok:
@@ -113,10 +110,6 @@ else:
 | `heading` | 헤더 텍스트 |
 | `items` | `[(label, done), ...]` — done: `True`(완료 ●) / `False`(미완료 ○) |
 
-### `closing()` ★ 마지막 슬라이드 강제
-
-템플릿 마지막 슬라이드 그대로 유지. 실제로는 no-op이지만 반드시 호출한다.
-
 ---
 
 ## KPI 덱 빌드 스크립트 (template="kpi")
@@ -162,8 +155,6 @@ b.kpi_tasks(
         ["KPI3", "과제3", "실행계획", "역할"],
     ]
 )
-
-b.closing()
 
 ok = b.flush()
 if ok:
