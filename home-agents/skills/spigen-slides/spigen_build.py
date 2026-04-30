@@ -357,6 +357,29 @@ class SpigenBuilder:
             self._text(txt, label)
             self._style(txt, 13, color=self.c["dim"] if done else self.c["fg"])
 
+    def closing(self, oid, idx, dept="디자인부문ㅣ패키지디자인팀",
+                name="한원진 담당", date="2026. 04."):
+        """마지막 슬라이드: 오렌지 가로선 + 담당자 정보 중앙 배치"""
+        self._slide(oid, idx)
+        self._bg(oid)
+
+        self._hline(oid, 180, 155, 360)
+
+        c = _uid()
+        self._shape(oid, c, 40, 165, 640, 36)
+        self._text(c, dept)
+        self._style(c, 13, color=self.c["dim"], align="CENTER")
+
+        n = _uid()
+        self._shape(oid, n, 40, 204, 640, 36)
+        self._text(n, name)
+        self._style(n, 15, bold=True, align="CENTER")
+
+        d = _uid()
+        self._shape(oid, d, 40, 244, 640, 28)
+        self._text(d, date)
+        self._style(d, 12, color=self.c["dim"], align="CENTER")
+
     # ── API 플러시 ────────────────────────────────────────────────
 
     def flush(self):
