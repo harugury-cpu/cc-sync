@@ -119,6 +119,78 @@ else:
 
 ---
 
+## KPI 덱 빌드 스크립트 (template="kpi")
+
+KPI / 목표 / 실적 내용이 있을 때는 `SpigenBuilder(title, template="kpi")`로 생성한다.
+
+```python
+import sys, shutil
+
+shutil.copy2("/Users/harugury/.agents/skills/spigen-slides/spigen_build.py",
+             "/tmp/spigen_build.py")
+sys.path.insert(0, "/tmp")
+from spigen_build import SpigenBuilder
+
+b = SpigenBuilder("(PPT 제목)", theme="light", template="kpi")
+
+b.cover(title="(제목)", subtitle="(부제)", date="2026. 04.")
+
+b.kpi_status(
+    title="1. KPI 진행 현황",
+    eyebrow="2025년도",
+    top_rows=[
+        # [목표구분, KPI명, 가중치, 상반기목표, 상반기실적, 상반기달성, 연간목표, 연간실적, 비고]
+        ["팀명", "KPI1", 30, 85, 90, 28, 95, 85, ""],
+        [None, "KPI2", 40, 70, 75, 28, 80, 75, ""],  # ri=1 col0은 None — merged cell skip
+        [None, "KPI3", 30, 60, 65, 18, 70, 65, ""],
+    ],
+    detail_rows=[
+        # [KPI명, 정의, 측정산식, 증빙]
+        ["KPI1", "설명", "산식", "증빙"],
+        ["KPI2", "설명", "산식", "증빙"],
+        ["KPI3", "설명", "산식", "증빙"],
+    ]
+)
+
+b.kpi_tasks(
+    title="2. 핵심과제",
+    eyebrow="2025",
+    rows=[
+        # [연관KPI, 핵심과제, 실행계획, 나의역할]
+        ["KPI1", "과제1", "실행계획", "역할"],
+        [None, "과제2", "실행계획", "역할"],  # ri=1 col0은 None — merged cell skip
+        ["KPI3", "과제3", "실행계획", "역할"],
+    ]
+)
+
+b.closing()
+
+ok = b.flush()
+if ok:
+    print(f"완료: https://docs.google.com/presentation/d/{b.pid}/edit")
+else:
+    print("생성 실패")
+```
+
+### `kpi_status(title, eyebrow, top_rows, detail_rows)`
+
+| 파라미터 | 설명 | 기본값 |
+|---------|------|--------|
+| `title` | 슬라이드 제목 | `"1. KPI 진행 현황"` |
+| `eyebrow` | 상단 작은 텍스트 (연도 등) | `"2025년도"` |
+| `top_rows` | KPI 실적 표 (최대 3행) — 각 행 9개 값. `ri=1` col0은 `None` 전달 | `None` |
+| `detail_rows` | KPI 세부정보 표 (최대 3행) — 각 행 4개 값 | `None` |
+
+### `kpi_tasks(title, eyebrow, rows)`
+
+| 파라미터 | 설명 | 기본값 |
+|---------|------|--------|
+| `title` | 슬라이드 제목 | `"2. 핵심과제"` |
+| `eyebrow` | 상단 작은 텍스트 | `"2025"` |
+| `rows` | 핵심과제 표 (최대 3행) — 각 행 4개 값. `ri=1` col0은 `None` 전달 | `None` |
+
+---
+
 ## 실행 명령
 
 ```bash

@@ -11,6 +11,19 @@ COVER_TITLE_OID = "g3e66e3c2180_1_2"   # 제목
 COVER_META_OID  = "g3e66e3c2180_1_3"   # 부서 | 담당자
 COVER_DATE_OID  = "g3e66e3c2180_1_4"   # 날짜
 
+KPI_TEMPLATE_ID     = "1BBG9PR6ZBsEABbJLhbUUfRMkgGYQtNMOWAmLQgPhr70"
+KPI_COVER_TITLE_OID = "g3d96284c9ce_0_1"
+KPI_COVER_META_OID  = "g3d96284c9ce_0_2"
+KPI_COVER_DATE_OID  = "g3d96284c9ce_0_3"
+KPI_TEST_SLIDES     = ["test_rule", "test_flow", "test_arch", "test_map"]
+KPI_STATUS_EYEBROW  = "guide_kpi_status_light_eyebrow"
+KPI_STATUS_TITLE    = "guide_kpi_status_light_title"
+KPI_STATUS_TOP_TBL  = "guide_kpi_status_light_kpi_top_tbl"
+KPI_STATUS_DTL_TBL  = "guide_kpi_status_light_kpi_detail_tbl"
+KPI_TASKS_EYEBROW   = "guide_kpi_key_tasks_light_eyebrow"
+KPI_TASKS_TITLE     = "guide_kpi_key_tasks_light_title"
+KPI_TASKS_TBL       = "guide_kpi_key_tasks_light_kpi_task_tbl"
+
 
 def _uid():
     return "ob_" + uuid.uuid4().hex[:12]
@@ -60,13 +73,22 @@ def _rgb(c):
 
 
 class SpigenBuilder:
-    def __init__(self, title, theme="light"):
-        """템플릿을 복사해 새 프레젠테이션 생성. 템플릿은 cover(0) + closing(1) 2장 고정."""
+    def __init__(self, title, theme="light", template="standard"):
+        """템플릿을 복사해 새 프레젠테이션 생성.
+        template="standard": cover(0) + closing(1) 2장 고정.
+        template="kpi": cover(0) + kpi_status + kpi_tasks 구조.
+        """
         if theme not in COLORS:
             theme = "light"
+        if template == "kpi":
+            tmpl_id = KPI_TEMPLATE_ID
+            self._cover_oids = (KPI_COVER_TITLE_OID, KPI_COVER_META_OID, KPI_COVER_DATE_OID)
+        else:
+            tmpl_id = TEMPLATE_ID
+            self._cover_oids = (COVER_TITLE_OID, COVER_META_OID, COVER_DATE_OID)
         r = subprocess.run(
             ["gws", "drive", "files", "copy",
-             "--params", json.dumps({"fileId": TEMPLATE_ID}),
+             "--params", json.dumps({"fileId": tmpl_id}),
              "--json", json.dumps({"name": title})],
             capture_output=True, text=True)
         if r.returncode != 0:
@@ -75,6 +97,10 @@ class SpigenBuilder:
         self.c = COLORS[theme]
         self.reqs = []
         self._n = 0  # 콘텐츠 슬라이드 카운터 (closing 앞에 삽입)
+        self.template = template
+        if template == "kpi":
+            for oid in KPI_TEST_SLIDES:
+                self.reqs.append({"deleteObject": {"objectId": oid}})
 
     def _next(self):
         """콘텐츠 슬라이드용 (oid, idx) 반환 후 카운터 증가."""
@@ -209,15 +235,44 @@ class SpigenBuilder:
 
     # ── 슬라이드 타입 ──────────────────────────────────────────────
 
+    def _replace_text(self, oid, text):
+        """shape 텍스트 전체 교체 (deleteText + insertText)."""
+        self.reqs += [
+            {"deleteText": {"objectId": oid, "textRange": {"type": "ALL"}}},
+            {"insertText": {"objectId": oid, "insertionIndex": 0, "text": text}},
+        ]
+
+    def _tbl_cell(self, tbl_oid, row, col, text):
+        """테이블 셀 텍스트 교체. 빈/None 값은 skip — merged 이차 셀 deleteText 오류 방지."""
+        if text is None:
+            return
+        text = str(text).strip()
+        if not text:
+            return
+        self.reqs += [
+            {"deleteText": {
+                "objectId": tbl_oid,
+                "cellLocation": {"rowIndex": row, "columnIndex": col},
+                "textRange": {"type": "ALL"},
+            }},
+            {"insertText": {
+                "objectId": tbl_oid,
+                "cellLocation": {"rowIndex": row, "columnIndex": col},
+                "insertionIndex": 0,
+                "text": text,
+            }},
+        ]
+
     def cover(self, title, subtitle="", dept="디자인부문ㅣ패키지디자인팀",
               name="한원진 담당", date="2026. 04."):
         """표지: 템플릿 커버 슬라이드의 텍스트를 교체. deleteText 후 insertText + 스타일 재적용."""
+        title_oid, meta_oid, date_oid = self._cover_oids
         title_text = f"{title}\n{subtitle}" if subtitle else title
         meta_text  = f"{dept}\n{name}"
         entries = [
-            (COVER_TITLE_OID, title_text, 28, True),
-            (COVER_META_OID,  meta_text,  11, False),
-            (COVER_DATE_OID,  date,        11, False),
+            (title_oid, title_text, 28, True),
+            (meta_oid,  meta_text,  11, False),
+            (date_oid,  date,       11, False),
         ]
         for oid, text, size, bold in entries:
             self.reqs += [
@@ -388,6 +443,39 @@ class SpigenBuilder:
             self._shape(oid, txt, 82, y, 598, item_h)
             self._text(txt, label)
             self._style(txt, 13, color=self.c["dim"] if done else self.c["fg"])
+
+    def kpi_status(self, title="1. KPI 진행 현황", eyebrow="2025년도",
+                   top_rows=None, detail_rows=None):
+        """KPI 현황 슬라이드: 템플릿 슬라이드 텍스트 교체. template='kpi' 전용.
+        top_rows: [[목표, kpi, 가중치, h1목표, h1실적, h1달성률, 연간목표, 연간실적, 연간달성률], ...]  (최대 3행)
+        detail_rows: [[kpi, 정의, 측정산식, 증빙], ...]  (최대 3행)
+        """
+        if self.template != "kpi":
+            raise ValueError("kpi_status()는 template='kpi'에서만 사용 가능합니다.")
+        self._replace_text(KPI_STATUS_EYEBROW, eyebrow)
+        self._replace_text(KPI_STATUS_TITLE, title)
+        for ri, row in enumerate((top_rows or [])[:3]):
+            for ci, val in enumerate(row[:9]):
+                if ri == 1 and ci == 0:
+                    continue  # [2,0] rs=2 merge가 row3 col0을 cover — 쓰기 불가
+                self._tbl_cell(KPI_STATUS_TOP_TBL, ri + 2, ci, val)
+        for ri, row in enumerate((detail_rows or [])[:3]):
+            for ci, val in enumerate(row[:4]):
+                self._tbl_cell(KPI_STATUS_DTL_TBL, ri + 1, ci, val)
+
+    def kpi_tasks(self, title="2. 핵심과제", eyebrow="2025", rows=None):
+        """주요 과제 슬라이드: 템플릿 슬라이드 텍스트 교체. template='kpi' 전용.
+        rows: [[연관kpi, 핵심과제, 실행계획, 나의역할], ...]  (최대 3행)
+        """
+        if self.template != "kpi":
+            raise ValueError("kpi_tasks()는 template='kpi'에서만 사용 가능합니다.")
+        self._replace_text(KPI_TASKS_EYEBROW, eyebrow)
+        self._replace_text(KPI_TASKS_TITLE, title)
+        for ri, row in enumerate((rows or [])[:3]):
+            for ci, val in enumerate(row[:4]):
+                if ri == 1 and ci == 0:
+                    continue  # [1,0] rowSpan=2 → row 2 col 0은 covered cell
+                self._tbl_cell(KPI_TASKS_TBL, ri + 1, ci, val)
 
     # ── API 플러시 ────────────────────────────────────────────────
 

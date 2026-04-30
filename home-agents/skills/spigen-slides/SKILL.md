@@ -95,6 +95,10 @@ Step 2 진입 전 아래를 내부적으로 수행한다. 사용자에게 출력
 | 실행 확인 | 완료·미완료 항목 목록 | `checklist()` |
 | 비교 | "현재 vs 이후", 대립 구도 2개 | `two_col()` |
 | 서술/설명/나열 | 단일 메시지, 순서 없는 정보 | `slide()` |
+| KPI 진행 현황 | KPI / 목표 / 실적 / 달성률 / 가중치 포함 | `kpi_status()` ★ template="kpi" |
+| KPI 핵심과제 | 연관KPI / 핵심과제 / 실행계획 / 역할 목록 | `kpi_tasks()` ★ template="kpi" |
+
+KPI 덱은 `SpigenBuilder(title, template="kpi")`로 생성한다. 표지·마지막 슬라이드는 KPI 전용 템플릿에서 복사.
 
 **③ Voice Fingerprint 확인 (생성 전 내부 체크)**
 
