@@ -264,6 +264,99 @@ class SpigenBuilder:
         self._text(rb, right_body)
         self._style(rb, 13)
 
+    def flow(self, oid, idx, heading, steps):
+        """흐름 슬라이드: 헤더 + 번호 단계 목록. steps = [(label, desc), ...]"""
+        self._slide(oid, idx)
+        self._bg(oid)
+
+        h = _uid()
+        self._shape(oid, h, 40, 20, 640, 38)
+        self._text(h, heading)
+        self._style(h, 22, bold=True)
+
+        self._hline(oid, 40, 62, 640)
+
+        step_h = max(16, min(60, 290 // max(len(steps), 1)))
+        for i, (label, desc) in enumerate(steps):
+            y = 72 + i * (step_h + 6)
+            num = _uid()
+            self._shape(oid, num, 40, y, 32, step_h)
+            self._text(num, str(i + 1))
+            self._style(num, 16, bold=True, color=self.c["accent"], align="CENTER")
+
+            self._vline(oid, 80, y + 4, step_h - 8, weight=1, color=self.c["dim"])
+
+            body = _uid()
+            self._shape(oid, body, 90, y, 590, step_h)
+            self._text(body, f"{label}\n{desc}" if desc else label)
+            self._style(body, 13)
+
+    def decision(self, oid, idx, heading, question, yes_label, yes_body, no_label, no_body):
+        """분기 슬라이드: 헤더 + 질문 박스 + YES/NO 패널"""
+        self._slide(oid, idx)
+        self._bg(oid)
+
+        h = _uid()
+        self._shape(oid, h, 40, 20, 640, 38)
+        self._text(h, heading)
+        self._style(h, 22, bold=True)
+
+        self._hline(oid, 40, 62, 640)
+
+        q = _uid()
+        self._shape(oid, q, 160, 72, 400, 44)
+        self._text(q, question)
+        self._style(q, 15, bold=True, align="CENTER")
+        self._hline(oid, 160, 118, 400, weight=1, color=self.c["dim"])
+
+        yl = _uid()
+        self._shape(oid, yl, 40, 130, 300, 28)
+        self._text(yl, f"✓  {yes_label}")
+        self._style(yl, 14, bold=True, color=self.c["accent"])
+
+        yb = _uid()
+        self._shape(oid, yb, 40, 162, 300, 210)
+        self._text(yb, yes_body)
+        self._style(yb, 13)
+
+        self._vline(oid, 355, 130, 230, weight=1, color=self.c["dim"])
+
+        nl = _uid()
+        self._shape(oid, nl, 365, 130, 315, 28)
+        self._text(nl, f"✗  {no_label}")
+        self._style(nl, 14, bold=True, color=self.c["dim"])
+
+        nb = _uid()
+        self._shape(oid, nb, 365, 162, 315, 210)
+        self._text(nb, no_body)
+        self._style(nb, 13)
+
+    def checklist(self, oid, idx, heading, items):
+        """체크리스트 슬라이드: 헤더 + 항목 목록. items = [(label, done), ...]"""
+        self._slide(oid, idx)
+        self._bg(oid)
+
+        h = _uid()
+        self._shape(oid, h, 40, 20, 640, 38)
+        self._text(h, heading)
+        self._style(h, 22, bold=True)
+
+        self._hline(oid, 40, 62, 640)
+
+        item_h = max(16, min(52, 300 // max(len(items), 1)))
+        for i, (label, done) in enumerate(items):
+            y = 72 + i * (item_h + 4)
+            mark = _uid()
+            self._shape(oid, mark, 40, y, 32, item_h)
+            self._text(mark, "●" if done else "○")
+            color = self.c["accent"] if done else self.c["dim"]
+            self._style(mark, 16, color=color, align="CENTER")
+
+            txt = _uid()
+            self._shape(oid, txt, 82, y, 598, item_h)
+            self._text(txt, label)
+            self._style(txt, 13, color=self.c["dim"] if done else self.c["fg"])
+
     # ── API 플러시 ────────────────────────────────────────────────
 
     def flush(self):
