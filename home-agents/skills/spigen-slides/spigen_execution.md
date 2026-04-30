@@ -97,6 +97,38 @@ else:
 | `right_title` | 오른쪽 패널 제목 (오렌지) |
 | `right_body` | 오른쪽 본문 |
 
+### `flow(oid, idx, heading, steps)`
+
+순서 있는 흐름 슬라이드. 번호 + 세로선 + 텍스트 구조.
+
+| 파라미터 | 설명 |
+|---------|------|
+| `oid`, `idx` | 슬라이드 위치 |
+| `heading` | 헤더 텍스트 |
+| `steps` | `[(label, desc), ...]` — label: 단계명, desc: 부연 설명 (빈 문자열 가능) |
+
+### `decision(oid, idx, heading, question, yes_label, yes_body, no_label, no_body)`
+
+분기/판단 슬라이드. 질문 박스 + YES/NO 패널.
+
+| 파라미터 | 설명 |
+|---------|------|
+| `oid`, `idx` | 슬라이드 위치 |
+| `heading` | 헤더 텍스트 |
+| `question` | 판단 질문 (예: "촬영이 필요한가?") |
+| `yes_label` / `yes_body` | YES 경로 제목·본문 |
+| `no_label` / `no_body` | NO 경로 제목·본문 |
+
+### `checklist(oid, idx, heading, items)`
+
+완료·미완료 체크리스트 슬라이드.
+
+| 파라미터 | 설명 |
+|---------|------|
+| `oid`, `idx` | 슬라이드 위치 |
+| `heading` | 헤더 텍스트 |
+| `items` | `[(label, done), ...]` — done: `True`(완료 ●) / `False`(미완료 ○) |
+
 ---
 
 ## 실행 명령
