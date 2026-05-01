@@ -141,7 +141,7 @@ Q. 항목이 몇 개인가?
 | `mk_section_divider()` | 섹션 구분 | 번호+제목만 |
 | `mk_quote()` | 인용/강조 한 문장 | 텍스트만 교체 |
 | `mk_contents()` / `mk_toc()` | 목차 | 섹션명만 교체 |
-| `mk_summary()` | 요약 closing | 메시지만 교체 |
+
 | `mk_kpi_status_detail()` | KPI 보고 전용 | 강제 지정 |
 | `mk_kpi_dense_table()` | KPI 밀도 표 | 강제 지정 |
 

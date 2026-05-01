@@ -1,169 +1,210 @@
-# spigen-slides Execution Guide (v4)
+# spigen-slides Execution Guide (v6)
 
 ## Step 3. 생성
 
-승인된 아웃라인을 그대로 Python 빌드 스크립트로 변환하고 실행한다.
+승인된 구성을 그대로 Python 빌드 스크립트로 변환하고 실행한다.
 
-### 라이브러리 준비
+v6 기본 방향:
+- 운영용 = 디테일용 = 보고서형
+- 각 슬라이드는 한 페이지 자기완결 설명
+- 설명량이 부족해지면 구조형 컴포넌트보다 `slide()`를 우선한다
 
-```bash
-SKILL_DIR="$HOME/.agents/skills/spigen-slides"
-for f in spigen_lib.py spigen_layout.py spigen_models.py; do
-  cp "$SKILL_DIR/$f" /tmp/$f
-done
-```
+---
 
-### 빌드 스크립트 기본 구조
+## 빌드 스크립트 템플릿
 
 ```python
-import sys, subprocess, json, shutil, os
+import sys, shutil
 
-SKILL_DIR = os.path.expanduser("~/.agents/skills/spigen-slides")
-for fname in ("spigen_lib.py", "spigen_layout.py", "spigen_models.py"):
-    shutil.copy2(os.path.join(SKILL_DIR, fname), f"/tmp/{fname}")
+# 빌더 복사
+shutil.copy2("/Users/harugury/.agents/skills/spigen-slides/spigen_build.py",
+             "/tmp/spigen_build.py")
 sys.path.insert(0, "/tmp")
-import spigen_lib as lib
+from spigen_build import SpigenBuilder
 
-TMPL_ID = "1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk"
-TITLE   = "<PPT 제목>"
+# 1. 템플릿 복사로 새 프레젠테이션 생성
+b = SpigenBuilder("(PPT 제목)", theme="light")
 
-# 1. 템플릿 복사
-copy_r = subprocess.run(
-    ["gws", "drive", "files", "copy",
-     "--params", json.dumps({"fileId": TMPL_ID}),
-     "--json",   json.dumps({"name": TITLE})],
-    capture_output=True, text=True)
-NEW_ID = json.loads(copy_r.stdout)["id"]
+# 2. 슬라이드 추가 (승인된 구성대로)
+# 표지 — 항상 첫 번째, 생략 불가
+# light: KPI 라이트 템플릿 cover 복사 / dark: 다크 템플릿 cover 복사
+b.cover(
+    title="(제목)",
+    subtitle="(부제)",
+    date="2026. 04.")
 
-# 2. 기존 슬라이드 ID 수집
-prs_data = json.loads(subprocess.run(
-    ["gws", "slides", "presentations", "get",
-     "--params", json.dumps({"presentationId": NEW_ID})],
-    capture_output=True, text=True).stdout)
-existing_ids = [s["objectId"] for s in prs_data["slides"]]
+# 콘텐츠 슬라이드 — oid/idx 없이 호출, 순서대로 자동 배치
+b.slide(
+    heading="(슬라이드 제목)",
+    body="(본문 내용\n• bullet\n• bullet)")
 
-# 3. 슬라이드 생성 요청 누적
-reqs = []
-lib.set_theme("dark")  # 또는 "light"
+b.two_col(
+    heading="(슬라이드 제목)",
+    left_title="(왼쪽 제목)",
+    left_body="(왼쪽 내용)",
+    right_title="(오른쪽 제목)",
+    right_body="(오른쪽 내용)")
 
-# 승인된 아웃라인 그대로 구현
-lib.mk_cover("cover", "<제목>", 0, reqs, subtitle="<부제>",
-             date_text="<날짜>", version="V1.0")
-# ... 나머지 슬라이드
-
-# 4. 기존 슬라이드 삭제
-for oid in existing_ids:
-    reqs.append({"deleteObject": {"objectId": oid}})
-
-# 5. batchUpdate (50개씩 청크)
-for i in range(0, len(reqs), 50):
-    chunk = reqs[i:i+50]
-    result = subprocess.run(
-        ["gws", "slides", "presentations", "batchUpdate",
-         "--params", json.dumps({"presentationId": NEW_ID}),
-         "--json",   json.dumps({"requests": chunk})],
-        capture_output=True, text=True)
-    if result.returncode != 0:
-        print(f"[오류] 청크 {i//50+1}: {result.stderr[:400]}")
-        sys.exit(1)
-    print(f"청크 {i//50+1} ({len(chunk)}건) 완료")
-
-print(f"\n완료: https://docs.google.com/presentation/d/{NEW_ID}/edit")
+# 3. 실행
+ok = b.flush()
+if ok:
+    print(f"완료: https://docs.google.com/presentation/d/{b.pid}/edit")
+else:
+    print("생성 실패")
 ```
 
 ---
 
-## Step 4. 수치 검증
+## 슬라이드 함수 레퍼런스
 
-```bash
-python3 ~/.agents/skills/spigen-slides/spigen_verify.py <PRESENTATION_ID>
-```
+### `cover(title, subtitle, dept, name, date)` ★ 첫 슬라이드 강제
 
-**PASS 기준**: 전원 PASS  
-**FAIL 시**: 해당 항목만 수정 후 재생성. 전체 재빌드하지 않아도 되면 `spigen_inplace_update.py` 사용.
+템플릿 표지의 텍스트를 교체. oid/idx 없음.
+
+| 파라미터 | 설명 | 기본값 |
+|---------|------|--------|
+| `title` | 메인 제목 | 필수 |
+| `subtitle` | 부제 (생략 가능) | `""` |
+| `dept` | 부서명 | `"디자인부문ㅣ패키지디자인팀"` |
+| `name` | 담당자명 | `"한원진 담당"` |
+| `date` | 날짜 | `"2026. 04."` |
+
+### `slide(heading, body, body_size)`
+
+| 파라미터 | 설명 | 기본값 |
+|---------|------|--------|
+| `heading` | 헤더 텍스트 | 필수 |
+| `body` | 본문 텍스트 (`\n` 줄바꿈, `• ` bullet) | 필수 |
+| `body_size` | 본문 폰트 크기 (pt) | `14` |
+
+기본값:
+- v6에서는 `slide()`가 가장 우선되는 기본 컴포넌트다.
+- 운영용(=디테일용=보고서형)은 본문 5~6줄까지 허용한다.
+- 실행 주체 / 상태 / 다음 액션을 한 페이지에 함께 설명할 수 있어야 한다.
+
+### `two_col(heading, left_title, left_body, right_title, right_body)`
+
+| 파라미터 | 설명 |
+|---------|------|
+| `heading` | 전체 헤더 |
+| `left_title` | 왼쪽 패널 제목 (오렌지) |
+| `left_body` | 왼쪽 본문 |
+| `right_title` | 오른쪽 패널 제목 (오렌지) |
+| `right_body` | 오른쪽 본문 |
+
+### `flow(heading, steps)`
+
+순서 있는 흐름 슬라이드. 번호 + 세로선 + 텍스트 구조.
+
+| 파라미터 | 설명 |
+|---------|------|
+| `heading` | 헤더 텍스트 |
+| `steps` | `[(label, desc), ...]` — label: 단계명, desc: 부연 설명 (빈 문자열 가능) |
+
+### `decision(heading, question, yes_label, yes_body, no_label, no_body)`
+
+분기/판단 슬라이드. 질문 박스 + YES/NO 패널.
+
+| 파라미터 | 설명 |
+|---------|------|
+| `heading` | 헤더 텍스트 |
+| `question` | 판단 질문 (예: "촬영이 필요한가?") |
+| `yes_label` / `yes_body` | YES 경로 제목·본문 |
+| `no_label` / `no_body` | NO 경로 제목·본문 |
+
+### `checklist(heading, items)`
+
+완료·미완료 체크리스트 슬라이드.
+
+| 파라미터 | 설명 |
+|---------|------|
+| `heading` | 헤더 텍스트 |
+| `items` | `[(label, done), ...]` — done: `True`(완료 ●) / `False`(미완료 ○) |
 
 ---
 
-## Step 5. 썸네일 시각 확인
+## KPI 덱 빌드 스크립트 (template="kpi")
+
+KPI / 목표 / 실적 내용이 있을 때는 `SpigenBuilder(title, template="kpi")`로 생성한다.
 
 ```python
-import subprocess, json
-NEW_ID = "<PRESENTATION_ID>"
-prs = json.loads(subprocess.run(
-    ["gws","slides","presentations","get",
-     "--params", f'{{"presentationId":"{NEW_ID}"}}'],
-    capture_output=True, text=True).stdout)
-for i, slide in enumerate(prs["slides"]):
-    thumb = json.loads(subprocess.run(
-        ["gws","slides","presentations","pages","getThumbnail",
-         "--params", json.dumps({"presentationId": NEW_ID,
-                                 "pageObjectId": slide["objectId"]})],
-        capture_output=True, text=True).stdout)
-    print(f"슬라이드 {i+1}: {thumb.get('contentUrl','')}")
+import sys, shutil
+
+shutil.copy2("/Users/harugury/.agents/skills/spigen-slides/spigen_build.py",
+             "/tmp/spigen_build.py")
+sys.path.insert(0, "/tmp")
+from spigen_build import SpigenBuilder
+
+b = SpigenBuilder("(PPT 제목)", theme="light", template="kpi")
+
+b.cover(title="(제목)", subtitle="(부제)", date="2026. 04.")
+
+b.kpi_status(
+    title="1. KPI 진행 현황",
+    eyebrow="2025년도",
+    top_rows=[
+        # [목표구분, KPI명, 가중치, 상반기목표, 상반기실적, 상반기달성, 연간목표, 연간실적, 비고]
+        ["팀명", "KPI1", 30, 85, 90, 28, 95, 85, ""],
+        [None, "KPI2", 40, 70, 75, 28, 80, 75, ""],  # ri=1 col0은 None — merged cell skip
+        [None, "KPI3", 30, 60, 65, 18, 70, 65, ""],
+    ],
+    detail_rows=[
+        # [KPI명, 정의, 측정산식, 증빙]
+        ["KPI1", "설명", "산식", "증빙"],
+        ["KPI2", "설명", "산식", "증빙"],
+        ["KPI3", "설명", "산식", "증빙"],
+    ]
+)
+
+b.kpi_tasks(
+    title="2. 핵심과제",
+    eyebrow="2025",
+    rows=[
+        # [연관KPI, 핵심과제, 실행계획, 나의역할]
+        ["KPI1", "과제1", "실행계획", "역할"],
+        [None, "과제2", "실행계획", "역할"],  # ri=1 col0은 None — merged cell skip
+        ["KPI3", "과제3", "실행계획", "역할"],
+    ]
+)
+
+ok = b.flush()
+if ok:
+    print(f"완료: https://docs.google.com/presentation/d/{b.pid}/edit")
+else:
+    print("생성 실패")
 ```
 
-**확인 항목:**
-- 텍스트 오버플로 (박스 밖으로 잘린 텍스트)
-- 요소 겹침
-- 캔버스 이탈 (720×405pt 밖)
-- 오렌지 강조 슬라이드당 3개 이하
+### `kpi_status(title, eyebrow, top_rows, detail_rows)`
 
-문제 발견 → 해당 슬라이드만 `spigen_inplace_update.py`로 수정.  
-전원 이상 없음 → 완료 링크 공유.
+| 파라미터 | 설명 | 기본값 |
+|---------|------|--------|
+| `title` | 슬라이드 제목 | `"1. KPI 진행 현황"` |
+| `eyebrow` | 상단 작은 텍스트 (연도 등) | `"2025년도"` |
+| `top_rows` | KPI 실적 표 (최대 3행) — 각 행 9개 값. `ri=1` col0은 `None` 전달 | `None` |
+| `detail_rows` | KPI 세부정보 표 (최대 3행) — 각 행 4개 값 | `None` |
+
+### `kpi_tasks(title, eyebrow, rows)`
+
+| 파라미터 | 설명 | 기본값 |
+|---------|------|--------|
+| `title` | 슬라이드 제목 | `"2. 핵심과제"` |
+| `eyebrow` | 상단 작은 텍스트 | `"2025"` |
+| `rows` | 핵심과제 표 (최대 3행) — 각 행 4개 값. `ri=1` col0은 `None` 전달 | `None` |
 
 ---
 
-## 슬라이드 부분 수정
-
-기존 덱에서 특정 슬라이드만 고칠 때:
+## 실행 명령
 
 ```bash
-python3 ~/.agents/skills/spigen-slides/spigen_inplace_update.py \
-  <PRESENTATION_ID> <SLIDE_OBJECT_ID>
+python3 /tmp/build_<name>.py
 ```
 
-전체 재빌드보다 이 방식을 먼저 시도한다.
+FAIL 시: 오류 메시지 확인 → 해당 슬라이드 수정 → 재실행.
 
 ---
 
-## 컴포넌트 주요 함수 시그니처
+## 완료 보고
 
-```python
-lib.mk_cover(obj_id, title, slide_idx, reqs,
-             subtitle="", date_text="", version="")
-
-lib.mk_section_divider(obj_id, number, title, slide_idx, reqs)
-
-lib.mk_flow_focus(slide_obj_id, steps, reqs)
-# steps: [{"num":"01","name":"...","service":"...","style":"auto"|"primary"}]
-
-lib.mk_decision_tree(slide_obj_id, config, reqs)
-# config: {"input":"...","decision":"...","yes":"...","no":"...",
-#           "output":"...","yes_label":"...","no_label":"..."}
-
-lib.mk_split_cards(slide_obj_id, left, right, reqs)
-# left/right: {"label":"...","items":[...]}
-
-lib.mk_3col_cards(slide_obj_id, cards, reqs)
-# cards: [{"title":"...","body":"..."}]
-
-lib.mk_kpi_status_detail(slide_obj_id, reqs,
-    summary_title, summary_groups, summary_headers, summary_rows,
-    detail_title, detail_headers, detail_rows)
-
-lib.slide_base(obj_id, title, slide_idx, reqs,
-               page_label="", page_no=1, total=1)
 ```
-
-`slide_base()`는 콘텐츠 슬라이드마다 먼저 호출하고, 이후 컴포넌트 함수를 호출한다.
-
----
-
-## 디자인 규칙 (불변)
-
-- 캔버스 720×405pt — 이탈 요소 = 수정 후 재생성, 납품 금지
-- 오렌지(`#FF6B1A`): 슬라이드당 핵심 1개, 전체 최대 3개
-- `lib.set_theme('dark')` 또는 `lib.set_theme('light')` — Step 2 승인 시 결정
-- 표지: `mk_cover()` 또는 템플릿 1페이지 복사 후 텍스트 교체
-
-세부 규칙: `spigen_render_rules.md`
+완료: https://docs.google.com/presentation/d/<ID>/edit
+```

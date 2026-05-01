@@ -1,8 +1,13 @@
-# spigen-slides Execution Guide (v5)
+# spigen-slides Execution Guide (v6)
 
 ## Step 3. 생성
 
 승인된 구성을 그대로 Python 빌드 스크립트로 변환하고 실행한다.
+
+v6 기본 방향:
+- 운영용 = 디테일용 = 보고서형
+- 각 슬라이드는 한 페이지 자기완결 설명
+- 설명량이 부족해지면 구조형 컴포넌트보다 `slide()`를 우선한다
 
 ---
 
@@ -17,11 +22,12 @@ shutil.copy2("/Users/harugury/.agents/skills/spigen-slides/spigen_build.py",
 sys.path.insert(0, "/tmp")
 from spigen_build import SpigenBuilder
 
-# 1. 템플릿 복사로 새 프레젠테이션 생성 (표지/마지막 슬라이드 포함)
+# 1. 템플릿 복사로 새 프레젠테이션 생성
 b = SpigenBuilder("(PPT 제목)", theme="light")
 
 # 2. 슬라이드 추가 (승인된 구성대로)
 # 표지 — 항상 첫 번째, 생략 불가
+# light: KPI 라이트 템플릿 cover 복사 / dark: 다크 템플릿 cover 복사
 b.cover(
     title="(제목)",
     subtitle="(부제)",
@@ -70,6 +76,11 @@ else:
 | `heading` | 헤더 텍스트 | 필수 |
 | `body` | 본문 텍스트 (`\n` 줄바꿈, `• ` bullet) | 필수 |
 | `body_size` | 본문 폰트 크기 (pt) | `14` |
+
+기본값:
+- v6에서는 `slide()`가 가장 우선되는 기본 컴포넌트다.
+- 운영용(=디테일용=보고서형)은 본문 5~6줄까지 허용한다.
+- 실행 주체 / 상태 / 다음 액션을 한 페이지에 함께 설명할 수 있어야 한다.
 
 ### `two_col(heading, left_title, left_body, right_title, right_body)`
 

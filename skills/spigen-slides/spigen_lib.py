@@ -34,38 +34,47 @@ def c255(r, g, b):
     return {"red": r / 255, "green": g / 255, "blue": b / 255}
 
 
+# V6.0: Spigen Design System 컬러 토큰 직접 동기화
+# 출처: Spigen Dark/Light Design System colors_and_type.css
 THEME_TOKENS = {
     "dark": {
-        "BG": {"red": 0, "green": 0, "blue": 0},
-        "SURFACE": c255(14, 14, 14),
-        "SURFACE_HI": c255(22, 22, 22),
-        "BORDER": c255(32, 32, 32),
-        "BORDER_HI": c255(48, 48, 48),
-        "ORANGE": c255(255, 107, 26),
-        "ORANGE_DIM": c255(61, 26, 5),
-        "WHITE": {"red": 1, "green": 1, "blue": 1},
-        "TEXT": c255(240, 240, 240),
-        "TEXT_DIM": c255(170, 170, 170),
-        "TEXT_FAINT": c255(110, 110, 110),
-        "GOOD": c255(156, 227, 125),
-        "BAD": c255(255, 122, 122),
-        "BLACK": c255(0, 0, 0),
+        "BG":         c255(26, 26, 26),       # #1A1A1A
+        "SURFACE":    c255(38, 38, 38),       # #262626 (★ V6.0: 14→38, 24% 밝게)
+        "SURFACE_HI": c255(48, 48, 48),       # #303030
+        "SURFACE_2":  c255(42, 42, 42),       # #2A2A2A
+        "BORDER":     c255(53, 53, 53),       # rgba(255,255,255,.12) 합성
+        "BORDER_HI":  c255(72, 72, 72),       # rgba(255,255,255,.20) 합성
+        "ORANGE":     c255(255, 107, 26),     # #FF6B1A
+        "ORANGE_DIM": c255(58, 37, 26),       # 14% 합성 (★ V6.0)
+        "ORANGE_LINE": c255(152, 71, 26),     # 55% 합성
+        "ORANGE_SOFT": c255(35, 29, 26),      # 4% 합성
+        "WHITE":      {"red": 1, "green": 1, "blue": 1},
+        "TEXT":       c255(228, 228, 228),    # 88% 합성
+        "TEXT_DIM":   c255(196, 196, 196),    # 74% 합성
+        "TEXT_FAINT": c255(154, 154, 154),    # 56% 합성
+        "GOOD":       c255(156, 227, 125),    # #9CE37D
+        "BAD":        c255(255, 122, 122),    # #FF7A7A
+        "BLACK":      c255(0, 0, 0),
     },
     "light": {
-        "BG": c255(255, 255, 255),
-        "SURFACE": {"red": 1, "green": 1, "blue": 1},
-        "SURFACE_HI": c255(241, 241, 237),
-        "BORDER": c255(217, 217, 210),
-        "BORDER_HI": c255(191, 192, 184),
-        "ORANGE": c255(255, 107, 26),
-        "ORANGE_DIM": {"red": 1, "green": 1, "blue": 1},
-        "WHITE": {"red": 1, "green": 1, "blue": 1},
-        "TEXT": c255(23, 23, 23),
-        "TEXT_DIM": c255(95, 97, 91),
-        "TEXT_FAINT": c255(138, 141, 132),
-        "GOOD": c255(80, 166, 76),
-        "BAD": c255(214, 74, 74),
-        "BLACK": c255(0, 0, 0),
+        "BG":             c255(255, 255, 255),   # #FFFFFF (순백, V6.0.1 사용자 요청)
+        "SURFACE":        c255(251, 250, 246),   # #FBFAF6
+        "SURFACE_HI":     c255(236, 234, 227),   # #ECEAE3
+        "SURFACE_2":      c255(229, 226, 217),   # #E5E2D9
+        "BORDER":         c255(228, 226, 221),   # rgba(20,20,20,.07) 합성
+        "BORDER_HI":      c255(215, 213, 208),   # rgba(20,20,20,.13) 합성
+        "ORANGE":         c255(239, 95, 14),     # ★ V6.0: #EF5F0E (다크보다 어두운 오렌지)
+        "ORANGE_STRONG":  c255(208, 78, 7),      # #D04E07 (hover/press)
+        "ORANGE_DIM":     c255(244, 229, 216),   # 9% 합성 (★ V6.0)
+        "ORANGE_LINE":    c255(242, 180, 143),   # 42% 합성
+        "ORANGE_SOFT":    c255(244, 237, 227),   # 4% 합성
+        "WHITE":          {"red": 1, "green": 1, "blue": 1},
+        "TEXT":           c255(47, 47, 46),      # 88% 합성
+        "TEXT_DIM":       c255(105, 104, 102),   # 62% 합성
+        "TEXT_FAINT":     c255(150, 149, 145),   # 42% 합성
+        "GOOD":           c255(31, 166, 74),     # #1FA64A
+        "BAD":            c255(197, 48, 48),     # #C53030
+        "BLACK":          c255(0, 0, 0),
     },
 }
 
