@@ -23,7 +23,7 @@
       "/Users/harugury/Documents/Obsidian Vault"
     ]
   },
-  "model": "sonnet",
+  "model": "haiku",
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -102,6 +102,16 @@
             "command": "$HOME/.claude/hooks/fix-commit-learner.sh"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "if": "Bash(*spigen_build.py*)",
+        "hooks": [
+          {
+            "type": "agent",
+            "prompt": "방금 spigen-slides로 PPT를 생성했습니다. 페르소나 검수 V5.7 default ON 룰에 따라 즉시 진행하세요.\n\n검수 대상: 직전 Bash stdout의 https://docs.google.com/presentation/d/* URL (또는 build_*.py 출력에 [light]/[dark] NEW/UPDATE 표기된 URL).\n\n검수 기준: ~/.claude/skills/spigen-slides/SKILL.md '페르소나 검수' 섹션 + spigen_subagent_prompts.md (영역 매트릭스 — 기획자/디자이너/청중 각자 영역만).\n\n자동 강제 룰(컬러·좌표·폰트 위계·콘텐츠 영역·표지 2줄 등)은 빌더 코드가 이미 처리. 페르소나는 코드가 못 잡는 텍스트·메시지·카테고리 라벨링·청중 이해도만 검수.\n\n룰: 1회 호출 + 1회 통합 수정 + 종료 (반복 호출 금지). 충돌 시 사용자 1회 문의."
+          }
+        ]
       }
     ]
   },
@@ -169,6 +179,7 @@
   "language": "korean",
   "effortLevel": "high",
   "skipDangerousModePermissionPrompt": true,
+  "theme": "light",
   "mcpServers": {
     "monday-apps-mcp": {
       "command": "npx",
@@ -180,6 +191,5 @@
         "apps"
       ]
     }
-  },
-  "theme": "light"
+  }
 }
