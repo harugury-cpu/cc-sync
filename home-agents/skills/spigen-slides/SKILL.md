@@ -163,28 +163,50 @@ Step 2 진입 전 아래를 내부적으로 수행한다. 사용자에게 출력
 | KPI 핵심과제 | 연관KPI / 핵심과제 / 실행계획 | `kpi_tasks()` ★ template="kpi" | V5 |
 | **결론 페이지 (선택)** — 대부분 사용 안 함 | 좌 큰 메트릭 + 우 디테일 4개 (시트 mk_conclusion_detail 양식) | `conclusion(metric, caption, details=[...])` | V5.5 |
 
-**자유 레이아웃 빌딩 블록 (V5.4):**
+**자유 레이아웃 빌딩 블록 (V6 권장 패턴):**
 
 ```python
-# 슬라이드 시작 — 헤더 + 오렌지 가로선만
-b.start_slide(heading="슬라이드 제목")
+# 슬라이드 시작 — eyebrow는 모든 콘텐츠 슬라이드에 권장 (★ V5.7 표준)
+b.start_slide(heading="슬라이드 제목", eyebrow="CATEGORY")
 
-# 카드 — primary=True면 풀-오렌지 강조 (한 슬라이드에 1개만 권장)
-b.card(x=40, y=80, w=200, h=120, label="01", title="제목", body="본문", primary=False)
+# 카드 — emphasis 옵션:
+#   None / 미지정 : 일반 (surface + border)
+#   "dim"         : 약한 강조 (accent_bg + accent border)
+#   "full"        : 풀 ORANGE 배경 + 검정 텍스트 (★ 한 슬라이드 1개만 허용)
+b.card(x=40, y=110, w=200, h=120, label="01", title="제목",
+       body="본문 (**굵게** 마크업 자동)", emphasis=None)
 
-# 플로우 단계 — 가로 자유 배치
-b.flow_step(x=40, y=80, w=160, h=140, num="01", name="단계명", desc="설명")
+# footer 섹션이 필요한 카드 (mk_conclusion_detail 스타일)
+b.card(x=40, y=110, w=200, h=200, label="01", title="제목",
+       body="본문",
+       footer_label="현재 지점", footer_body="**핵심값** 보강 메시지")
 
-# 비교 행 — y만 지정, 가로 전체에 자동 배치 (여러 번 호출 가능)
-b.compare_pair(y=90,  item="항목1", before="기존", after="개선")
-b.compare_pair(y=140, item="항목2", before="기존", after="개선")
+# 플로우 단계 — 가로 자유 배치, primary=True로 강조 단계 1개 지정
+b.flow_step(x=40, y=110, w=160, h=140, num="01", name="단계명",
+            desc="설명 (**굵게**)", primary=False)
 
-# 강조 메시지 (단일 슬라이드)
+# 비교 행 — y만 지정 (가로 자동 배치), 여러 번 호출 가능
+b.compare_pair(y=110, item="항목1", before="기존", after="개선")
+b.compare_pair(y=144, item="항목2", before="기존", after="개선")
+
+# 단일 강조 메시지 슬라이드
 b.callout(text="핵심 메시지 한 줄", sub="부연 설명")
+
+# 결론 페이지 (선택, 대부분 사용 안 함) — 시트 mk_conclusion_detail 양식
+b.conclusion(metric="QR 1종", caption="**3대 부담 해소**",
+             heading="결론", eyebrow="CONCLUSION",
+             details=[{"label": "관리", "body": "..."},
+                      {"label": "일정", "body": "..."}])
+
+# 자유 텍스트 (큰 헤더, 라벨 등)
+b.text(x=40, y=110, w=300, h=24, content="자유 위치 **굵게**", size=14, bold=True)
 
 # 구분선
 b.divider(x=40, y=240, w=640, orange=False)
 ```
+
+> ★ **모든 콘텐츠 슬라이드에 eyebrow 권장**. 카테고리 라벨로 슬라이드 의미 명확화 (예: PROBLEM / COMPARE / ACTION PLAN / WORKFLOW / STATUS / CONCLUSION).
+> 표지(cover)에는 eyebrow 사용 안 함.
 
 토큰은 `import spigen_tokens as T`로 직접 사용 가능.
 - `T.CANVAS["margin"]`, `T.SPACING["card_gap"]`, `T.TYPO["heading"]`, `T.color("ORANGE")` 등.
@@ -284,34 +306,53 @@ lib.mk_decision_tree(oid, nodes={
 import sys, shutil
 
 # 필수 파일 복사
-for f in ["spigen_build.py", "spigen_lib.py", "spigen_models.py", "spigen_layout.py"]:
+for f in ["spigen_build.py", "spigen_lib.py", "spigen_models.py",
+          "spigen_layout.py", "spigen_tokens.py"]:
     shutil.copy2(f"/Users/harugury/.agents/skills/spigen-slides/{f}", f"/tmp/{f}")
 sys.path.insert(0, "/tmp")
 
-from spigen_build import SpigenBuilder
+from spigen_build import SpigenBuilder, load_pid, save_pid
 import spigen_lib as lib
 
-lib.set_theme("light")  # 테마 먼저 설정 (light 기본)
+BUILD_NAME = "my_deck"  # ← in-place 빌드용 PID 캐시 키 (덱마다 고유)
 
-b = SpigenBuilder("(PPT 제목)", theme="light")
+def build(theme):
+    lib.set_theme(theme)
+    pid = load_pid(BUILD_NAME, theme)
+    b = SpigenBuilder("(PPT 제목)", theme=theme, presentation_id=pid)
+    if pid is None:
+        save_pid(BUILD_NAME, theme, b.pid)
 
-# [1] 표지 — 항상 V5 커버 (템플릿 복사)
-b.cover(title="(제목)", subtitle="(부제)", date="2026. 05.")
+    # [1] 표지 — subtitle 사용 안 함 (V6: 표지 제목 2줄 이내)
+    b.cover(title="(제목 1줄)\n(제목 2줄)", date="2026. 05.")
 
-# [N] V4 컴포넌트 슬라이드
-oid, idx = b._next()                              # OID + 삽입 인덱스 취득
-lib.slide_base(oid, "슬라이드 제목", idx, b.reqs)  # 슬라이드 생성 + 헤더
-lib.mk_compare_rows(oid, rows=[...], reqs=b.reqs) # 컴포넌트 렌더링
+    # [2] 콘텐츠 슬라이드 — eyebrow 항상 명시 (★ V6 권장)
+    b.start_slide(heading="슬라이드 제목", eyebrow="CATEGORY")
+    b.card(x=40, y=110, w=200, h=180, label="01", title="...", body="...")
+    # ... 추가 빌딩 블록 자유 호출
 
-# [N] V5 단순 슬라이드 (checklist 등 필요 시)
-b.checklist(heading="...", items=[...])  # 내부에서 _next() 자동 호출
+    # [3] 체크리스트 — eyebrow 권장
+    b.checklist(heading="진행 현황", eyebrow="STATUS",
+                items=[("항목", True), ...])
 
-ok = b.flush()
-if ok:
-    print(f"완료: https://docs.google.com/presentation/d/{b.pid}/edit")
-else:
-    print("생성 실패")
+    # [4] 결론 (선택, 대부분 안 씀)
+    b.conclusion(metric="...", caption="...", heading="결론",
+                 eyebrow="CONCLUSION", details=[...])
+
+    ok = b.flush()
+    if ok:
+        print(f"[{theme}] {'NEW' if pid is None else 'UPDATE'} "
+              f"https://docs.google.com/presentation/d/{b.pid}/edit")
+
+build("dark")  # ← V6 default 테마. light는 사용자 명시 시에만.
 ```
+
+**V6 빌드 표준**
+- `theme="dark"` default — light는 사용자가 명시 요청 시에만
+- `subtitle` 표지에 사용 안 함 (제목만 2줄 이내)
+- 모든 콘텐츠 슬라이드에 `eyebrow` 권장 (카테고리 라벨)
+- in-place 모드 (`load_pid` / `save_pid`) — 같은 덱은 같은 URL에 누적 수정
+- 빌드 후 페르소나 검수 자동 호출 (default ON, 사용자가 "검수 생략" 명시 시 OFF)
 
 ```bash
 python3 /tmp/build_<name>.py
@@ -472,24 +513,24 @@ python3 /tmp/build_<name>.py
 > 메인 에이전트는 검수 종합 시 위 매트릭스대로 의견을 분류한다.
 > 영역 혼동(예: "헤더 좌표 일관성"을 기획자에게 묻기) 금지.
 
-### 흐름
+### 흐름 (기본 ON)
 
 ```
-사용자: "검수 부탁"
+빌드 완료 (spigen_build.py 실행 후)
   ↓
-[1] 빌드 결과 슬라이드 스크린샷/링크 준비
+[1] PPT 생성 확인 (완료 링크 추출)
 [2] 3종 페르소나 동시 호출 (병렬, 관찰만)
 [3] 메인 에이전트가 의견 종합 + 충돌 해결
     - 자동 룰 위반은 즉시 수정
     - 페르소나만의 의견은 자동 룰 위반 없으면 채택
     - 충돌 시 사용자 1회 문의
-[4] 1회 통합 수정 → 빌드 → 종료
+[4] 1회 통합 수정 (필요 시) → 종료
 ```
 
-### 호출 안 하는 경우 (default — 대부분)
+### 검수 생략하기 (사용자가 명시 거부할 때)
 
-- 빌드 후 사용자가 "검수 부탁" 같은 명시 요청 없으면 페르소나 호출 안 함
-- 결과만 공유하고 사용자 시각 점검에 맡김
+기본값은 **자동 검수 ON**입니다. 다음 표현으로 검수를 건너뜁니다:
+- "검수 생략", "검수 안 해도 돼", "skip review", "검수 빼고"
 
 ---
 

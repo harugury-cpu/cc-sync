@@ -48,7 +48,12 @@ b.two_col(
 # 3. 실행
 ok = b.flush()
 if ok:
-    print(f"완료: https://docs.google.com/presentation/d/{b.pid}/edit")
+    ppt_link = f"https://docs.google.com/presentation/d/{b.pid}/edit"
+    print(f"완료: {ppt_link}")
+    
+    # ★ V5.7 기본 ON: 페르소나 검수 자동 호출
+    # (사용자가 "검수 생략" 같이 명시 거부하지 않으면 검수 실행)
+    print("\n페르소나 검수를 시작합니다...")
 else:
     print("생성 실패")
 ```
