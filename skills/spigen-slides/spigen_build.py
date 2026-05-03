@@ -69,9 +69,9 @@ def clear_pid(name, theme=None):
 
 # ── 라이트 표지 템플릿 (KPI 기준) ────────────────────────────────
 LIGHT_TEMPLATE_ID  = "1BBG9PR6ZBsEABbJLhbUUfRMkgGYQtNMOWAmLQgPhr70"
-LIGHT_COVER_TITLE_OID = "g3d96284c9ce_0_1"
-LIGHT_COVER_META_OID  = "g3d96284c9ce_0_2"
-LIGHT_COVER_DATE_OID  = "g3d96284c9ce_0_3"
+LIGHT_COVER_TITLE_OID = "g3db629c31e0_0_75"   # V6.0.2: light template cover OID 갱신
+LIGHT_COVER_META_OID  = "g3db629c31e0_0_76"
+LIGHT_COVER_DATE_OID  = "g3db629c31e0_0_77"
 LIGHT_GUIDE_SLIDES    = [
     "test_rule",
     "test_flow",
