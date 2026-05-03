@@ -216,59 +216,67 @@ def _safe_size(h_avail: int, lines: int, start: int = 14) -> int:
 
 
 class SpigenBuilder:
-    def __init__(self, title, theme="dark", template="standard", presentation_id=None):
-        """템플릿을 복사해 새 프레젠테이션 생성. (V5.7: default dark)
+    def __init__(self, title, theme="dark", template="standard",
+                 presentation_id=None, custom_template_id=None):
+        """V6.1: cover OID 자동 매핑 + 가이드 슬라이드 자동 식별.
 
-        template="standard": 테마별 지정 템플릿 커버만 복사, 불필요 슬라이드 삭제.
-          theme="dark"  → 다크 템플릿 (default, V5.7)
-          theme="light" → KPI 라이트 템플릿 cover 기준 (사용자 명시 시에만)
-        template="kpi": 라이트 KPI 템플릿. cover + kpi_status + kpi_tasks.
+        다른 사용자 환경에서도 동작 — 템플릿이 변경돼도 OID 하드코딩 의존 X.
 
-        V5.8 in-place 모드:
-          presentation_id 가 주어지면 해당 파일에 직접 업데이트.
-          - 표지(첫 슬라이드)는 보존, 콘텐츠 슬라이드는 모두 삭제 후 재생성.
-          - 같은 URL 유지 — 사용자가 처음 만든 파일에 계속 누적 수정 가능.
+        Args:
+            title:               프레젠테이션 제목
+            theme:               "dark" (default V5.7) | "light"
+            template:            "standard" | "kpi" (KPI는 시트 OID 의존이 커서 자동화 X)
+            presentation_id:     in-place 업데이트 모드 (V5.8)
+            custom_template_id:  본인 템플릿 사용 (default 템플릿 무시) — 다른 사용자 공유 시 ★
+
+        Standard 모드 자동 매핑:
+            첫 슬라이드 = cover (보존, 텍스트박스 Y 정렬해 title/team/date 매핑)
+            나머지 슬라이드 = 가이드 시트 (모두 자동 deleteObject)
         """
         if theme not in COLORS:
             theme = "light"
-        if template == "kpi":
-            self._cover_oids = (KPI_COVER_TITLE_OID, KPI_COVER_META_OID, KPI_COVER_DATE_OID)
-        elif theme == "dark":
-            self._cover_oids = (DARK_COVER_TITLE_OID, DARK_COVER_TEAM_OID, DARK_COVER_META_OID)
-        else:
-            self._cover_oids = (LIGHT_COVER_TITLE_OID, LIGHT_COVER_META_OID, LIGHT_COVER_DATE_OID)
         self.c = COLORS[theme]
         self.reqs = []
         self._n = 0
         self.template = template
 
-        # V5.8 in-place 모드
-        if presentation_id:
-            self.pid = presentation_id
-            r = subprocess.run(
-                ["gws", "slides", "presentations", "get",
-                 "--params", json.dumps({"presentationId": presentation_id})],
-                capture_output=True, text=True)
-            if r.returncode != 0:
-                raise RuntimeError(f"기존 파일 조회 실패: {r.stderr or r.stdout}")
-            raw = r.stdout
-            ji = raw.find("{")
-            if ji < 0:
-                raise RuntimeError(f"기존 파일 응답 파싱 실패: {raw[:200]}")
-            data = json.loads(raw[ji:])
-            slides = data.get("slides", [])
-            # 표지(첫 슬라이드) 보존, 나머지 모두 삭제
-            for s in slides[1:]:
-                self.reqs.append({"deleteObject": {"objectId": s["objectId"]}})
+        # KPI 모드 — V6.1.1: cover + KPI 시트 element OID 자동 매핑
+        if template == "kpi":
+            if presentation_id:
+                self.pid = presentation_id
+            else:
+                tmpl_id = custom_template_id or KPI_TEMPLATE_ID
+                self.pid = self._copy_template(tmpl_id, title)
+            # cover (slide 0) + status (slide 1) + tasks (slide 2) element 자동 매핑.
+            # 그 외 슬라이드는 자동 삭제 (KPI_TEST_SLIDES 하드코드 대체).
+            self._discover_kpi_layout(self.pid)
             return
 
-        # 기본: 템플릿 복사 모드
-        if template == "kpi":
-            tmpl_id = KPI_TEMPLATE_ID
+        # Standard 모드 — V6.1 자동 매핑
+        if presentation_id:
+            # in-place: 기존 파일의 cover OID 동적 매핑
+            self.pid = presentation_id
+            cover_oids, other = self._autodiscover_cover(presentation_id)
+            self._cover_oids = cover_oids
+            for oid in other:
+                self.reqs.append({"deleteObject": {"objectId": oid}})
+            return
+
+        # 신규 빌드: 템플릿 복사 → cover OID 자동 매핑 → 가이드 자동 삭제
+        if custom_template_id:
+            tmpl_id = custom_template_id
         elif theme == "dark":
             tmpl_id = DARK_TEMPLATE_ID
         else:
             tmpl_id = LIGHT_TEMPLATE_ID
+        self.pid = self._copy_template(tmpl_id, title)
+        cover_oids, other = self._autodiscover_cover(self.pid)
+        self._cover_oids = cover_oids
+        for oid in other:
+            self.reqs.append({"deleteObject": {"objectId": oid}})
+
+    def _copy_template(self, tmpl_id, title):
+        """템플릿 복사 → 새 PRESENTATION_ID 반환."""
         r = subprocess.run(
             ["gws", "drive", "files", "copy",
              "--params", json.dumps({"fileId": tmpl_id}),
@@ -276,16 +284,202 @@ class SpigenBuilder:
             capture_output=True, text=True)
         if r.returncode != 0:
             raise RuntimeError(f"템플릿 복사 실패: {r.stderr or r.stdout}")
-        self.pid = json.loads(r.stdout)["id"]
-        if template == "kpi":
-            for oid in KPI_TEST_SLIDES:
-                self.reqs.append({"deleteObject": {"objectId": oid}})
-        elif theme == "dark":
-            for oid in DARK_GUIDE_SLIDES:
-                self.reqs.append({"deleteObject": {"objectId": oid}})
-        else:
-            for oid in LIGHT_GUIDE_SLIDES:
-                self.reqs.append({"deleteObject": {"objectId": oid}})
+        return json.loads(r.stdout)["id"]
+
+    def _autodiscover_cover(self, presentation_id):
+        """V6.1.1: cover slide 자동 분석 — size + X 좌표 기반 매핑.
+
+        cover slide 안 텍스트박스 식별 룰:
+          - 빈 텍스트박스(페이지번호 placeholder 등)는 제외
+          - title  : 폰트 크기가 가장 큰 박스 (보통 36pt)
+          - team   : 나머지 중 X 좌표 작은 쪽 (좌측 하단)
+          - date   : 나머지 중 X 좌표 큰 쪽 (우측 하단)
+
+        cover 외 슬라이드 OID 리스트도 반환.
+        Returns: (cover_oids: tuple of 3, other_slide_oids: list)
+        """
+        r = subprocess.run(
+            ["gws", "slides", "presentations", "get",
+             "--params", json.dumps({"presentationId": presentation_id})],
+            capture_output=True, text=True)
+        if r.returncode != 0:
+            raise RuntimeError(f"파일 조회 실패: {r.stderr or r.stdout}")
+        raw = r.stdout
+        ji = raw.find("{")
+        if ji < 0:
+            raise RuntimeError(f"응답 파싱 실패: {raw[:200]}")
+        data = json.loads(raw[ji:])
+        slides = data.get("slides", [])
+        if not slides:
+            raise RuntimeError("템플릿에 슬라이드가 없음 — 최소 cover 1장 필요")
+        cover = slides[0]
+        # cover slide 안 텍스트박스 추출 (빈 placeholder 제외)
+        text_boxes = []
+        for elem in cover.get("pageElements", []):
+            sh = elem.get("shape", {})
+            if "text" not in sh:
+                continue
+            # 콘텐츠 + 폰트 사이즈 추출
+            has_content = False
+            first_size = 0
+            for t in sh["text"].get("textElements", []):
+                tr = t.get("textRun")
+                if tr and tr.get("content", "").strip():
+                    has_content = True
+                    sz = tr.get("style", {}).get("fontSize", {}).get("magnitude", 0)
+                    if sz and not first_size:
+                        first_size = sz
+            if not has_content:
+                continue  # 빈 placeholder (페이지번호 등) 무시
+            tx = elem.get("transform", {})
+            x = tx.get("translateX", 0)
+            y = tx.get("translateY", 0)
+            text_boxes.append({
+                "oid": elem.get("objectId", ""),
+                "x": x, "y": y, "size": first_size,
+            })
+        if len(text_boxes) < 3:
+            raise RuntimeError(
+                f"cover slide의 (콘텐츠 있는) 텍스트박스가 3개 미만 "
+                f"({len(text_boxes)}개). 제목·부서·날짜 3개 필요. "
+                f"cover slide ID: {cover.get('objectId')}"
+            )
+        # title = 폰트 크기 가장 큰 것
+        title_box = max(text_boxes, key=lambda t: t["size"])
+        others = [t for t in text_boxes if t["oid"] != title_box["oid"]]
+        # team/date = 나머지 중 X 좌측 = team, 우측 = date
+        others.sort(key=lambda t: t["x"])
+        team_box = others[0]
+        date_box = others[1]
+        cover_oids = (title_box["oid"], team_box["oid"], date_box["oid"])
+        other_slide_oids = [s["objectId"] for s in slides[1:]]
+        return cover_oids, other_slide_oids
+
+    def _discover_kpi_layout(self, presentation_id):
+        """V6.1.1: KPI 모드 element OID 자동 매핑.
+
+        고정 인덱스:
+          slide 0 = cover  → cover_oids 자동 매핑 (title/team/date)
+          slide 1 = KPI status → eyebrow/title/top_tbl/detail_tbl 자동 매핑
+          slide 2 = KPI tasks  → eyebrow/title/tbl 자동 매핑
+
+        slide 3+ = 가이드/테스트 시트 → 자동 삭제
+
+        매핑 룰 (텍스트 내용 기반 분석 X):
+          - title  : 텍스트박스 중 폰트 크기 가장 큼 (보통 22pt)
+          - eyebrow: title 아닌 텍스트박스 중 Y 가장 작음
+          - tables : TABLE 타입 element를 Y 정렬, 첫 번째 = top_tbl, 두 번째 = detail_tbl
+        """
+        r = subprocess.run(
+            ["gws", "slides", "presentations", "get",
+             "--params", json.dumps({"presentationId": presentation_id})],
+            capture_output=True, text=True)
+        if r.returncode != 0:
+            raise RuntimeError(f"KPI 파일 조회 실패: {r.stderr or r.stdout}")
+        raw = r.stdout
+        ji = raw.find("{")
+        if ji < 0:
+            raise RuntimeError(f"KPI 응답 파싱 실패: {raw[:200]}")
+        data = json.loads(raw[ji:])
+        slides = data.get("slides", [])
+        if len(slides) < 3:
+            raise RuntimeError(
+                f"KPI 템플릿 슬라이드 부족 ({len(slides)}개). "
+                f"slide 0=cover, 1=status, 2=tasks 최소 3장 필요."
+            )
+
+        # cover (slide 0) 자동 매핑 — _autodiscover_cover와 동일 룰
+        cover = slides[0]
+        cover_text_boxes = []
+        for elem in cover.get("pageElements", []):
+            sh = elem.get("shape", {})
+            if "text" not in sh:
+                continue
+            has_content = False
+            first_size = 0
+            for t in sh["text"].get("textElements", []):
+                tr = t.get("textRun")
+                if tr and tr.get("content", "").strip():
+                    has_content = True
+                    sz = tr.get("style", {}).get("fontSize", {}).get("magnitude", 0)
+                    if sz and not first_size:
+                        first_size = sz
+            if not has_content:
+                continue
+            tx = elem.get("transform", {})
+            cover_text_boxes.append({
+                "oid": elem.get("objectId", ""),
+                "x": tx.get("translateX", 0),
+                "size": first_size,
+            })
+        if len(cover_text_boxes) < 3:
+            raise RuntimeError(f"KPI cover 텍스트박스 3개 미만 ({len(cover_text_boxes)}개)")
+        title_b = max(cover_text_boxes, key=lambda t: t["size"])
+        others = [t for t in cover_text_boxes if t["oid"] != title_b["oid"]]
+        others.sort(key=lambda t: t["x"])
+        self._cover_oids = (title_b["oid"], others[0]["oid"], others[1]["oid"])
+
+        # status slide (slide 1) element 매핑
+        status_layout = self._extract_kpi_slide_layout(slides[1], slide_label="status")
+        # tasks slide (slide 2) element 매핑
+        tasks_layout = self._extract_kpi_slide_layout(slides[2], slide_label="tasks")
+
+        self._kpi_oids = {
+            "status_eyebrow": status_layout["eyebrow"],
+            "status_title": status_layout["title"],
+            "status_top_tbl": status_layout["tables"][0] if status_layout["tables"] else None,
+            "status_detail_tbl": status_layout["tables"][1] if len(status_layout["tables"]) > 1 else None,
+            "tasks_eyebrow": tasks_layout["eyebrow"],
+            "tasks_title": tasks_layout["title"],
+            "tasks_tbl": tasks_layout["tables"][0] if tasks_layout["tables"] else None,
+        }
+
+        # slide 3+ 자동 삭제 (KPI_TEST_SLIDES 하드코드 대체)
+        for s in slides[3:]:
+            self.reqs.append({"deleteObject": {"objectId": s["objectId"]}})
+
+    def _extract_kpi_slide_layout(self, slide, slide_label=""):
+        """KPI status/tasks slide 안 element 자동 매핑.
+        Returns: {"eyebrow": oid, "title": oid, "tables": [oid, ...]}
+        """
+        text_boxes = []
+        tables = []
+        for e in slide.get("pageElements", []):
+            tx = e.get("transform", {})
+            y = tx.get("translateY", 0)
+            tbl = e.get("table")
+            sh = e.get("shape", {})
+            if tbl:
+                tables.append((y, e.get("objectId", "")))
+                continue
+            if "text" not in sh:
+                continue
+            sz = 0
+            has_content = False
+            for t in sh["text"].get("textElements", []):
+                tr = t.get("textRun")
+                if tr and tr.get("content", "").strip():
+                    has_content = True
+                    s = tr.get("style", {}).get("fontSize", {}).get("magnitude", 0)
+                    if s and not sz:
+                        sz = s
+            if has_content:
+                text_boxes.append({"oid": e.get("objectId", ""), "y": y, "size": sz})
+        if len(text_boxes) < 2:
+            raise RuntimeError(
+                f"KPI {slide_label} slide 텍스트박스 2개 미만 ({len(text_boxes)}개)"
+            )
+        if not tables:
+            raise RuntimeError(f"KPI {slide_label} slide TABLE 부재")
+        title_b = max(text_boxes, key=lambda t: t["size"])
+        eb_candidates = [t for t in text_boxes if t["oid"] != title_b["oid"]]
+        eyebrow_b = min(eb_candidates, key=lambda t: t["y"])
+        tables.sort()
+        return {
+            "eyebrow": eyebrow_b["oid"],
+            "title": title_b["oid"],
+            "tables": [oid for _, oid in tables],
+        }
 
     def _next(self):
         """콘텐츠 슬라이드용 (oid, idx) 반환 후 카운터 증가."""
@@ -755,16 +949,17 @@ class SpigenBuilder:
         """
         if self.template != "kpi":
             raise ValueError("kpi_status()는 template='kpi'에서만 사용 가능합니다.")
-        self._replace_text(KPI_STATUS_EYEBROW, eyebrow)
-        self._replace_text(KPI_STATUS_TITLE, title)
+        # V6.1.1: __init__에서 자동 매핑된 self._kpi_oids 사용
+        self._replace_text(self._kpi_oids["status_eyebrow"], eyebrow)
+        self._replace_text(self._kpi_oids["status_title"], title)
         for ri, row in enumerate((top_rows or [])[:3]):
             for ci, val in enumerate(row[:9]):
                 if ri == 1 and ci == 0:
                     continue  # [2,0] rs=2 merge가 row3 col0을 cover — 쓰기 불가
-                self._tbl_cell(KPI_STATUS_TOP_TBL, ri + 2, ci, val)
+                self._tbl_cell(self._kpi_oids["status_top_tbl"], ri + 2, ci, val)
         for ri, row in enumerate((detail_rows or [])[:3]):
             for ci, val in enumerate(row[:4]):
-                self._tbl_cell(KPI_STATUS_DTL_TBL, ri + 1, ci, val)
+                self._tbl_cell(self._kpi_oids["status_detail_tbl"], ri + 1, ci, val)
 
     def kpi_tasks(self, title="2. 핵심과제", eyebrow="2025", rows=None):
         """주요 과제 슬라이드: 템플릿 슬라이드 텍스트 교체. template='kpi' 전용.
@@ -772,13 +967,14 @@ class SpigenBuilder:
         """
         if self.template != "kpi":
             raise ValueError("kpi_tasks()는 template='kpi'에서만 사용 가능합니다.")
-        self._replace_text(KPI_TASKS_EYEBROW, eyebrow)
-        self._replace_text(KPI_TASKS_TITLE, title)
+        # V6.1.1: 자동 매핑된 self._kpi_oids 사용
+        self._replace_text(self._kpi_oids["tasks_eyebrow"], eyebrow)
+        self._replace_text(self._kpi_oids["tasks_title"], title)
         for ri, row in enumerate((rows or [])[:3]):
             for ci, val in enumerate(row[:4]):
                 if ri == 1 and ci == 0:
                     continue  # [1,0] rowSpan=2 → row 2 col 0은 covered cell
-                self._tbl_cell(KPI_TASKS_TBL, ri + 1, ci, val)
+                self._tbl_cell(self._kpi_oids["tasks_tbl"], ri + 1, ci, val)
 
     # ── 빌딩 블록 (자유 레이아웃) ─────────────────────────────────
     # 시트 디자인을 "참고만" 하면서 콘텐츠 구조에 맞게 자유 조합.
