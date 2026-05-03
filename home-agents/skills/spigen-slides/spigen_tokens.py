@@ -139,7 +139,8 @@ HEADER = {
     # 모든 텍스트박스 valign=MIDDLE 일관성. 박스 가운데 = 텍스트 시각 위치.
     # eyebrow + title 동시 사용 (start_slide에 eyebrow 인자 전달 시)
     "eyebrow": {
-        "x": 40, "y": 32, "w": 320, "h": 10,
+        # V6.2: 자유 빌딩 블록 마진 48과 정렬 (헤더-본문 좌측 X 통일)
+        "x": 48, "y": 32, "w": 312, "h": 10,
         "valign": "MIDDLE",
         "font_size": 8, "bold": True,
         "color_token": "ORANGE",
@@ -147,14 +148,15 @@ HEADER = {
     "title_with_eyebrow": {
         # eyebrow와 시각 영역이 겹치지 않도록 박스 가운데 = y=59
         # (22pt 텍스트 시각 영역 y=48~70, eyebrow 시각 영역 y=33~41 → 7pt 간격)
-        "x": 40, "y": 46, "w": 640, "h": 26,
+        # V6.2: x 40→48, w 640→624 (자유 블록 마진과 정렬)
+        "x": 48, "y": 46, "w": 624, "h": 26,
         "valign": "MIDDLE",
         "font_size": 22, "bold": True,
         "color_token": "TEXT",
     },
     # eyebrow 없이 title만 있을 때 (start_slide에 heading만 전달 시)
     "title_only": {
-        "x": 40, "y": 20, "w": 640, "h": 38,
+        "x": 48, "y": 20, "w": 624, "h": 38,
         "valign": "MIDDLE",
         "font_size": 22, "bold": True,
         "color_token": "TEXT",
