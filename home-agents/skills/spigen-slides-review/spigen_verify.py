@@ -153,6 +153,12 @@ def verify_cover_contract(slide, idx):
         "g3e66e3c2180_1_3",
         "g3e66e3c2180_1_4",
     }
+    template_cover_dark_v3 = {
+        "g3db53c0022e_0_1",
+        "g3db53c0022e_0_2",
+        "g3db53c0022e_0_3",
+        "g3db53c0022e_0_4",
+    }
     template_cover_light = {
         "g8f47d50608_1_1",
         "g8f47d50608_1_3",
@@ -166,6 +172,7 @@ def verify_cover_contract(slide, idx):
     if (
         template_cover_dark.issubset(oids)
         or template_cover_dark_v2.issubset(oids)
+        or template_cover_dark_v3.issubset(oids)
         or template_cover_light.issubset(oids)
     ):
         return [("PASS", "cover_contract: template cover IDs detected")]

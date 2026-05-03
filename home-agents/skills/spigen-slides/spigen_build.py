@@ -6,6 +6,7 @@ spigen_build.py — Spigen Slides v5.4
 헤더/색/간격 토큰: spigen_tokens 참조
 """
 import os, subprocess, json, uuid
+from datetime import datetime
 import spigen_tokens as _T
 
 
@@ -114,6 +115,10 @@ KPI_TASKS_TBL       = "guide_kpi_key_tasks_light_kpi_task_tbl"
 
 def _uid():
     return "ob_" + uuid.uuid4().hex[:12]
+
+
+def _today_cover_date():
+    return datetime.now().strftime("%Y. %m. %d.")
 
 
 # V6.0: Spigen Design System 컬러 토큰 직접 동기화
@@ -695,7 +700,7 @@ class SpigenBuilder:
         ]
 
     def cover(self, title, subtitle="", dept="디자인부문ㅣ패키지디자인팀",
-              name="한원진 담당", date="2026. 04."):
+              name="한원진 담당", date=None):
         """표지: 템플릿 커버 슬라이드의 텍스트를 교체.
 
         V5.9: title + subtitle 합계 2줄 이내 강제.
@@ -716,6 +721,7 @@ class SpigenBuilder:
         title_oid, meta_oid, date_oid = self._cover_oids
         title_text = f"{title}\n{subtitle}" if subtitle else title
         meta_text  = f"{dept}\n{name}"
+        date_text = date if date is not None else _today_cover_date()
         # V5.9: 표지 표준 폰트 사이즈 (light template 기준 — dark는 가이드 덱이라 14.5)
         # 일반 표지 표준: title 36 / meta 12 / date 12 (양 테마 통일)
         title_size = 36
@@ -723,7 +729,7 @@ class SpigenBuilder:
         entries = [
             (title_oid, title_text, title_size, True),
             (meta_oid,  meta_text,  meta_size,  False),
-            (date_oid,  date,       meta_size,  False),
+            (date_oid,  date_text,  meta_size,  False),
         ]
         for oid, text, size, bold in entries:
             self.reqs += [

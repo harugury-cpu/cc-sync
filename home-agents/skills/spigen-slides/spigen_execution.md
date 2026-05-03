@@ -22,16 +22,22 @@ shutil.copy2("/Users/harugury/.agents/skills/spigen-slides/spigen_build.py",
 sys.path.insert(0, "/tmp")
 from spigen_build import SpigenBuilder
 
-# 1. 템플릿 복사로 새 프레젠테이션 생성
-b = SpigenBuilder("(PPT 제목)", theme="light")
+from spigen_build import SpigenBuilder, load_pid, save_pid
+
+BUILD_NAME = "my_deck"
+
+# 1. in-place 모드로 프레젠테이션 생성/수정
+pid = load_pid(BUILD_NAME, "light")
+b = SpigenBuilder("(PPT 제목)", theme="light", presentation_id=pid)
+if pid is None:
+    save_pid(BUILD_NAME, "light", b.pid)
 
 # 2. 슬라이드 추가 (승인된 구성대로)
 # 표지 — 항상 첫 번째, 생략 불가
 # light: KPI 라이트 템플릿 cover 복사 / dark: 다크 템플릿 cover 복사
 b.cover(
     title="(제목)",
-    subtitle="(부제)",
-    date="2026. 04.")
+    subtitle="(부제)")  # date 생략 시 오늘 날짜(yyyy. mm. dd.) 자동 입력
 
 # 콘텐츠 슬라이드 — oid/idx 없이 호출, 순서대로 자동 배치
 b.slide(
@@ -49,14 +55,26 @@ b.two_col(
 ok = b.flush()
 if ok:
     ppt_link = f"https://docs.google.com/presentation/d/{b.pid}/edit"
-    print(f"완료: {ppt_link}")
-    
-    # ★ V5.7 기본 ON: 페르소나 검수 자동 호출
-    # (사용자가 "검수 생략" 같이 명시 거부하지 않으면 검수 실행)
-    print("\n페르소나 검수를 시작합니다...")
+    print(f"빌드 완료: {ppt_link}")
+
+    # ★ PID 안정성 게이트 (수정 단계 기본 강제)
+    # python3 ~/.agents/skills/spigen-slides/spigen_pid_guard.py expect-stable BUILD_NAME light
+    # python3 /tmp/build_<name>.py
+    # python3 ~/.agents/skills/spigen-slides/spigen_pid_guard.py assert-stable BUILD_NAME light
+    # 기존 PID가 있는데 링크가 바뀌면 실패 처리
+
+    # ★ 검증은 별도 스킬에서 실행
+    # 이 제작 스킬에서는 review gate를 자동 실행하지 않는다.
+    # 완료 링크와 요약을 전달한 뒤 "2. 검증을 실행할까요?"를 묻는다.
+    # 사용자가 검증을 요청하면 spigen-slides-review 스킬로 진행한다.
 else:
     print("생성 실패")
 ```
+
+수정 단계 필수 규칙:
+- `clear_pid()` 사용 금지
+- 같은 `BUILD_NAME` 작업은 같은 URL에 누적 수정
+- 사용자가 새 덱을 명시적으로 요구한 경우에만 새 PID 허용
 
 ---
 
@@ -72,7 +90,7 @@ else:
 | `subtitle` | 부제 (생략 가능) | `""` |
 | `dept` | 부서명 | `"디자인부문ㅣ패키지디자인팀"` |
 | `name` | 담당자명 | `"한원진 담당"` |
-| `date` | 날짜 | `"2026. 04."` |
+| `date` | 날짜 | 생략 시 오늘 날짜 자동 입력 (`yyyy. mm. dd.`) |
 
 ### `slide(heading, body, body_size)`
 
@@ -142,7 +160,7 @@ from spigen_build import SpigenBuilder
 
 b = SpigenBuilder("(PPT 제목)", theme="light", template="kpi")
 
-b.cover(title="(제목)", subtitle="(부제)", date="2026. 04.")
+b.cover(title="(제목)", subtitle="(부제)")
 
 b.kpi_status(
     title="1. KPI 진행 현황",
@@ -211,5 +229,18 @@ FAIL 시: 오류 메시지 확인 → 해당 슬라이드 수정 → 재실행.
 ## 완료 보고
 
 ```
-완료: https://docs.google.com/presentation/d/<ID>/edit
+완성: https://docs.google.com/presentation/d/<ID>/edit
 ```
+
+빌드가 성공하면 제작 결과를 요약하고 검증 실행 여부를 묻는다.
+
+```text
+완성: https://docs.google.com/presentation/d/<ID>/edit
+요약: (생성한 주요 내용)
+
+2. 검증을 실행할까요?
+```
+
+- 검증을 자동 실행하지 않는다.
+- 사용자가 "검증", "검수", "2번", "검증 실행"을 명시하면 `spigen-slides-review` 스킬을 사용한다.
+- 검증 결과가 불통과여도 이 제작 스킬에서 반복 수정 루프를 시작하지 않는다.

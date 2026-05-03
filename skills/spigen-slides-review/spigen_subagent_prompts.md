@@ -1,9 +1,11 @@
 # spigen_subagent_prompts.md — 검수 서브에이전트 프롬프트 원문
 > 메인 에이전트가 Agent 도구로 검수 서브에이전트를 spawn할 때 사용하는 프롬프트 원문.
 
-> ⚠️ **기본 ON 검수 모드 (V5.7)** — 모든 빌드 후 자동 호출.
-> 기본 흐름: 생성 → `spigen_verify.py` → 페르소나 검수 → 통합 수정 → 완료.
+> ⚠️ **기본 ON 검수 모드 (V6.1.1)** — 모든 빌드 후 자동 호출.
+> 기본 흐름: 생성 → `spigen_review_gate.py init` → 페르소나 검수 → `spigen_review_gate.py status --require-pass` → `cleanup` → 완료.
 > 사용자가 "검수 생략" / "skip review" 같이 명시 거부할 때만 OFF.
+> 수정 작업에서는 이 흐름 전에 `spigen_pid_guard.py` 로 기존 PID 유지 여부를 먼저 확인한다.
+> `init` 이후 슬라이드가 수정되면 이전 PASS는 자동 무효이며, `status` 는 실패해야 한다.
 
 ---
 
@@ -27,13 +29,12 @@
    사용자에게 1회 문의 후 결정. 메인 임의 결정 금지.
 ```
 
-### 호출 트리거 키워드
+### 호출 트리거
 
-다음 표현이 사용자 메시지에 포함될 때만 호출:
-- "검수 부탁", "페르소나 검토", "리뷰 봐줘", "review"
-- "기획자 / 디자이너 / 청중 관점에서 봐줘"
-
-호출 안 하면 결과만 공유하고 사용자 시각 점검에 맡긴다.
+- 기본값은 **항상 호출** 이다.
+- 사용자가 "검수 생략", "검수 안 해도 돼", "skip review", "검수 빼고" 를 명시한 경우에만 호출하지 않는다.
+- 메인 에이전트는 검수 결과를 `/tmp/spigen_review_<PRESENTATION_ID>/reports/*.md` 에 저장하고
+  `spigen_review_gate.py record ...` 로 상태를 기록해야 한다.
 
 ---
 
@@ -46,6 +47,7 @@
 - STAGE0_SOURCE_FACTS   (소스 분석 결과)
 - STAGE2_OUTLINE        (사용자 승인 완료 아웃라인)
 - COMPONENT_BRIEF       (Stage3 컴포넌트 매핑 결과)
+- REVIEW_REPORT_PATH    (/tmp/spigen_review_<ID>/reports/planner.md)
 ```
 
 ```
@@ -127,6 +129,7 @@ Stage3 컴포넌트 매핑 브리프:
 결과물만 본다. 측정 가능한 규격 위반만 잡는다. 미감(리듬·반복감·심미성)은 판정에 넣지 않는다.
 
 슬라이드 ID: {{PRESENTATION_ID}}
+리포트 저장 경로: {{REVIEW_REPORT_PATH}}
 
 ---
 
@@ -136,13 +139,13 @@ Stage3 컴포넌트 매핑 브리프:
   gws slides presentations get --params '{"presentationId":"{{PRESENTATION_ID}}"}' 2>/dev/null
 
 **B. 자동 검증 실행 (필수 — 생략 불가)**
-  python3 ~/.agents/skills/spigen-slides/spigen_verify.py {{PRESENTATION_ID}}
+  python3 ~/.agents/skills/spigen-slides-review/spigen_verify.py {{PRESENTATION_ID}}
   → 결과 전체를 보고서에 그대로 첨부한다.
 
 **C. 썸네일 시각 검사 (필수 — 생략 불가)**
   ls /tmp/spigen_review_{{PRESENTATION_ID}}/thumbnails/
   → 썸네일이 없으면 먼저 생성한다:
-    python3 ~/.agents/skills/spigen-slides/spigen_postgen_hook.py {{PRESENTATION_ID}} --audience "검수" --purpose "디자인 검수"
+    python3 ~/.agents/skills/spigen-slides-review/spigen_postgen_hook.py {{PRESENTATION_ID}} --audience "검수" --purpose "디자인 검수"
   → 존재하는 썸네일 파일(slide_1.png ~ slide_N.png)을 Read 도구로 하나씩 열어 시각적으로 확인한다.
   → 확인 항목: 텍스트 줄바꿈 / 텍스트 클리핑 / 요소 미표시 / 배경과 구분 안 되는 텍스트
 
@@ -213,6 +216,7 @@ spigen_verify.py 결과:
 청중: {{Q2}}
 목적: {{Q4}}
 슬라이드 ID: {{PRESENTATION_ID}}
+리포트 저장 경로: {{REVIEW_REPORT_PATH}}
 
 ⚠️ 이 검수는 PASS/FAIL 판정을 내리지 않는다. 피드백만 제공한다.
 

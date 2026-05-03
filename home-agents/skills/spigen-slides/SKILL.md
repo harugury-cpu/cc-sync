@@ -11,7 +11,7 @@ metadata:
 # spigen-slides
 
 > 컬러 토큰 출처: `~/Downloads/Spigen Dark|Light Design System/colors_and_type.css`
-> 빌더가 디자인 룰을 자동 강제. 페르소나 검수는 빌드 후 필수 자동 호출.
+> 빌더가 디자인 룰을 자동 강제. 페르소나 검수는 별도 `spigen-slides-review` 스킬에서 사용자가 요청할 때 실행한다.
 
 ## 핵심 원칙
 
@@ -42,6 +42,7 @@ metadata:
 Step 1. 내용 수집
 Step 2. 슬라이드 구성 제안 → 사용자 승인
 Step 3. 생성 + 링크 공유
+Step 4. 검증 실행 여부 질문
 ```
 
 ---
@@ -128,6 +129,7 @@ Step 2 진입 전 아래를 내부적으로 수행한다. 사용자에게 출력
 - **클로징 없음**: 마지막은 콘텐츠 슬라이드로 끝낸다.
 - **기본 테마: dark** — `theme="dark"` 가 default. light는 사용자가 "라이트로", "light theme" 같이 명시 요청 시에만 사용.
 - **표지 제목 2줄 이내**: `cover(title=...)` 의 `\n` 개수 1개 이하. 3줄 이상 시 자동 트림 + 경고.
+- **표지 날짜 자동 반영**: `cover()`의 `date`를 생략하면 생성 시점의 오늘 날짜를 `yyyy. mm. dd.` 형식으로 자동 입력한다. 사용자가 특정 날짜를 명시한 경우에만 `date="..."`를 넘긴다.
 - **테마 선택**: `theme="light"` 또는 `theme="dark"` — 각각 별도 지정 템플릿 cover 사용.
 - **light cover 기준**: KPI 라이트 템플릿 `1BBG9PR6ZBsEABbJLhbUUfRMkgGYQtNMOWAmLQgPhr70`
 - **dark cover 기준**: 다크 가이드 템플릿 `1HJbTWXPCr38gXDQuarglSLrkheDQXAojlrYUKcfVgAc`
@@ -320,7 +322,7 @@ def build(theme):
         save_pid(BUILD_NAME, theme, b.pid)
 
     # [1] 표지 — subtitle 사용 안 함 (V6: 표지 제목 2줄 이내)
-    b.cover(title="(제목 1줄)\n(제목 2줄)", date="2026. 05.")
+    b.cover(title="(제목 1줄)\n(제목 2줄)")  # date 생략 시 오늘 날짜 자동 입력
 
     # [2] 콘텐츠 슬라이드 — eyebrow 항상 명시 (★ 권장)
     b.start_slide(heading="슬라이드 제목", eyebrow="CATEGORY")
@@ -348,7 +350,23 @@ build("dark")  # ← default 테마. light는 사용자 명시 시에만.
 - `subtitle` 표지에 사용 안 함 (제목만 2줄 이내)
 - 모든 콘텐츠 슬라이드에 `eyebrow` 권장 (카테고리 라벨)
 - in-place 모드 (`load_pid` / `save_pid`) — 같은 덱은 같은 URL에 누적 수정
-- 빌드 후 페르소나 검수 자동 호출 (default ON, 사용자가 "검수 생략" 명시 시 OFF)
+- 빌드 후 검증은 자동 호출하지 않음 — 완료 내용과 링크를 전달한 뒤 `2. 검증을 실행할까요?` 를 묻는다
+- `clear_pid()` 사용 금지 — 사용자가 명시적으로 새 덱을 요구하지 않은 한 PID 캐시를 지우면 안 된다
+
+### In-Place 게이트
+
+수정 작업에서는 **PID 안정성 게이트**를 먼저 통과해야 한다.
+
+```bash
+python3 ~/.agents/skills/spigen-slides/spigen_pid_guard.py expect-stable <BUILD_NAME> dark
+python3 /tmp/build_<name>.py
+python3 ~/.agents/skills/spigen-slides/spigen_pid_guard.py assert-stable <BUILD_NAME> dark
+```
+
+규칙:
+- 기존 PID가 있는데 build 후 PID가 바뀌면 실패
+- 실패 시 완료 보고 금지
+- 사용자가 `"새 덱으로"`, `"새 링크로"`, `"다시 새로 생성"` 을 명시한 경우에만 `--allow-new` 허용
 
 ```bash
 python3 /tmp/build_<name>.py
@@ -447,97 +465,24 @@ python3 /tmp/build_<name>.py
 
 ---
 
-## 페르소나 검수 (필수 자동 호출)
+## 생성 후 검증 제안
 
-> ★ **모든 빌드 후 즉시 자동 진행 — 사용자가 명시 거부하지 않은 모든 케이스에 강제 적용.**
-> 빌드 완료 메시지 출력 후 다음 응답에서 곧바로 페르소나 검수 단계로 진입한다.
-> "다음 작업 알려주세요" 같은 대기 응답으로 끝내지 않는다.
+이 스킬은 **덱 제작까지만 담당**한다. 빌드 완료 후에는 검증을 자동 실행하지 않는다.
 
-### 빌드 직후 강제 동작
+완료 보고는 아래 구조로 한다:
 
 ```
-[1] 빌드 결과 URL 출력
-[2] 즉시 → 3종 페르소나 검수 자동 진행 (별도 사용자 요청 없이)
-    - 검수 대상: 빌드 출력의 PPT URL
-    - 검수 기준: 본 SKILL.md 페르소나 검수 섹션 + spigen_subagent_prompts.md 영역 매트릭스
-    - 자동 강제 룰(컬러·좌표·폰트 위계·콘텐츠 영역·표지 2줄)은 빌더 코드가 처리 — 페르소나는 텍스트·메시지·청중 차원만 검수
-[3] 의견 종합 + 충돌 시 사용자 1회 문의
-[4] 1회 통합 수정 → 종료
+완성: <Google Slides URL>
+요약: (생성한 주요 내용 2~3줄)
+
+2. 검증을 실행할까요?
+검증을 실행하면 `spigen-slides-review` 스킬로 자동 검증과 3종 에이전트 검수를 진행합니다.
 ```
 
-### 검수 생략 트리거 (사용자 명시 시에만 OFF)
-
-다음 표현이 사용자 메시지에 명시적으로 있어야만 OFF:
-- "검수 생략", "검수 안 해도 돼", "skip review", "검수 빼고"
-
-→ 위 표현이 없으면 **반드시 자동 검수 진행**. "잘 됐는지 보세요" 같은 모호한 표현으로 검수 생략하지 않는다.
-
-### 4조건 운영 룰 (반드시 준수)
-
-```
-① 관찰만 — 수정안 강제 X
-   페르소나는 "이 부분이 [관점]에서 어색하다" 형태로 관찰만 출력.
-   "이렇게 바꿔라" 같은 강제 수정안 금지.
-
-② 우선순위 명시 — 자동 룰 > 페르소나 의견 > 사용자 명시
-   디자인 금지 규칙(spigen_render_rules)과 페르소나 의견 충돌 시
-   자동 룰이 항상 우선. 페르소나 의견은 자동 룰을 위반하지 않는 범위 내에서만 채택.
-
-③ 1회 호출 + 1회 통합 수정 + 종료
-   페르소나 호출 → 의견 종합 → 1회 일괄 수정 → 종료.
-   수정 후 페르소나 재호출 금지 (반복 루프 방지).
-
-④ 충돌 항목은 사용자에게 1회 문의 (옵션)
-   페르소나 의견이 서로 충돌하고 자동 룰로도 결정 못하면
-   사용자에게 1회 문의 후 결정. 메인 에이전트 임의 결정 금지.
-```
-
-### 페르소나 종류 (`spigen_subagent_prompts.md` 참조)
-
-- **기획자** — 메시지 구조·내용 일관성 검수
-- **디자이너** — 시각 위계·여백·정렬 검수
-- **대상(청중)** — 청중 관점 이해도·전달력 검수
-
-### 영역 매트릭스 (영역 혼동 금지)
-
-| 검수 항목 | 기획자 | 디자이너 | 청중 |
-|---|:---:|:---:|:---:|
-| 슬라이드별 핵심 메시지 | ★ | | |
-| 메시지 일관성 / 카테고리 라벨링 | ★ | | |
-| 정보 흐름 / 시간 순서 / 인과관계 | ★ | | |
-| 콘텐츠 적합도 / 슬롯 매칭 | ★ | | |
-| 시각 위계 (강조 카드, 폰트 크기) | | ★ | |
-| 좌표 일관성 / 정렬 / 여백 | | ★ | |
-| **카드 내부 정렬·시각 균형** (텍스트가 카드 가운데에 보이는가) | | ★ | |
-| **페이지 간 폰트 위계 일관성** (한 페이지만 갑자기 폰트 큼/작음 검출) | | ★ | |
-| **최소 변경 원칙** (작은 여백은 좌표만 미세 조정, 레이아웃 자체 바꾸지 말 것) | | ★ | |
-| 색상 / 톤 / 디자인 시스템 적합성 | | ★ | |
-| 타이포 / line spacing / 가독성 | | ★ | |
-| 첫인상 / 즉시 이해 가능성 | | | ★ |
-| 용어 적절성 / 전문 용어 부담 | | | ★ |
-| 전달력 / 청중 입장 |  |  | ★ |
-
-> 메인 에이전트는 검수 종합 시 위 매트릭스대로 의견을 분류한다.
-> 영역 혼동(예: "헤더 좌표 일관성"을 기획자에게 묻기) 금지.
-
-### 흐름 (기본 ON)
-
-```
-빌드 완료 (spigen_build.py 실행 후)
-  ↓
-[1] PPT 생성 확인 (완료 링크 추출)
-[2] 3종 페르소나 동시 호출 (병렬, 관찰만)
-[3] 메인 에이전트가 의견 종합 + 충돌 해결
-    - 자동 룰 위반은 즉시 수정
-    - 페르소나만의 의견은 자동 룰 위반 없으면 채택
-    - 충돌 시 사용자 1회 문의
-[4] 1회 통합 수정 (필요 시) → 종료
-```
-
-### 검수 생략하기 (사용자가 명시 거부할 때)
-
-기본값은 **자동 검수 ON**입니다. 다음 표현으로 검수를 건너뜁니다:
-- "검수 생략", "검수 안 해도 돼", "skip review", "검수 빼고"
+중요:
+- 사용자가 "검증해줘", "검수해줘", "2번", "검증 실행"처럼 명시하기 전에는 review gate를 실행하지 않는다.
+- 이 스킬에서 `spigen_review_gate.py init/status/cleanup`을 실행하지 않는다.
+- 검증은 별도 스킬 `spigen-slides-review`의 책임이다.
 
 ---
 
@@ -548,10 +493,9 @@ python3 /tmp/build_<name>.py
 | `spigen_build.py` | 슬라이드 빌더 (cover / slide / two_col / start_slide / 빌딩 블록 / 자동 강제 룰) |
 | `spigen_lib.py` | mk_* 컴포넌트 라이브러리 + THEME_TOKENS |
 | `spigen_tokens.py` | 디자인 토큰 (HEADER / SHEET_GEOM / SPACING / TYPO / FONT_HIERARCHY / EMPHASIS) |
-| `spigen_subagent_prompts.md` | 페르소나 검수 프롬프트 + 영역 매트릭스 |
-| `spigen_review_checklist.md` | 빌드 후 점검 체크리스트 |
+| `spigen_pid_guard.py` | 수정 모드 PID 안전성 확인 (expect-stable / assert-stable) |
 | `spigen_planning.md` | Step 1~2 기획 가이드 |
 | `spigen_execution.md` | Step 3 실행 코드 템플릿 |
 | `spigen_component_gallery.md` | 컴포넌트 인벤토리 |
 
-> 디자인 룰은 빌더 코드(`spigen_build.py` / `spigen_lib.py` / `spigen_tokens.py`)가 자동 강제. 코드로 못 잡는 텍스트·메시지·청중 차원 룰만 `SKILL.md` 디자인 금지 9카테고리 + `spigen_subagent_prompts.md` 페르소나 영역 매트릭스에 명시.
+> 디자인 룰은 빌더 코드(`spigen_build.py` / `spigen_lib.py` / `spigen_tokens.py`)가 자동 강제. 코드로 못 잡는 텍스트·메시지·청중 차원 룰은 별도 `spigen-slides-review` 스킬의 페르소나 영역 매트릭스에서 검수한다.
