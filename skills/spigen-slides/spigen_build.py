@@ -947,6 +947,44 @@ class SpigenBuilder:
             # V5.8: card title 위계(10.5)와 일관 (13→10.5)
             self._style(txt, 10.5, color=self.c["dim"] if done else self.c["fg"])
 
+    def numbered_steps(self, heading, items, eyebrow=""):
+        """순서 안내 슬라이드 — 01-NN 숫자 라벨 + 항목 텍스트.
+
+        의도: "이 순서대로 따라해라". checklist(점검)와 의도 분리.
+
+        헬퍼 선택 가이드:
+            - "방법", "순서", "단계", "절차", "흐름" 표현 → 이 헬퍼 (numbered_steps)
+            - "체크리스트", "점검", "확인 항목" 표현 → checklist
+            - 사용자가 마크가 아닌 진행 순서를 보고 싶다면 이 헬퍼
+
+        V6.2: x=48 (자유 빌딩 블록 마진과 정렬, 헤더와 좌측 통일).
+
+        Args:
+            heading: 22pt 슬라이드 타이틀
+            items: [label, ...] 또는 [(label, done), ...]
+                done은 호환 위해 받지만 무시 (모두 활성 라벨)
+            eyebrow: 타이틀 위 8pt ORANGE 메타 (선택)
+        """
+        oid = self._make_slide_with_header(heading=heading, eyebrow=eyebrow)
+        content_y_start = 100
+        content_y_end = 373
+        n = max(len(items), 1)
+        gap = 4
+        max_item_h = (content_y_end - content_y_start - (n - 1) * gap) // n
+        item_h = max(16, min(52, max_item_h))
+        for i, item in enumerate(items):
+            label = item[0] if isinstance(item, tuple) else item
+            y = content_y_start + i * (item_h + 4)
+            mark = _uid()
+            self._shape(oid, mark, 48, y, 32, item_h)
+            self._text(mark, f"{i+1:02d}")
+            self._style(mark, 10.5, bold=True, color=self.c["accent"], align="CENTER")
+
+            txt = _uid()
+            self._shape(oid, txt, 88, y, 584, item_h)
+            self._text(txt, label)
+            self._style(txt, 10.5, color=self.c["fg"])
+
     def kpi_status(self, title="1. KPI 진행 현황", eyebrow="2025년도",
                    top_rows=None, detail_rows=None):
         """KPI 현황 슬라이드: 템플릿 슬라이드 텍스트 교체. template='kpi' 전용.
