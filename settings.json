@@ -23,7 +23,7 @@
       "/Users/harugury/Documents/Obsidian Vault"
     ]
   },
-  "model": "haiku",
+  "model": "sonnet",
   "hooks": {
     "UserPromptSubmit": [
       {
