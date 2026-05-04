@@ -581,7 +581,7 @@ class SpigenBuilder:
                 }
             })
 
-    def _style(self, oid, size, bold=False, color=None, italic=False, align="START"):
+    def _style(self, oid, size, bold=False, color=None, italic=False, align="START", font_family="Noto Sans KR"):
         if color is None:
             color = self.c["fg"]
         # V5.7: 8pt 본문(non-bold)에 line spacing 1.5 자동 적용
@@ -599,7 +599,7 @@ class SpigenBuilder:
                         "bold": bold,
                         "italic": italic,
                         "foregroundColor": {"opaqueColor": _rgb(color)},
-                        "fontFamily": "Noto Sans KR",
+                        "fontFamily": font_family,
                     },
                     "textRange": {"type": "ALL"},
                     "fields": "fontSize,bold,italic,foregroundColor,fontFamily",
@@ -1299,6 +1299,63 @@ class SpigenBuilder:
             self._shape(oid, so, 90, 210, 590, 50)
             self._text(so, sub)
             self._style(so, 8, color=self.c["dim"])
+        self._current_slide = oid
+        return oid
+
+    def section_divider(self, number, title, label="Section"):
+        """챕터 구분 슬라이드 — 큰 오렌지 숫자 + 작은 라벨 + 큰 제목.
+
+        의도: 발표를 큰 챕터(SECTION 01 / SECTION 02 등)로 나눌 때.
+        일반 헤더 슬라이드(start_slide)와 시각 위계가 다름 — 큰 숫자 앵커로 휴지 구간 제공.
+
+        좌표·사이즈 출처: 사용자 직접 수정 슬라이드 8 실측 카피 (V6.2 검증 완료).
+            - "01" 박스: pos (50.90, 102.70) 시각 150x110 valign=TOP
+                Proxima Nova 100pt bold accent
+            - "Section" 라벨: pos (183.23, 163.23) 시각 200x16 valign=MIDDLE
+                Proxima Nova 11.5pt dim
+            - 제목: pos (183.23, 180.56) 시각 300x32 valign=MIDDLE
+                Noto Sans 21pt fg
+
+        주의 — Google Slides API 동작:
+            createShape의 size는 항상 default 236.22로 강제되고, 코드 송신한
+            size는 transform.scaleX/scaleY로 변환되어 적용됨.
+            valign MIDDLE은 시각 박스 기준 가운데 정렬 (transform.x/y가 시각 박스 좌상단).
+
+        Args:
+            number: 챕터 번호. int 또는 string.
+                - int: 자동 zero-padding (1 → "01")
+                - string: 그대로 (예: "01", "Ⅰ")
+            title: 큰 흰색 제목 (예: "바커 진행 방법")
+            label: 숫자 옆 작은 dim 라벨 (default "Section")
+        """
+        oid, idx = self._next()
+        self._slide(oid, idx)
+        self._bg(oid)
+
+        num_str = f"{number:02d}" if isinstance(number, int) else str(number)
+
+        # 큰 오렌지 숫자 — Proxima Nova 100pt bold, valign TOP
+        # 박스 사이즈 150x110 (텍스트 실측에 맞게 축소)
+        n_oid = _uid()
+        self._shape(oid, n_oid, 50.90, 102.70, 150, 110, valign="TOP")
+        self._text(n_oid, num_str)
+        self._style(n_oid, 100, bold=True, color=self.c["accent"], align="START",
+                    font_family="Proxima Nova")
+
+        # 작은 라벨 — Proxima Nova 11.5pt, valign MIDDLE
+        # 사용자 직접 수정 좌표 카피 (transform.y는 시각 박스 좌상단)
+        lbl_oid = _uid()
+        self._shape(oid, lbl_oid, 183.23, 163.23, 200, 16, valign="MIDDLE")
+        self._text(lbl_oid, label)
+        self._style(lbl_oid, 11.5, color=self.c["dim"], font_family="Proxima Nova")
+
+        # 큰 제목 — Noto Sans 21pt, valign MIDDLE
+        # 사용자 직접 수정 좌표 카피
+        ttl_oid = _uid()
+        self._shape(oid, ttl_oid, 183.23, 180.56, 300, 32, valign="MIDDLE")
+        self._text(ttl_oid, title)
+        self._style(ttl_oid, 21, color=self.c["fg"], font_family="Noto Sans")
+
         self._current_slide = oid
         return oid
 

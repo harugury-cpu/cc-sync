@@ -146,6 +146,7 @@ Step 2 진입 전 아래를 내부적으로 수행한다. 사용자에게 출력
 |-----|---------|------------|
 | 단순 서술/나열 | 구조화 어려운 설명·주의사항·요약 본문 | `slide()` |
 | 단일 강조 메시지 | 한 슬라이드 = 한 문장 강조 | `callout()` |
+| 챕터 구분 (SECTION 01/02) | 큰 오렌지 숫자 + 라벨 + 제목 — 발표 휴지 구간 | `section_divider()` |
 | 완료·미완료 체크리스트 | 항목별 완료 여부 점검 (●/○ 마크) | `checklist()` |
 | 순서·방법 안내 | "이 순서대로 따라해라" 단계 안내 (01-NN 숫자 라벨) | `numbered_steps()` |
 | 자유 카드 조합 | 항목 수가 4개+ 또는 시트 슬롯과 다른 카드 그룹 | `start_slide()` + `card()` 반복 |
@@ -338,6 +339,12 @@ def build(theme):
     #   체크리스트와 다른 점: ●/○ 마크 대신 01-NN 숫자 라벨
     b.numbered_steps(heading="실행 방법", eyebrow="HOW TO RUN",
                      items=["첫 단계", "두 번째 단계", "세 번째 단계"])
+
+    # [3-c] 챕터 구분 — SECTION 01/02 처럼 발표를 큰 단원으로 나눌 때
+    #   큰 오렌지 숫자(Proxima Nova 100pt) + 작은 dim "Section" 라벨 + 큰 흰색 제목
+    #   "방법", "흐름", "단계" 같은 큰 단원 발표 휴지 구간에서 사용
+    b.section_divider(1, "바커 진행 방법", label="Section")
+    b.section_divider(2, "전용 대치")  # label default "Section"
 
     # [4] 결론 (선택, 대부분 안 씀)
     b.conclusion(metric="...", caption="...", heading="결론",
