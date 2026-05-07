@@ -118,7 +118,7 @@ def _uid():
 
 
 def _today_cover_date():
-    return datetime.now().strftime("%Y. %m. %d.")
+    return datetime.now().strftime("%Y.%m.%d")
 
 
 # V6.0: Spigen Design System 컬러 토큰 직접 동기화
