@@ -5,7 +5,7 @@ license: MIT
 metadata:
   category: productivity
   locale: ko-KR
-  phase: v6.2.0
+  phase: v6.3.0
 ---
 
 # spigen-slides
@@ -31,7 +31,7 @@ metadata:
 - 담당자: `한원진 담당`
 - 부서: `디자인부문ㅣ패키지디자인팀`
 - 오렌지: `#FF6B1A`
-- dark 배경: `#1C1C1E` / 텍스트: `#FFFFFF`
+- dark 배경: `#000000` / 텍스트: `#FFFFFF` (다크 표지와 통일)
 - light 배경: `#FFFFFF` / 텍스트: `#1C1C1E`
 - 빌더: `~/.agents/skills/spigen-slides/spigen_build.py`
 
@@ -171,9 +171,10 @@ Step 2 진입 전 아래를 내부적으로 수행한다. 사용자에게 출력
 b.start_slide(heading="슬라이드 제목", eyebrow="CATEGORY")
 
 # 카드 — emphasis 옵션:
-#   None / 미지정 : 일반 (surface + border)
+#   None / 미지정 : 일반 (surface + border, 라벨 = accent 오렌지 항상)
 #   "dim"         : 약한 강조 (accent_bg + accent border)
 #   "full"        : 풀 ORANGE 배경 + 검정 텍스트 (★ 한 슬라이드 1개만 허용)
+# 본문(card body / flow desc / compare 본문) = 9pt + line spacing 1.5 (코드 토큰 자동 적용)
 b.card(x=40, y=110, w=200, h=120, label="01", title="제목",
        body="본문 (**굵게** 마크업 자동)", emphasis=None)
 
