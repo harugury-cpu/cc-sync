@@ -5,7 +5,7 @@ license: MIT
 metadata:
   category: productivity
   locale: ko-KR
-  phase: v1.0
+  phase: v6.3.2
 ---
 
 # spigen-slides
@@ -135,8 +135,8 @@ Step 2 진입 전 아래를 내부적으로 수행한다. 사용자에게 출력
 - **표지 제목 2줄 이내**: `cover(title=...)` 의 `\n` 개수 1개 이하. 3줄 이상 시 자동 트림 + 경고.
 - **표지 날짜 자동 반영**: `cover()`의 `date`를 생략하면 생성 시점의 오늘 날짜를 `yyyy.mm.dd` 형식(공백 없음, 좁은 텍스트박스에서 줄바꿈 방지)으로 자동 입력한다. 사용자가 특정 날짜를 명시한 경우에만 `date="..."`를 넘긴다.
 - **테마 선택**: `theme="light"` 또는 `theme="dark"` — 각각 별도 지정 템플릿 cover 사용.
-- **light cover 기준**: KPI 라이트 템플릿 `1gPAlxb421I_IaVIG0y9xGTV0qLxiF3PIgLVFODq30tc`
-- **dark cover 기준**: 다크 가이드 템플릿 `1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk`
+- **light cover 기준**: KPI 라이트 템플릿 `1BBG9PR6ZBsEABbJLhbUUfRMkgGYQtNMOWAmLQgPhr70`
+- **dark cover 기준**: 다크 가이드 템플릿 `1HJbTWXPCr38gXDQuarglSLrkheDQXAojlrYUKcfVgAc`
 - **KPI 덱**: `template="kpi"` — 라이트 모드 전용. `kpi_status()` + `kpi_tasks()` 사용.
 
 중간 슬라이드 컴포넌트 결정 (위에서 아래로 순서대로 확인, 첫 번째 일치 항목 사용).
@@ -165,8 +165,6 @@ Step 2 진입 전 아래를 내부적으로 수행한다. 사용자에게 출력
 | **시트 슬롯 정확 일치 — 레이어** | 입력→처리→출력 레이어 | `mk_arch_layers` |
 | KPI 진행 현황 | KPI / 목표 / 실적 / 달성률 | `kpi_status()` ★ template="kpi" |
 | KPI 핵심과제 | 연관KPI / 핵심과제 / 실행계획 | `kpi_tasks()` ★ template="kpi" |
-| **데이터 추이/비율 비교 — 가로** | 연도별·항목별 수치를 막대 길이로 비교 (3~6개 항목) | `start_slide()` + 가로 막대 차트 패턴 (갤러리 참조) |
-| **데이터 추이/비율 비교 — 세로** | 기간별 수치 증감을 막대 높이로 비교 (2~6개 항목) | `start_slide()` + 세로 막대 차트 패턴 (갤러리 참조) |
 | **결론 페이지 (선택)** — 대부분 사용 안 함 | 좌 큰 메트릭 + 우 디테일 4개 (시트 mk_conclusion_detail 양식) | `conclusion(metric, caption, details=[...])` |
 
 **자유 레이아웃 빌딩 블록:**
@@ -439,28 +437,13 @@ python3 /tmp/build_<name>.py
 - ❌ 검정 배경 위 어두운 오렌지·갈색 톤 텍스트
 - ❌ 긴 본문이나 보조 설명을 오렌지 계열 색으로 표기 — 오렌지는 강조 전용
 - ❌ `ACCENT_DIM`을 텍스트 색으로 사용 (배경 fill 전용)
-- ❌ **슬라이드당 오렌지(accent) 가시적 사용 2회 초과 (eyebrow 제외)** — eyebrow는 헤더 메타로 항상 ORANGE 고정이므로 카운트에서 제외한다. 카운트 대상은 본문 영역의 오렌지 사용: 오렌지 구분선 / 오렌지 카드 테두리(normal/dim) / 풀 오렌지 카드(`emphasis="full"`) / 오렌지 텍스트 강조. 본문 영역 기준 슬라이드당 2회 이내, 3회 이상이면 우선순위가 낮은 것부터 제거한다.
+- ❌ **슬라이드당 오렌지(accent) 가시적 사용 2회 초과** — eyebrow 오렌지 + 강조 카드 1개가 정석 쌍. 오렌지 구분선 + 오렌지 카드 테두리 + 오렌지 eyebrow + 풀카드가 동시에 있으면 accent가 희석된다. 슬라이드당 2회를 목표로, 3회 이상이면 우선순위가 낮은 것부터 제거한다.
 
 ### 2. 강조 카드 사용 제한
 - ❌ 한 슬라이드에 풀 ORANGE 강조 카드 (`emphasis="full"`) **2개 이상**
-- ❌ 한 슬라이드에 dim 강조 카드 (`emphasis="dim"`) **2개 이상**
-- ❌ **dim 카드 수 > normal 카드 수**. dim과 normal을 각각 비교.
-- ❌ **full 카드 수 > normal 카드 수**. full과 normal을 각각 비교.
-- ❌ **full 없이 dim 단독 사용 금지** — dim을 쓰려면 같은 슬라이드에 full 1개 동반 필수. 약한 강조(dim)만 깔리면 위계 시그널 약해짐. full 단독은 OK (강한 강조).
-  - N=2: `full 1 + normal 1` 또는 `normal 2` — `dim 1 + normal 1`은 dim 단독이라 금지
-  - N=3: `full 1 + normal 2` 또는 `dim 1 + full 1 + normal 1` 또는 `normal 3` — `dim 1 + normal 2`는 dim 단독 금지
-  - N=4: `dim 1 + full 1 + normal 2` — 정석 풀하우스 패턴 (full + dim 위계 둘 다)
+- ❌ 모든 슬라이드에 습관적으로 풀 강조 카드 추가
 - ❌ 분석 카드와 결론 카드를 **같은 크기·색·밀도**로 나란히 배치 (위계 무너짐)
 - ❌ 색만으로 의미 전달 (`color-only meaning`) — 형태/위치도 함께 차별화
-
-#### 풀 오렌지 (`emphasis="full"`) 사용 기준
-- ✅ **덱 전체 상한 없음** — 슬라이드는 한 장씩 분리되어 표시되므로 페이지 임팩트가 다른 페이지에 누적되지 않는다. 한 슬라이드 1개 룰만 지키면 풀 카드는 덱에 몇 장이든 상관없다.
-- ✅ 결론 / 핵심 메트릭 슬라이드 — 풀 카드 1개 권장
-- ✅ 카드 N장 그룹에서 **사용자가 반드시 보길 원하는 단 하나의 카드** — 풀로 승격
-- ✅ 정석 패턴: `풀 1 + normal N-1` (또는 `dim 1 + normal N-1`, 또는 `dim 1 + full 1 + normal N-2`)
-- ✅ 풀 카드 안 텍스트는 **테마 바탕색** 자동 (dark=검정, light=흰색) — 코드가 처리
-- ❌ 강조 의도 없이 풀 사용 — 단순 다양성 / 시각 채움 목적이면 normal 유지
-- ❌ 카드 모두 dim — 위계 없음. 1개를 풀로 승격하거나 모두 normal로 평준화
 
 ### 3. 카드 구성
 - ❌ 카드 안에 강조용 sub-box 삽입 (박스 안 박스) — `emphasis` 토큰으로 대체

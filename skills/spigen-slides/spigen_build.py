@@ -69,7 +69,7 @@ def clear_pid(name, theme=None):
         pass
 
 # ── 라이트 표지 템플릿 (KPI 기준) ────────────────────────────────
-LIGHT_TEMPLATE_ID  = "1gPAlxb421I_IaVIG0y9xGTV0qLxiF3PIgLVFODq30tc"
+LIGHT_TEMPLATE_ID  = "1BBG9PR6ZBsEABbJLhbUUfRMkgGYQtNMOWAmLQgPhr70"
 LIGHT_COVER_TITLE_OID = "g3db629c31e0_0_75"   # V6.0.2: light template cover OID 갱신
 LIGHT_COVER_META_OID  = "g3db629c31e0_0_76"
 LIGHT_COVER_DATE_OID  = "g3db629c31e0_0_77"
@@ -83,7 +83,7 @@ LIGHT_GUIDE_SLIDES    = [
 ]
 
 # ── 다크 템플릿 ────────────────────────────────────────────────
-DARK_TEMPLATE_ID      = "1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk"
+DARK_TEMPLATE_ID      = "1HJbTWXPCr38gXDQuarglSLrkheDQXAojlrYUKcfVgAc"
 DARK_COVER_TITLE_OID  = "g3db53c0022e_0_2"   # V5.9: 사용자가 cover 정리, 새 OID
 DARK_COVER_TEAM_OID   = "g3db53c0022e_0_3"   # 부서 | 담당자
 DARK_COVER_META_OID   = "g3db53c0022e_0_4"   # 날짜
