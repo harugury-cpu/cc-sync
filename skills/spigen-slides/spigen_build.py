@@ -83,7 +83,7 @@ LIGHT_GUIDE_SLIDES    = [
 ]
 
 # ── 다크 템플릿 ────────────────────────────────────────────────
-DARK_TEMPLATE_ID      = "1HJbTWXPCr38gXDQuarglSLrkheDQXAojlrYUKcfVgAc"
+DARK_TEMPLATE_ID      = "1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk"
 DARK_COVER_TITLE_OID  = "g3db53c0022e_0_2"   # V5.9: 사용자가 cover 정리, 새 OID
 DARK_COVER_TEAM_OID   = "g3db53c0022e_0_3"   # 부서 | 담당자
 DARK_COVER_META_OID   = "g3db53c0022e_0_4"   # 날짜
