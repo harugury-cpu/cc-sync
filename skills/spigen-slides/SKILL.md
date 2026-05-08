@@ -135,7 +135,7 @@ Step 2 진입 전 아래를 내부적으로 수행한다. 사용자에게 출력
 - **표지 제목 2줄 이내**: `cover(title=...)` 의 `\n` 개수 1개 이하. 3줄 이상 시 자동 트림 + 경고.
 - **표지 날짜 자동 반영**: `cover()`의 `date`를 생략하면 생성 시점의 오늘 날짜를 `yyyy.mm.dd` 형식(공백 없음, 좁은 텍스트박스에서 줄바꿈 방지)으로 자동 입력한다. 사용자가 특정 날짜를 명시한 경우에만 `date="..."`를 넘긴다.
 - **테마 선택**: `theme="light"` 또는 `theme="dark"` — 각각 별도 지정 템플릿 cover 사용.
-- **light cover 기준**: KPI 라이트 템플릿 `1BBG9PR6ZBsEABbJLhbUUfRMkgGYQtNMOWAmLQgPhr70`
+- **light cover 기준**: KPI 라이트 템플릿 `1gPAlxb421I_IaVIG0y9xGTV0qLxiF3PIgLVFODq30tc`
 - **dark cover 기준**: 다크 가이드 템플릿 `1R_z4ZKSbRSe5uQ-uWT6dnmBDTJ7M4yOjbGW_1UfxnEk`
 - **KPI 덱**: `template="kpi"` — 라이트 모드 전용. `kpi_status()` + `kpi_tasks()` 사용.
 
