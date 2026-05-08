@@ -125,8 +125,103 @@ Q. 항목이 몇 개인가?
 ### `mk_kpi_dashboard()`
 - 언제: KPI 수치 3~4개를 대시보드처럼 보여줄 때
 
-### `mk_bar_chart()`
-- 언제: 수치 비교가 필요한 바 차트
+### `chart_hbar` — 가로 막대 차트 ★
+- 언제: 연도별·항목별 비율/수치를 막대 길이로 비교 (3~6개 항목)
+- 예: 선호도 추이 / 카테고리별 점유율 / 항목별 달성률
+
+```python
+# ── 가로 막대 차트 ──────────────────────────────────────
+data = [("2022", 35), ("2023", 42), ("2024", 38), ("2025", 51)]
+BAR_X    = 100   # 막대 시작 x (항목 라벨 뒤)
+BAR_MAX_W = 500  # 100%일 때 최대 너비 (pt)  ← 조정 포인트
+BAR_H    = 20    # 막대 높이
+ROW_H    = 34    # 행 높이 (막대 + 간격)
+CHART_Y  = 160   # 차트 시작 y
+
+for i, (label, val) in enumerate(data):
+    ry = CHART_Y + i * ROW_H
+
+    # 항목 라벨 (왼쪽, 오른쪽 정렬)
+    yl = _uid()
+    b._shape(pid, yl, 48, ry + 2, 46, BAR_H - 4, valign="MIDDLE")
+    b._text(yl, label)
+    b._style(yl, 7.5, color=b.c["dim"], align="END")
+
+    # 배경 바 (전체 기준선)
+    b._rect(pid, BAR_X, ry, BAR_MAX_W, BAR_H, b.c["surface"], b.c["surface"])
+
+    # 전경 바 (비율만큼)
+    bar_w = max(4, int(BAR_MAX_W * val / 100))
+    b._rect(pid, BAR_X, ry, bar_w, BAR_H, b.c["accent"], b.c["accent"])
+
+    # 수치 라벨 (막대 끝 오른쪽)
+    pl = _uid()
+    b._shape(pid, pl, BAR_X + bar_w + 6, ry + 2, 40, BAR_H - 4, valign="MIDDLE")
+    b._text(pl, f"{val}%")
+    b._style(pl, 8, bold=True, color=b.c["fg"])
+```
+
+---
+
+### `chart_vbar` — 세로 막대 차트
+- 언제: 기간별 수치 증감을 막대 높이로 비교 (2~6개 항목)
+- 예: 분기별 매출 / 연도별 성장률 / 월별 출하량
+
+```python
+# ── 세로 막대 차트 ──────────────────────────────────────
+data = [("Q1", 35), ("Q2", 52), ("Q3", 44), ("Q4", 61)]
+COL_W        = 60    # 막대 너비  ← 조정 포인트
+COL_GAP      = 20    # 막대 간격
+BAR_MAX_H    = 150   # 최대값일 때 막대 높이 (pt)
+MAX_VAL      = max(v for _, v in data)
+CHART_X      = 120   # 차트 시작 x
+CHART_BOTTOM = 320   # 바닥 기준선 y
+
+for i, (label, val) in enumerate(data):
+    cx    = CHART_X + i * (COL_W + COL_GAP)
+    bar_h = max(4, int(BAR_MAX_H * val / MAX_VAL))
+    bar_y = CHART_BOTTOM - bar_h
+
+    # 배경 바 (전체 기준선)
+    b._rect(pid, cx, CHART_BOTTOM - BAR_MAX_H, COL_W, BAR_MAX_H, b.c["surface"], b.c["surface"])
+
+    # 전경 바
+    b._rect(pid, cx, bar_y, COL_W, bar_h, b.c["accent"], b.c["accent"])
+
+    # 수치 라벨 (막대 위)
+    vl = _uid()
+    b._shape(pid, vl, cx, bar_y - 16, COL_W, 14, valign="MIDDLE")
+    b._text(vl, str(val))
+    b._style(vl, 8, bold=True, color=b.c["fg"], align="CENTER")
+
+    # 기간 라벨 (바닥 아래)
+    ll = _uid()
+    b._shape(pid, ll, cx, CHART_BOTTOM + 4, COL_W, 14, valign="MIDDLE")
+    b._text(ll, label)
+    b._style(ll, 7.5, color=b.c["dim"], align="CENTER")
+```
+
+---
+
+### `chart_progress` — 단일 진척도 바
+- 언제: 목표 대비 달성률 1개를 강조할 때
+- 예: 출하 달성률 / 프로젝트 진행률
+
+```python
+# ── 단일 진척도 바 ──────────────────────────────────────
+ratio    = 0.73   # 달성률 (0.0 ~ 1.0)
+BAR_X, BAR_Y = 48, 200
+BAR_W, BAR_H = 550, 28
+
+b._rect(pid, BAR_X, BAR_Y, BAR_W, BAR_H, b.c["surface"], b.c["surface"])
+fill_w = max(4, int(BAR_W * ratio))
+b._rect(pid, BAR_X, BAR_Y, fill_w, BAR_H, b.c["accent"], b.c["accent"])
+
+pct = _uid()
+b._shape(pid, pct, BAR_X + fill_w + 8, BAR_Y + 2, 50, BAR_H - 4, valign="MIDDLE")
+b._text(pct, f"{int(ratio * 100)}%")
+b._style(pct, 10, bold=True, color=b.c["fg"])
+```
 
 ### `mk_report_table()`
 - 언제: 행이 많은 데이터 표 (7개 이상 항목)
