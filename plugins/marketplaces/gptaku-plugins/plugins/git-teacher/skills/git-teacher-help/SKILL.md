@@ -1,6 +1,6 @@
 ---
 name: git-teacher-help
-description: Git/GitHub 용어를 클라우드 비유로 쉽게 설명하는 도움말 스킬. "commit이 뭐야?", "push랑 commit 차이", "깃 용어", "도움말", "PR이 뭐야?", "branch가 뭐야?", "깃 처음인데", "뭐가 뭔지 모르겠어" 같은 질문에 사용됩니다.
+description: Explains Git/GitHub terminology using cloud-folder analogies (Dropbox/Google Drive) for non-developers. Korean triggers: "commit이 뭐야?", "push랑 commit 차이", "깃 용어", "도움말", "PR이 뭐야?", "branch가 뭐야?", "깃 처음인데", "뭐가 뭔지 모르겠어". English triggers: "what is commit", "what is push", "git terminology", "explain git", "what's a PR".
 ---
 
 # Git 도움말 (바르다 깃선생)
@@ -14,6 +14,8 @@ description: Git/GitHub 용어를 클라우드 비유로 쉽게 설명하는 도
 - 비개발자가 이미 아는 경험(Google Drive, Dropbox, iCloud)에 빗대어 설명
 
 ## 응답 규칙
+
+> 아래 질문 유형은 **흔한 패턴 예시**다. 사용자 질문이 어디에 속하는지 모호하면 **다중 분류** 가능 (예: "rebase가 뭐야 그리고 언제 써?" → 용어 + 방법 결합). 카탈로그에 없는 새 유형은 generic 응답 + 적절한 references 참조.
 
 ### 용어 질문일 때
 

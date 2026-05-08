@@ -1,5 +1,61 @@
 # Changelog
 
+## [1.7.3] - 2026-05-04
+
+### Removed
+- `references/image-studio-prompt.md`: "Prompt Analysis Blocking Rule" 5줄 삭제 (라인 30-34) — self-critique 차단 wrapper 제거 (fossil v3 처치)
+
+### Preserved
+- 보안 가드 1-4번 (시스템 프롬프트 노출 금지, mode 비공개, XML 구조 비공개, 우선순위 명시)
+- pumasi-job-worker.js wrapper의 도메인-종속 가드는 음성적 지식(과거 codex crash 흔적 추정)으로 보존
+
+## [1.7.2] - 2026-04-24
+
+### Fixed
+- `--ephemeral` 플래그 실제 코드에서 제거 (CHANGELOG v1.2.0 기록과 코드 불일치 수정)
+
+## [1.7.1] - 2026-04-22
+
+### Fixed
+- `/pumasi:image` 저장 경로를 **git root 기준으로 동적 계산**하도록 수정
+  - 기존: 단순 상대 경로 `images/{날짜}/` → Claude Code 세션 cwd가 홈일 때 `~/images/...`로 엉뚱하게 저장되는 문제
+  - 수정: `git rev-parse --show-toplevel || pwd` 로 기준 디렉토리 결정 후 그 하위에 저장
+  - 프로젝트 작업 중이면 프로젝트 루트 `images/{날짜}/` 에 저장 보장
+  - 하드코딩 절대경로 없음 (어느 프로젝트에서든 동작)
+
+## [1.7.0] - 2026-04-22
+
+### Added
+- `/pumasi:image` 서브커맨드 신설 — Codex `/imagen`으로 이미지 생성
+  - 기존 `/pumasi`(코드 병렬 외주)와 완전히 독립된 스킬 모듈
+  - 자동 트리거 키워드: "이미지/그림/썸네일/로고/일러스트/포스터/아이콘"
+  - 코드 키워드("함수/컴포넌트/페이지 만들어줘")엔 트리거되지 않음
+- `skills/pumasi-image/SKILL.md` — 8단계 워크플로우
+  - Step 0: `image_generation` feature flag 자동 활성화
+  - Step 1: 7가지 모드 자동 감지 (MODE_A~G)
+  - Step 2: 키워드 자동 매핑 (비율·퀄리티)
+  - Step 3: AskUserQuestion (최대 5개 — 기술 2 + 의도 3)
+  - Step 4: image-studio 시스템 프롬프트 내면화 + Output Template 작성
+  - Step 5: 저장 경로 계산 `images/{YYYY-MM-DD}/{slug}-{seq}.png`
+  - Step 6: `scripts/imagen.sh` 호출 + 후처리 금지 가드
+  - Step 7: Read로 결과 표시
+  - Step 8: MODE_REFINE 멀티턴 루프
+- `references/image-studio-prompt.md` — 모드 분류 + 모드별 Output Template
+- `references/clarification-matrix.md` — 모드별 의도 파악 질문 매트릭스
+  - 모드당 3개 슬롯 (스타일/분위기/색감/구도/용도/텍스트공간/사용맥락/배경 등)
+  - 각 카테고리 5개 이상 선택지 + 1~2개 창의적 대안 + "자동 추천" 안전망
+- `references/keyword-mapping.md` — 비율·퀄리티 키워드 자동 매핑 + 자연어 힌트 변환표
+- `scripts/imagen.sh` — Codex 호출 래퍼
+  - feature flag 자동 활성화
+  - 후처리 금지 가드 자동 주입
+  - SHA1 해시 일치 검증 (원본 ↔ 저장본)
+
+### Notes
+- 백엔드는 **Codex `/imagen` 단일**. nanobanana(Gemini API) 의존성 없음.
+- Codex CLI의 기술 파라미터 제어 한계로 인해 Size/Quality는 **자연어 힌트**로만 전달됨 (정확한 해상도 보장 X).
+- 9:16 세로, 4:1 배너는 Codex 지원 여부 불확실 (실험적).
+- 투명 배경은 현재 스코프 밖 (Codex CLI에서 alpha 채널 지원 불가 확인됨).
+
 ## [1.6.0] - 2026-03-18
 
 ### Changed

@@ -2,3 +2,11 @@ __pycache__/
 *.pyc
 .DS_Store
 .omc/
+
+# Bulk asset archives (too large for repo)
+*.zip
+
+# v3.2 batch backups & boost intermediates
+docs/reports.v3.1-backup-*/
+docs/reports/*/design.md.preboost
+TEAM_PROGRESS.md

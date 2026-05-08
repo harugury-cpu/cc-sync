@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.7.4] - 2026-05-04
+
+### Changed
+- `references/domain-doc-sets.md`: 카탈로그(메뉴)에서 **동적 생성 가이드 + 참고 예시**로 프레이밍 전환
+  - 도메인 8개 enum 라벨 → 패턴 학습용 예시
+  - "동적 생성 절차" 섹션 강조 (4 차원: 요구사항 / 구조 / 도메인 특화 / AI 행동 규칙)
+  - "이 문서를 메뉴로 사용 금지" 명시
+- `references/document-templates.md` 사용 안내를 "선택/대체"에서 "예시 보고 즉석 정의"로 변경
+
+### Why
+v0.7.3의 domain-doc-sets.md 8 도메인 enum이 새 fossil 패턴이 됨.
+사용자 지적: 카탈로그에 없는 도메인은 fallback으로 강제 → 예시 + 동적 생성으로 전환.
+
+## [0.7.3] - 2026-05-04
+
+### Added
+- `references/domain-doc-sets.md` 신설 — 도메인별 4종 문서 카탈로그 (기본/B2B SaaS/1인 도구/이커머스/데이터/헬스케어/교육/콘텐츠 8 도메인)
+
+### Changed
+- `references/document-templates.md` 출력 구조 — 4종 floor는 사용자 예측가능성 본질로 유지, 문서 정의는 도메인별 가변 명시
+
+### Preserved
+- 4종 문서 강제 + README (사용자 예측가능성)
+- AskUserQuestion Other 자동 제공 (자유 escape hatch)
+- [NEEDS CLARIFICATION] 명시 (정직한 빈 칸)
+- Phase 1/2/3 골격 (워크플로우 일관성)
+
 ## [0.7.2] - 2026-03-15
 
 ### Fixed

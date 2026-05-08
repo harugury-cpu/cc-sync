@@ -1,5 +1,49 @@
 # Changelog
 
+## [1.3.3] - 2026-05-04
+
+### Changed
+- `references/personas.md`: 카탈로그(메뉴)에서 **동적 생성 가이드 + 참고 예시**로 프레이밍 전환
+  - 도메인 7개 enum 라벨 → 패턴 학습용 예시
+  - "동적 생성 절차" 섹션 강조 (4 차원 매핑 + Step 1-4)
+  - "이 문서를 메뉴로 사용 금지" 명시 — 카탈로그 fossil 재발 방지
+- SKILL.md "4명의 전문가" 섹션 — 사용 안내를 "선택/대체"에서 "예시 학습 후 즉석 정의"로 변경
+
+### Why
+v1.3.2의 personas.md 7 도메인 enum이 새 fossil 패턴이 됨 (insane-search R3 No-Site-Name Rule 위반).
+사용자 지적: "카탈로그에 있는 도메인이 아니면 못 쓰는 도구가 됨" → 예시 + 동적 생성으로 전환.
+
+## [1.3.2] - 2026-05-04
+
+### Added
+- `references/personas.md` 신설 — 도메인별 4 페르소나 카탈로그 (기본/헬스케어/이커머스/보안/데이터/교육/콘텐츠 7 도메인)
+
+### Changed
+- SKILL.md "4명의 전문가" 섹션 — 인원수 4 floor는 검증 다중성 본질로 유지, 페르소나 정의는 도메인별 가변 명시
+- 사용자 패턴 적용: Schema(개수) 보존 + Content(정의) 자유
+
+### Preserved
+- 4 페르소나 병렬 스폰 (검증 다중성)
+- AskUserQuestion 호출 강제 (parser contract)
+- frontmatter 형식 (Claude Code 다운스트림 호환)
+- 단어 수 ceiling 1,500-2,000 (인지 부하 가드)
+
+## [1.3.1] - 2026-04-17
+
+### Fixed
+- Windows/PowerShell 호환성 — `select.select()` 파이프 사용으로 인한 `WinError 10038` 크래시 해결. Phase F/G/H (eval, 반복 개선, description 최적화)가 Windows에서 정상 동작.
+- UTF-8 멀티바이트 청크 경계 안전 처리 — `codecs.IncrementalDecoder` 도입으로 한글 등이 8KB 경계에서 잘려도 손상 없음.
+- EOF 직전 newline 없는 마지막 JSON 이벤트 누락 방지.
+- 전 스크립트 `read_text`/`write_text`/`open()`에 `encoding="utf-8"` 명시 — Windows 기본 cp949 회피.
+- `shutil.which("claude")` 사전 해상 — PowerShell 환경의 `.cmd`/`.exe` 자동 탐색.
+- `stdout`/`stderr` UTF-8 재설정 — Windows 콘솔 한글 로그 깨짐 방지.
+
+### Changed
+- reader thread 예외를 `--verbose` 모드에서 stderr로 노출 (silent failure 제거).
+- `validate-skill.sh`에 deprecation 경고 — 다음 릴리스에서 제거 예정. `validate-skill.js` 또는 `verify-skill.py` 사용 권장.
+- script-templates.md 언어 기본값을 Python으로 명시 (크로스플랫폼).
+- SKILL.md Phase E-verify/F에 PowerShell 변환 주석 추가.
+
 ## [1.3.0] - 2026-03-18
 
 ### Changed

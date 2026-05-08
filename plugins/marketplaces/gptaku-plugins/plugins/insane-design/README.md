@@ -8,6 +8,8 @@ English | [한국어](README.ko.md)
 
 100 pre-analyzed sites shipped (Stripe, Apple, Linear, Toss, Notion...) — or point it at any URL and go.
 
+**[See the gallery — 100 design system reports →](https://fivetaku.github.io/insane-design/)**
+
 [Quick Start](#quick-start) • [Why insane-design?](#why-insane-design) • [How it works](#how-it-works) • [Features](#features) • [Requirements](#requirements)
 
 ---
@@ -92,6 +94,8 @@ stripe/
 | `/insane-design [slug]` | Apply a pre-analyzed design to your project |
 | `/insane-design:analysis [URL]` | Analysis mode only |
 | `/insane-design:apply [slug]` | Apply mode only |
+| `/insane-design:build [design.md]` | Scaffold a new page/component from a `design.md` (or synthesize on the fly from a URL) |
+| `/insane-design:verify [job_id]` | Poll the async verifier — collects §18 DON'T violations + screenshot diff |
 
 Natural language also works. "Analyze this site" triggers analysis mode, "apply the Stripe style" triggers apply mode.
 

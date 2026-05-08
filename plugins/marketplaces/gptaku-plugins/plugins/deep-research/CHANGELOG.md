@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.2.2] - 2026-05-04
+
+### Changed
+- SKILL.md "Research Type별 권장 골격" → **"Research Type 기반 골격 동적 생성"**
+  - 5 type 표를 "메뉴"가 아닌 "패턴 학습용 예시"로 명시
+  - 적용 절차에 "**사용자 주제에 맞춰 5 섹션 명을 동적 생성**" 단계 추가
+  - 섹션 명을 그대로 카피하지 말고 사용자 주제에 맞춰 변환하라 명시
+  - "새 type 사례를 본 표에 추가하지 말 것" 가드 추가
+
+### Why
+v2.2.1의 type별 매핑 표가 약한 fossil 위험 (섹션 명 하드코딩).
+사용자 지적: 카탈로그를 메뉴로 쓰면 새 fossil이 됨 → 예시 + 동적 생성으로 명시.
+
+## [2.2.1] - 2026-05-04
+
+### Added
+- SKILL.md "Research Type별 권장 골격" 섹션 — Exploratory/Comparative/Predictive/Analytical/Generic 5 type 매핑 (advanced opt-in)
+
+### Preserved (모든 결정 contract 그대로 유지)
+- 7-Phase 강제 + 기본 5섹션 보고서 골격 (resume protocol)
+- A-E source quality 등급 + minimum 2 sources
+- citation 5 elements (Author/Date/Title/URL/Page)
+- Hallucination Prevention 4 strategies
+- state.json / sources.jsonl schema
+- Date-aware query generation (CRITICAL)
+
+→ ADDITIVE only. 기본 동작은 그대로, type별 골격은 사용자 명시 confirm 시에만 사용.
+
 ## [2.2.0] - 2026-03-16
 
 ### Added

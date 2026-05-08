@@ -1,6 +1,6 @@
 ---
 name: vibe-sunsang-mentor
-description: 바선생 멘토링 — AI 활용 능력을 코칭합니다. 요청 품질, 안티패턴, 개념 학습, 종합 코칭 4가지 모드를 지원합니다. v2 레벨 시스템(6축×7단계, 0.5 단위)으로 분석합니다. "멘토링해줘", "코칭해줘", "요청 코칭해줘", "뭘 잘못하고 있는지", "어떻게 요청하면 좋을지", "mentor", "coach" 같은 요청에 사용됩니다.
+description: AI-collaboration mentoring — coaches users on request quality, anti-patterns, and concepts across 4 modes, analyzed via v2 level system (6 axes × 7 levels, 0.5 increments). Korean triggers: "멘토링해줘", "코칭해줘", "요청 코칭해줘", "뭘 잘못하고 있는지", "어떻게 요청하면 좋을지". English triggers: "mentor", "coach", "coaching", "improve my requests".
 ---
 
 # Mentor - AI 활용 멘토 스킬
@@ -215,11 +215,14 @@ description: 바선생 멘토링 — AI 활용 능력을 코칭합니다. 요청
 
 ### Step 5: 행동 계획
 
-분석 완료 후, 사용자에게 3단계 행동 계획 제시:
+분석 완료 후, 사용자에게 **3단계 행동 계획** 제시 (단계 수 3은 인지 부하 본질로 유지, 시간축은 도메인별 가변):
 
-1. **지금 당장** 할 수 있는 행동 1가지 (가장 약한 축 개선)
-2. **이번 주** 시도해볼 행동 1가지 (두 번째로 약한 축 또는 게이트 조건 충족)
-3. **한 달 안에** 목표로 할 행동 1가지 (다음 레벨 달성)
+흔한 시간축 (예시):
+1. **즉시** (오늘 ~ 이번 주) — 가장 약한 축 개선
+2. **단기** (이번 달) — 두 번째로 약한 축 또는 게이트 조건 충족
+3. **중기** (1-3개월) — 다음 레벨 달성
+
+> 사용자 상황에 맞춰 시간축 조정 가능. 빠른 학습자는 "오늘/이번 주/이번 달" / 점진 학습자는 "이번 달/3개월/6개월". **단계 수 3은 보존**.
 
 ### Step 6: 저장 (선택)
 

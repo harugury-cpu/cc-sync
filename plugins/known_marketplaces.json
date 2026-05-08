@@ -5,7 +5,7 @@
       "repo": "anthropics/claude-plugins-official"
     },
     "installLocation": "/Users/harugury/.claude/plugins/marketplaces/claude-plugins-official",
-    "lastUpdated": "2026-05-04T12:36:06.003Z"
+    "lastUpdated": "2026-05-08T06:47:54.257Z"
   },
   "bkit-marketplace": {
     "source": {
@@ -29,15 +29,15 @@
       "url": "https://github.com/fivetaku/gptaku_plugins.git"
     },
     "installLocation": "/Users/harugury/.claude/plugins/marketplaces/gptaku-plugins",
-    "lastUpdated": "2026-04-09T08:37:30.476Z"
+    "lastUpdated": "2026-05-05T15:32:27.740Z"
   },
   "memory-bank-dev": {
     "source": {
-      "source": "github",
-      "repo": "jung-wan-kim/memory-bank"
+      "source": "git",
+      "url": "https://github.com/jung-wan-kim/memory-bank.git"
     },
     "installLocation": "/Users/harugury/.claude/plugins/marketplaces/memory-bank-dev",
-    "lastUpdated": "2026-05-04T12:45:45.105Z"
+    "lastUpdated": "2026-05-08T07:54:36.400Z"
   },
   "addy-agent-skills": {
     "source": {

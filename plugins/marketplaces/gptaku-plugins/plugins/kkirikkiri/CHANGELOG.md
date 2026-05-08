@@ -1,5 +1,66 @@
 # Changelog
 
+## [0.15.2] - 2026-05-05
+
+### Fixed — AskUserQuestion 응답 후 멈춤 회귀 (v0.15.1 핫픽스)
+
+v0.15.1에서 MANDATORY READ wrapper를 6→3회로 축소하면서, **AskUserQuestion 응답 수신 후 모델이 다음 도구 호출 없이 정지하는 회귀**가 발생했다. Step 3/Step 4/Step 8-2 진입부의 도구 호출 트리거(`🚨 MANDATORY READ` 박스)가 *"이미 읽었다고 가정"*, *"여기서는 생략"* 같은 부정형 안내문으로 대체되면서 모델이 다음 액션 앵커를 잃은 것이 직접 원인. Agent Council (Claude/Codex/Gemini) 검토를 거쳐 핫픽스 확정.
+
+- **Step 3/Step 4/Step 7-6/Step 8-2 진입부에 `🚨 EXECUTE NOW: Read(...)` 박스 복원** — 부정형 안내문을 명령형 도구 호출 트리거로 전환
+- **모든 AskUserQuestion 블록에 Continuation Contract 추가** (Step 3/Step 5/Step 7-3/Step 8-3/Step 8-3-1) — "응답 수신 후 즉시 다음 Step의 도구 호출로 진행, 텍스트만 출력하고 멈춤 금지" 명시
+- **사전 준비 섹션 재작성** — 17줄 "사전 준비 후 즉시 AskUserQuestion 호출" vs 28-33줄 lazy-read 표 "Step 진입 직전에만 읽는다"의 충돌 해소. 사전 준비는 `presets.md`만 읽고, 나머지는 각 Step 본문의 `EXECUTE NOW` 박스가 실제 트리거임을 명시. lazy-read 표를 "Per-step EXECUTE Read 인덱스"로 명령형 전환.
+- **`KKIRIKKIRI_DIR` placeholder 정의를 사전 준비 섹션에 추가** — Step 6-1에서야 정의되던 변수가 Step 2/Step 4 캐시 확인/team-prompts 템플릿에서 미리 참조되며 발생하던 변수 미정의 참조 문제 해소
+
+### Council 합의 사항
+
+- 직접 원인은 "MANDATORY READ 박스 → 부정형 안내문" 변환으로 인한 도구 호출 트리거 상실 ("Action Vacuum 상태"). LLM 도구 호출은 상태머신이 아니라 현재 컨텍스트에서 샘플링되는 다음 액션이므로, 단계 본문의 `EXECUTE/MANDATORY + 도구명 + 코드블록`이 상단 lazy-read 표보다 훨씬 강한 트리거임 — 토큰 절약 리팩토링 시 도구 호출 앵커는 줄이지 않는 것이 원칙
+- `KKIRIKKIRI_DIR` 변수 선언 시점 문제는 보조 원인 (Context Noise)이며 멈춤의 직접 원인은 아님 — 함께 해소
+- `team-prompts.md` 페르소나 자유화 (v0.15.1)는 멈춤 직접 원인 아님 — 별도 마이너 패치로 분리
+
+## [0.15.1] - 2026-05-04
+
+### Removed
+- SKILL.md MANDATORY READ wrapper 6회 → 3회로 축소 (Step 3 / Step 4 / Step 8-2 위치 삭제)
+  - 보존: Step 6-2 (공유 메모리 초기화), Step 6-4 (팀원 스폰), Step 7-6 (2라운드 진입) — 컨텍스트 손실 가장 큰 시점
+
+### Changed
+- team-prompts.md 5 archetype 페르소나 형용사 강제(`성격: [3-4 형용사]`) → 자유 narrative (`정체성: 한 줄 자유 narrative — generic 형용사 회피`)
+- 측정 결과 4/5 archetype이 generic adjective cluster 공유 → 자유화로 차별성 회복
+
+### Preserved
+- 5 archetype (Researcher/Builder/Analyst/Critic/Leader) 검증 다중성
+- TeamCreate / TaskCreate / SendMessage / TaskUpdate API 스키마
+- AskUserQuestion JSON 호출 (parser contract)
+- 공유 메모리 경로 + 4단계 작업 완료 protocol
+- Leader R&R "직접 코드/검색/문서 작성 금지" (역할 분리)
+- 43 lock-in 체크리스트 (워크플로우 끝의 안전 가드 — Gemini "앵커링" 비판 인정 후 보존)
+
+## [0.15.0] - 2026-05-03
+
+### Changed — 멀티세션 격리 (Phase 1)
+
+같은 워크스페이스에서 `/kkirikkiri`를 여러 Claude Code 세션이 동시에 실행할 때 공유 문서가 섞이거나 유실되던 문제 해결. 모든 working state를 `team_name` 기반 세션 디렉토리로 격리.
+
+- **새 디렉토리 레이아웃**:
+  - `.kkirikkiri/teams/{team_name}/` — 세션 격리 (TEAM_PLAN/PROGRESS/FINDINGS, agents/, prompts/, agent-cache/, archive/, report.md)
+  - `.kkirikkiri/shared/saved-teams/{team_name}.md` — 크로스 세션 공유 (사용자 명시 저장)
+- **team_name 형식 변경**: `kkirikkiri-{preset}-{YYYYMMDD-HHMM}-{rand4}` (4자리 hex suffix로 동시 시작 충돌 방지)
+- **Step 6-1**에 `KKIRIKKIRI_DIR` 변수 정의 + 디렉토리 생성 + team_name 사용자 출력
+- **레거시 마이그레이션 셰임**: 기존 평면 레이아웃 자동 감지 → `teams/legacy-{epoch}/`로 1회 이동 (mkdir 락 기반 race-safe)
+- **archive 로직 재설계**: 인터-세션 archive 제거, within-session 재구성용으로만 보존 (`{KKIRIKKIRI_DIR}/archive/`)
+- **canonical report**: `kkirikkiri-report-{timestamp}.md` (루트) → `{KKIRIKKIRI_DIR}/report.md`
+- 6개 파일 경로 일괄 변수화: SKILL.md, team-prompts.md, shared-memory.md, output-guide.md, agency-agents-catalog.md, README
+
+### Removed
+
+- `shared-memory.md`의 인터-세션 archive 로직 (Step 6-2 진입 시 다른 세션의 in-flight 파일을 archive로 밀어내던 데이터 유실 원인)
+- "이전 세션 TEAM_FINDINGS.md 아카이빙 확인" 체크리스트 항목 (격리 후 불필요)
+
+### Notes
+
+- Phase 2 (예정): `index.json` 활성 세션 레지스트리 + agent-cache atomic write + stale 세션 GC
+- Agent Council (Claude/Codex/Gemini) 설계 검토 후 합의 7건 반영
+
 ## [0.12.0] - 2026-03-17
 
 ### Added

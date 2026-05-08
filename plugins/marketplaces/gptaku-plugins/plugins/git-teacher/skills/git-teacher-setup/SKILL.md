@@ -1,6 +1,6 @@
 ---
 name: git-teacher-setup
-description: Git/GitHub 초기 설정부터 프로젝트 폴더 생성까지 안내하는 스킬. "깃 시작", "깃 설정", "처음이에요", "git 설치", "GitHub 연결", "프로젝트 만들기", "깃 세팅", "시작하기" 같은 요청에 사용됩니다.
+description: Initial Git/GitHub setup and project folder creation for non-developers — handles install, GitHub connection, and first project scaffold. Auto-skips completed steps. Korean triggers: "깃 시작", "깃 설정", "처음이에요", "git 설치", "GitHub 연결", "프로젝트 만들기", "깃 세팅", "시작하기". English triggers: "start with git", "git setup", "connect GitHub", "new project".
 ---
 
 # 시작하기 — Phase 1 + 2 (바르다 깃선생)
@@ -157,11 +157,12 @@ gh auth login --web --git-protocol https
 #### 선택 1: 새 프로젝트 시작하기
 
 AskUserQuestion으로 프로젝트 이름을 받는다.
+AskUserQuestion으로 레포지토리 공개 여부를 확인한다 (공개/비공개).
 
 ```bash
 mkdir {project-name} && cd {project-name}
 git init
-gh repo create {project-name} --public --source=. --remote=origin --push
+gh repo create {project-name} --{public|private} --source=. --remote=origin --push
 ```
 
 #### 선택 2: 기존 프로젝트 가져오기
@@ -175,9 +176,11 @@ AskUserQuestion으로 GitHub URL 또는 저장소 이름을 받는다.
 
 #### 선택 3: 현재 폴더를 프로젝트로 만들기
 
+AskUserQuestion으로 레포지토리 공개 여부를 확인한다 (공개/비공개).
+
 ```bash
 git init
-gh repo create {folder-name} --public --source=. --remote=origin --push
+gh repo create {folder-name} --{public|private} --source=. --remote=origin --push
 ```
 
 ### Step 5: Phase 2 완료 확인

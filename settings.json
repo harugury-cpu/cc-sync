@@ -115,12 +115,18 @@
     "nopal@gptaku-plugins": true,
     "telegram@claude-plugins-official": false,
     "git-teacher@gptaku-plugins": true,
-    "memory-bank@memory-bank-dev": false,
+    "memory-bank@memory-bank-dev": true,
     "superpowers@claude-plugins-official": true,
     "agent-skills@addy-agent-skills": true,
     "insane-search@insane-search": true,
     "show-me-the-prd@gptaku-plugins": true,
-    "skillers-suda@gptaku-plugins": true
+    "skillers-suda@gptaku-plugins": true,
+    "pumasi@gptaku-plugins": true,
+    "vibe-sunsang@gptaku-plugins": true,
+    "deep-research@gptaku-plugins": true,
+    "docs-guide@gptaku-plugins": true,
+    "insane-design@gptaku-plugins": true,
+    "insane-search@gptaku-plugins": true
   },
   "extraKnownMarketplaces": {
     "omc": {

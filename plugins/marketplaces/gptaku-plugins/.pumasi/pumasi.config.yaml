@@ -1,0 +1,13 @@
+pumasi:
+  defaults:
+    command: "codex exec --dangerously-bypass-approvals-and-sandbox"
+    emoji: "🎨"
+
+  tasks: []
+  # tasks 예시:
+  # - name: some-task
+  #   instruction: |
+  #     작업 지시서...
+  #   gates:
+  #     - bash: "test -f some/file.md"
+  #       label: "파일 존재 확인"
