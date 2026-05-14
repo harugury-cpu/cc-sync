@@ -35,10 +35,6 @@
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/context-enrichment.sh"
-          },
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/memory-inject.sh"
           }
         ]
       }
@@ -53,10 +49,6 @@
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/harsh-critic-learn.sh"
-          },
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/memory-learn.sh"
           }
         ]
       }
@@ -115,7 +107,6 @@
     "nopal@gptaku-plugins": true,
     "telegram@claude-plugins-official": false,
     "git-teacher@gptaku-plugins": true,
-    "memory-bank@memory-bank-dev": true,
     "superpowers@claude-plugins-official": true,
     "agent-skills@addy-agent-skills": true,
     "insane-search@insane-search": true,
@@ -135,12 +126,6 @@
         "url": "https://github.com/Yeachan-Heo/oh-my-claudecode.git"
       }
     },
-    "memory-bank": {
-      "source": {
-        "source": "github",
-        "repo": "jung-wan-kim/memory-bank"
-      }
-    },
     "gptaku-plugins": {
       "source": {
         "source": "git",
@@ -151,12 +136,6 @@
       "source": {
         "source": "github",
         "repo": "anthropics/claude-plugins-official"
-      }
-    },
-    "memory-bank-dev": {
-      "source": {
-        "source": "git",
-        "url": "https://github.com/jung-wan-kim/memory-bank.git"
       }
     },
     "addy-agent-skills": {

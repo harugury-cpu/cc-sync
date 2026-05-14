@@ -31,6 +31,31 @@ description: 제품 기능과 경쟁사 자료를 기반으로 상세페이지�
 6. fitValidation과 evidenceAudit을 실행한다. 입력 근거가 약하거나 환각 가능성이 있으면 점수와 순위를 보수적으로 조정한다.
 7. selfReview에서 점수 인플레이션·근거 부족을 점검한다. 위험을 발견하면 코멘트만 남기지 말고 점수와 scoreReasons를 실제로 수정한 뒤 최종 출력한다.
 
+## 병렬 분석 / 합의 프로토콜
+
+자료가 충분하거나 웹앱/에이전트 환경에서 작업을 분리할 수 있으면 아래 구조를 우선한다. 병렬화의 목적은 속도와 누락 감소이며, 최종 판단은 반드시 중앙에서 합친다.
+
+```text
+Coordinator
+  ├─ Competitor Research Agent: 경쟁사 메시지/비주얼/누락 요소 조사
+  ├─ Product Feature Agent: 자사 기능/소비자 문제/구매장벽 정리
+  ├─ Web·Consumer Agent: 시장 공통 표현/리뷰 불안/구매 전 걱정 보강
+  ├─ Visual Strategy Agent: 사진·일러스트·혼합 구도와 복제 위험 분석
+  ├─ Score Panel A: 소비자 체감·구매 영향 독립 점수
+  ├─ Score Panel B: 경쟁사 대비 메시지·표현 차별화 독립 점수
+  ├─ Score Panel C: 시각화 용이성·증명력·프롬프트 안정성 독립 점수
+  └─ Final Judge: 편차 큰 항목만 재검토하고 TOP 3 확정
+```
+
+운영 규칙:
+
+- 조사/분류는 병렬 실행해도 된다.
+- 점수화 패널은 서로의 점수를 보기 전에 독립 평가한다.
+- 점수 차이가 2점 이상이거나 serious risk가 있으면 dispute로 표시한다.
+- 합의는 평균이 아니라 근거 검증으로 수행한다. 약한 근거는 점수와 confidence를 낮춘다.
+- 최종 TOP 3는 단일 Final Judge가 role-based 순서(intuitive, differentiation, trust)로 확정한다.
+- 자유토론식 합의 금지. `panelAgreement`, `disputedCriteria`, `resolution`, `finalJudgeReason`, `scoreAdjustments`를 구조화해 남긴다.
+
 ## 입력 방식
 
 폴더형 입력을 우선한다. 사용자가 자료 폴더를 제공하면 먼저 `references/input-folder.md`를 읽고 자료 구조를 확인한다.

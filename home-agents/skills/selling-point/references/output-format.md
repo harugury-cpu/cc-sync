@@ -8,11 +8,12 @@
 4. 신뢰도 분해 (confidenceBreakdown)
 5. 경쟁사 공통 표현 패턴
 6. 우리 제품 차별화 기회
-7. TOP 1, 2, 3 카드
-8. 사진/일러스트 판단 보조 노트
-9. 비주얼 브리프 (각 TOP 카드별, `visual-brief.md` 형식)
-10. 구도 미리보기/이미지 생성 핸드오프
-11. 평가 모드 보고서 (평가 모드일 때만)
+7. 점수화 패널 합의 요약 (scoringPanelConsensus)
+8. TOP 1, 2, 3 카드
+9. 사진/일러스트 판단 보조 노트
+10. 비주얼 브리프 (각 TOP 카드별, `visual-brief.md` 형식)
+11. 구도 미리보기/이미지 생성 핸드오프
+12. 평가 모드 보고서 (평가 모드일 때만)
 
 ## 1. 입력 자료 요약
 
@@ -112,7 +113,32 @@ confidenceBreakdown:
 - 
 ```
 
-## 7. TOP 카드 구조
+## 7. 점수화 패널 합의 요약 (scoringPanelConsensus)
+
+병렬/다중 에이전트 환경에서는 TOP 카드 전에 점수화 패널 합의 결과를 기록한다. 단일 실행 환경에서도 같은 사고 절차를 압축해서 작성한다.
+
+```text
+scoringPanelConsensus:
+- method: independent-panel-then-dispute-resolution
+- panelFiles:
+  - consumer panel
+  - differentiation panel
+  - visual/proof panel
+- disputedCandidates:
+  - candidateId:
+    disputedCriteria:
+    resolution:
+- finalJudgeSummary:
+```
+
+원칙:
+
+- 패널 점수는 평균내지 않는다.
+- 2점 이상 차이나는 기준 또는 serious risk만 쟁점으로 올린다.
+- 근거가 약한 쪽은 점수/신뢰도를 내린다.
+- 최종 선정은 role-based 순서(intuitive, differentiation, trust)를 지킨다.
+
+## 8. TOP 카드 구조
 
 각 TOP 카드에 다음 항목을 포함한다.
 
@@ -173,6 +199,18 @@ selfValidation:
 
 selfReview: 수정 없음 / 또는 점수 조정 사실과 이유 1문장
 
+consensusReview:
+- panelAgreement: high / medium / low
+- disputedCriteria:
+  - 
+- resolution:
+- finalJudgeReason:
+- scoreAdjustments:
+  - criterion:
+    from:
+    to:
+    reason:
+
 추천 표현 형식:
 - baseline: product_hero / lifestyle
 - 주 표현:
@@ -190,7 +228,7 @@ selfReview: 수정 없음 / 또는 점수 조정 사실과 이유 1문장
 비주얼 브리프 (영문 8필드 + baseline prefix, visual-brief.md 형식 그대로):
 ```
 
-## 8. 사진/일러스트 판단 보조 노트
+## 9. 사진/일러스트 판단 보조 노트
 
 사진이 적합한 경우:
 
