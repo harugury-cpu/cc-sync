@@ -42,8 +42,9 @@ metadata:
 ```
 Step 1. 내용 수집
 Step 2. 슬라이드 구성 제안 → 사용자 승인
-Step 3. 생성 + 링크 공유
-Step 4. 검증 실행 여부 질문
+Step 3. Preflight Gate 통과
+Step 4. 생성 + 링크 공유
+Step 5. 검증 실행 여부 질문
 ```
 
 ---
@@ -307,7 +308,59 @@ lib.mk_decision_tree(oid, nodes={
 
 ---
 
-## Step 3. 생성
+## Step 3. Preflight Gate
+
+생성 스크립트를 작성하기 전에 반드시 `/tmp/spigen_plan_<BUILD_NAME>.json`을 만들고
+`spigen_preflight.py`를 실행한다.
+
+목적:
+- 자료 목적 → 섹션 구조 → 슬라이드 역할 → 컴포넌트 선택 순서를 강제한다.
+- 구조 설명을 카드로 압축하거나, 논의 항목을 카드로 만드는 실수를 막는다.
+- 7장 이상 덱에서 섹션 구분 없이 슬라이드를 나열하는 실수를 막는다.
+
+필수 JSON 형식:
+
+```json
+{
+  "purpose": "운영 구조 설명",
+  "audience": "프로젝트 참여자",
+  "mode": "operational_detail_report",
+  "sections": [
+    {
+      "title": "현재 구조",
+      "slides": [
+        {"title": "전체 구조", "role": "structure", "component": "diagram"}
+      ]
+    },
+    {
+      "title": "추가 논의 항목",
+      "slides": [
+        {"title": "논의 항목 1", "role": "agenda", "component": "numbered_text"}
+      ]
+    }
+  ]
+}
+```
+
+실행:
+
+```bash
+python3 ~/.agents/skills/spigen-slides/spigen_preflight.py /tmp/spigen_plan_<BUILD_NAME>.json
+```
+
+실패 시:
+- 빌드하지 않는다.
+- 섹션, role, component를 수정한 뒤 다시 실행한다.
+
+특히 아래는 실패로 본다:
+- 7장 이상인데 섹션이 2개 미만
+- 논의 항목을 card / 3col_cards로 구성
+- 구조 설명을 diagram / flow / arch 계열이 아닌 카드 위주로 구성
+- 작동 방식을 flow / diagram 계열이 아닌 카드 위주로 구성
+
+---
+
+## Step 4. 생성
 
 승인된 구성대로 Python 빌드 스크립트를 작성하고 실행한다.
 
@@ -437,13 +490,28 @@ python3 /tmp/build_<name>.py
 - ❌ 검정 배경 위 어두운 오렌지·갈색 톤 텍스트
 - ❌ 긴 본문이나 보조 설명을 오렌지 계열 색으로 표기 — 오렌지는 강조 전용
 - ❌ `ACCENT_DIM`을 텍스트 색으로 사용 (배경 fill 전용)
-- ❌ **슬라이드당 오렌지(accent) 가시적 사용 2회 초과** — eyebrow 오렌지 + 강조 카드 1개가 정석 쌍. 오렌지 구분선 + 오렌지 카드 테두리 + 오렌지 eyebrow + 풀카드가 동시에 있으면 accent가 희석된다. 슬라이드당 2회를 목표로, 3회 이상이면 우선순위가 낮은 것부터 제거한다.
+- ❌ **슬라이드당 오렌지(accent) 가시적 사용 2회 초과 (V6.3.3: eyebrow 제외)** — eyebrow는 헤더 메타로 항상 ORANGE 고정이므로 카운트에서 제외한다. 카운트 대상은 본문 영역의 오렌지 사용: 오렌지 구분선 / 오렌지 카드 테두리(normal/dim) / 풀 오렌지 카드(`emphasis="full"`) / 오렌지 텍스트 강조. 본문 영역 기준 슬라이드당 2회 이내, 3회 이상이면 우선순위가 낮은 것부터 제거한다.
 
 ### 2. 강조 카드 사용 제한
 - ❌ 한 슬라이드에 풀 ORANGE 강조 카드 (`emphasis="full"`) **2개 이상**
-- ❌ 모든 슬라이드에 습관적으로 풀 강조 카드 추가
+- ❌ 한 슬라이드에 dim 강조 카드 (`emphasis="dim"`) **2개 이상** (V6.3.3 신설 — full 룰과 대칭)
+- ❌ **dim 카드 수 > normal 카드 수** (V6.3.3 신설). dim과 normal을 각각 비교.
+- ❌ **full 카드 수 > normal 카드 수** (V6.3.3 신설). full과 normal을 각각 비교.
+- ❌ **full 없이 dim 단독 사용 금지** (V6.3.3 신설) — dim을 쓰려면 같은 슬라이드에 full 1개 동반 필수. 약한 강조(dim)만 깔리면 위계 시그널 약해짐. full 단독은 OK (강한 강조).
+  - N=2: `full 1 + normal 1` 또는 `normal 2` — `dim 1 + normal 1`은 dim 단독이라 금지
+  - N=3: `full 1 + normal 2` 또는 `dim 1 + full 1 + normal 1` 또는 `normal 3` — `dim 1 + normal 2`는 dim 단독 금지
+  - N=4: `dim 1 + full 1 + normal 2` — 정석 풀하우스 패턴 (full + dim 위계 둘 다)
 - ❌ 분석 카드와 결론 카드를 **같은 크기·색·밀도**로 나란히 배치 (위계 무너짐)
 - ❌ 색만으로 의미 전달 (`color-only meaning`) — 형태/위치도 함께 차별화
+
+#### 풀 오렌지 (`emphasis="full"`) 사용 기준 (V6.3.3)
+- ✅ **덱 전체 상한 없음** — 슬라이드는 한 장씩 분리되어 표시되므로 페이지 임팩트가 다른 페이지에 누적되지 않는다. 한 슬라이드 1개 룰만 지키면 풀 카드는 덱에 몇 장이든 상관없다.
+- ✅ 결론 / 핵심 메트릭 슬라이드 — 풀 카드 1개 권장
+- ✅ 카드 N장 그룹에서 **사용자가 반드시 보길 원하는 단 하나의 카드** — 풀로 승격
+- ✅ 정석 패턴: `풀 1 + normal N-1` (또는 `dim 1 + normal N-1`, 또는 `dim 1 + full 1 + normal N-2`)
+- ✅ 풀 카드 안 텍스트는 **테마 바탕색** 자동 (dark=검정, light=흰색) — 코드가 처리 (V6.3.3)
+- ❌ 강조 의도 없이 풀 사용 — 단순 다양성 / 시각 채움 목적이면 normal 유지
+- ❌ 카드 모두 dim — 위계 없음. 1개를 풀로 승격하거나 모두 normal로 평준화
 
 ### 3. 카드 구성
 - ❌ 카드 안에 강조용 sub-box 삽입 (박스 안 박스) — `emphasis` 토큰으로 대체
