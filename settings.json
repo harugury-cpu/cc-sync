@@ -156,6 +156,10 @@
   "skipDangerousModePermissionPrompt": true,
   "theme": "light",
   "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--headless"]
+    },
     "monday-apps-mcp": {
       "command": "npx",
       "args": [

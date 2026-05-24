@@ -1,0 +1,3 @@
+display_name: 업무정량화 오케스트레이터
+short_description: 업무정량화 PRD를 모듈별 구현 작업과 테스트 케이스로 분해합니다.
+default_prompt: 업무정량화 프로젝트 폴더를 스캔하고, PRD 기준으로 구현 모듈·파일 구조·테스트 케이스·QA Gate를 작성해줘.

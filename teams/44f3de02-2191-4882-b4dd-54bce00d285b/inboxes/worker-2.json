@@ -1,0 +1,8 @@
+[
+  {
+    "from": "team-lead",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"2\",\"subject\":\"Worker 2: server.js 강화\",\"description\":\"프로젝트: /Users/harugury/.cokacdir/workspace/m2de78rd/selling-point-creater\\n대상 파일: server/server.js (2241줄)\\n\\n## 파일 분리 (최우선)\\nserver.js를 다음 모듈로 분리:\\n1. server/server.js — Express 앱 초기화, 미들웨어, 포트 바인딩만 (진입점)\\n2. server/routes/analysis.js — /analyze, /stage/* 라우트 핸들러\\n3. server/routes/image.js — /generate-image, ima2-gen 관련 라우트\\n4. server/services/codex.js — Codex CLI 호출, staged analysis 로직\\n5. server/services/prompt.js — 프롬프트 생성 함수들\\n6. server/middleware/validation.js — 요청 유효성 검사, sanitization\\n\\n## server.js 강화\\n1. 에러 핸들링 강화 (try-catch 누락 구간, 상세 에러 메시지)\\n2. Codex CLI staged analysis 프롬프트 품질 향상\\n3. API 응답 robustness (타임아웃 처리)\\n4. 내부 키/민감정보 필터링 강화 (API 키 응답 노출 방지)\\n5. 로깅 개선 (구조화된 로그)\\n\\n완료 조건:\\n- server/ 디렉토리 하위 routes/, services/, middleware/ 폴더 생성\\n- node --check 로 각 파일 문법 확인 통과\\n- 서버 정상 기동 확인 (node server/server.js 실행 후 포트 리스닝 로그 확인)\",\"assignedBy\":\"team-lead\",\"timestamp\":\"2026-05-23T07:16:30.780Z\"}",
+    "timestamp": "2026-05-23T07:16:30.780Z",
+    "read": false
+  }
+]

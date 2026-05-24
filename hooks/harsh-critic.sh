@@ -99,7 +99,8 @@ check_triggers() {
 }
 
 main() {
-  TRIGGERS_FILE="$HOME/.claude/data/harsh-critic-triggers.json"
+  HARSH_CRITIC_HOME="${HARSH_CRITIC_HOME:-$HOME/.ai-feedback/harsh-critic}"
+  TRIGGERS_FILE="${HARSH_CRITIC_TRIGGERS_FILE:-$HARSH_CRITIC_HOME/triggers.json}"
 
   if [ ! -f "$TRIGGERS_FILE" ]; then
     exit 0

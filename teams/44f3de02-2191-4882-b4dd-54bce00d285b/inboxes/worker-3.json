@@ -1,0 +1,8 @@
+[
+  {
+    "from": "team-lead",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"3\",\"subject\":\"Worker 3: app.js 모듈 분리 (PRD 10.4)\",\"description\":\"프로젝트: /Users/harugury/.cokacdir/workspace/m2de78rd/selling-point-creater\\n대상 파일: public/app.js (2939줄) → 5개 파일로 분리\\nPRD 10.4 권장 구조:\\n1. public/app.js (코어 상태/초기화만 남김)\\n2. public/image-generation.js (APPLE_BASELINES, ima2-gen 관련 함수)\\n3. public/pdf-export.js (PDF 내보내기 관련 함수)\\n4. public/prompt-builder.js (프롬프트 구성 함수)\\n5. public/result-renderer.js (분석 결과 렌더링 함수)\\n작업 내용:\\n- 각 모듈 책임 경계 파악 후 함수 분류\\n- 모듈 간 의존성 처리 (전역 state 참조 방식 유지)\\n- index.html에 새 스크립트 태그 추가\\n- 분리 후 app.js에서 삭제된 함수 참조 정리\\n완료 조건: 브라우저 콘솔 오류 없이 기존 기능 동작, node --check로 각 파일 문법 확인\",\"assignedBy\":\"team-lead\",\"timestamp\":\"2026-05-23T07:16:30.858Z\"}",
+    "timestamp": "2026-05-23T07:16:30.858Z",
+    "read": false
+  }
+]
