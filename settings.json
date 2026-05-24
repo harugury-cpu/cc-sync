@@ -30,6 +30,10 @@
         "hooks": [
           {
             "type": "command",
+            "command": "$HOME/.claude/hooks/memory-inject.sh"
+          },
+          {
+            "type": "command",
             "command": "$HOME/.claude/hooks/harsh-critic-trigger.sh"
           },
           {
@@ -42,6 +46,10 @@
     "Stop": [
       {
         "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/memory-learn.sh"
+          },
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/harsh-critic.sh"
