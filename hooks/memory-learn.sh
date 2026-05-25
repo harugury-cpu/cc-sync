@@ -82,7 +82,7 @@ ${TURNS_COPY}
         {
             echo '# 이전 세션 메모리'
             echo ''
-            ls -t '${MEM_DIR}'/session_*.md 2>/dev/null | head -3 | while IFS= read -r f; do
+            ls -t '${MEM_DIR}'/session_*.md 2>/dev/null | head -10 | while IFS= read -r f; do
                 cat \"\$f\"
                 echo '---'
             done
