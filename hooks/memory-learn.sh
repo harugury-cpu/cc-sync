@@ -49,48 +49,46 @@ SESSION_FILE="$MEM_DIR/session_${DATE}_${TIME}.md"
 TURNS_COPY="$TURNS"
 
 # 완전 분리된 백그라운드 프로세스 (부모 쉘 즉시 종료)
-(
-    setsid bash -c "
-        PROMPT='다음 AI 대화에서 다음 세션에 유용한 정보를 추출하라. 없는 항목은 완전히 생략.
+PROMPT="아래 대화에서 이 사람을 이해하는 데 도움이 되는 정보를 추출하라. 업무 내용보다 이 사람이 어떤 사람인지에 집중. 없는 항목은 완전히 생략.
 
 대화:
 ${TURNS_COPY}
 
 형식 (없는 항목 생략):
-## 사용자 선호/패턴
--
+## 성향 / 말투
+- (짜증 표현 방식, 유머, 직접성, 반응 패턴 등)
 
-## 내린 결정
--
+## 관심사 / 고민
+- (업무 외 개인적 관심사, 이직·커리어·인생 고민 등)
 
-## 진행 중 작업
--
+## 이 세션에서 새로 알게 된 것
+- (새로 드러난 선호, 불만, 기대, 가치관)
 
-## 주의사항
-- '
+## 진행 중 작업 (신규 또는 상태 변경된 것만)
+-"
 
-        EXTRACT=\$(echo \"\$PROMPT\" | CLAUDE_SKIP_MEMORY_LEARN=1 timeout 90 claude -p 2>/dev/null | head -30 || echo '')
-        [ -n \"\$EXTRACT\" ] || exit 0
+{
+    EXTRACT=$(echo "$PROMPT" | CLAUDE_SKIP_MEMORY_LEARN=1 claude -p 2>/dev/null | head -40 || echo "")
+    [ -n "$EXTRACT" ] || exit 0
 
-        {
-            echo '# 세션: ${DATE} ${TIME}'
-            echo ''
-            echo \"\$EXTRACT\"
-            echo ''
-        } > '${SESSION_FILE}'
+    {
+        echo "# 세션: ${DATE} ${TIME}"
+        echo ""
+        echo "$EXTRACT"
+        echo ""
+    } > "${SESSION_FILE}"
 
-        {
-            echo '# 이전 세션 메모리'
-            echo ''
-            ls -t '${MEM_DIR}'/session_*.md 2>/dev/null | head -10 | while IFS= read -r f; do
-                cat \"\$f\"
-                echo '---'
-            done
-        } > '${MEM_DIR}/LATEST.md'
+    {
+        echo "# 이전 세션 메모리"
+        echo ""
+        ls -t "${MEM_DIR}"/session_*.md 2>/dev/null | head -10 | while IFS= read -r f; do
+            cat "$f"
+            echo "---"
+        done
+    } > "${MEM_DIR}/LATEST.md"
 
-        echo '💾 [MEMORY-LEARN] 저장: ${SESSION_FILE}' >&2
-    " > /dev/null 2>&1
-) &
+    echo "💾 [MEMORY-LEARN] 저장: ${SESSION_FILE}" >&2
+} > /dev/null 2>&1 &
 disown $!
 
 exit 0
