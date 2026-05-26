@@ -1,9 +1,23 @@
 #!/bin/bash
-# UserPromptSubmit hook: 이전 세션 메모리 + 프로젝트 메모리 + MCP 지식 그래프를 컨텍스트에 주입
+# UserPromptSubmit hook: LanceDB 의미 검색으로 관련 메모리 주입
+
+INPUT=$(cat 2>/dev/null || echo "")
+QUERY=$(echo "$INPUT" | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    # hook_event_name = UserPromptSubmit, prompt 필드 추출
+    prompt = d.get('prompt', '')
+    if isinstance(prompt, list):
+        prompt = ' '.join(x.get('text','') for x in prompt if isinstance(x, dict))
+    print(str(prompt)[:300])
+except:
+    pass
+" 2>/dev/null || echo "")
 
 OUTPUT=""
 
-# 1. 프로젝트 메모리 (사용자 프로필, 설정, 피드백)
+# 1. 프로젝트 메모리 (사용자 프로필, 설정, 피드백) — 기존 방식 유지
 PROJECT_MEM_DIR="$HOME/.claude/projects/-Users-harugury--cokacdir-workspace-yizd0re4/memory"
 for f in user_profile.md project_setup.md feedback.md; do
     FPATH="$PROJECT_MEM_DIR/$f"
@@ -14,41 +28,37 @@ for f in user_profile.md project_setup.md feedback.md; do
 "
 done
 
-# 2. MCP 지식 그래프 엔티티
-MCP_MEM="$HOME/.claude/mcp-memory.json"
-if [ -f "$MCP_MEM" ]; then
-    MCP_CONTENT=$(python3 -c "
-import json, sys
+# 2. LanceDB 의미 검색 (ollama가 실행 중인 경우)
+if [ -n "$QUERY" ]; then
+    SEMANTIC=$(python3 -c "
+import sys
+sys.path.insert(0, '$HOME/.claude/bin')
 try:
-    with open('$MCP_MEM', encoding='utf-8') as f:
-        data = json.load(f)
-    entities = data.get('entities', [])
-    if not entities:
-        sys.exit(0)
-    print('## MCP 지식 그래프')
-    for e in entities:
-        name = e.get('name', '')
-        etype = e.get('entityType', '')
-        obs = e.get('observations', [])
-        print(f'### {name} ({etype})')
-        for o in obs:
-            print(f'- {o}')
-except:
+    import mem_db
+    results = mem_db.search('$QUERY', limit=4)
+    if results:
+        print('## 관련 기억 (의미 검색)')
+        for r in results:
+            print(f\"[{r['date']} | {r['source']}]\")
+            print(r['content'][:250])
+            print('---')
+except Exception as e:
     pass
 " 2>/dev/null || echo "")
-    [ -n "$MCP_CONTENT" ] && OUTPUT="${OUTPUT}${MCP_CONTENT}
+    [ -n "$SEMANTIC" ] && OUTPUT="${OUTPUT}${SEMANTIC}
 
 "
 fi
 
-# 3. 직전 세션 메모리
-LATEST="$HOME/.claude/memory/LATEST.md"
-if [ -f "$LATEST" ]; then
-    LATEST_CONTENT=$(head -60 "$LATEST" 2>/dev/null || echo "")
-    [ -n "$LATEST_CONTENT" ] && OUTPUT="${OUTPUT}${LATEST_CONTENT}"
+# 3. 직전 세션 메모리 (fallback — LATEST.md)
+if [ -z "$SEMANTIC" ]; then
+    LATEST="$HOME/.claude/memory/LATEST.md"
+    if [ -f "$LATEST" ]; then
+        LATEST_CONTENT=$(head -60 "$LATEST" 2>/dev/null || echo "")
+        [ -n "$LATEST_CONTENT" ] && OUTPUT="${OUTPUT}${LATEST_CONTENT}"
+    fi
 fi
 
 [ -n "$OUTPUT" ] || exit 0
-
 printf '<previous-session-memory>\n%s\n</previous-session-memory>\n' "$OUTPUT"
 exit 0

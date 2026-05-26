@@ -1,24 +1,19 @@
 #!/bin/bash
-# Stop hook: 세션 종료 시 LanceDB + 마크다운 동시 저장
+# Stop hook: 세션 종료 시 핵심 내용 자동 추출 → ~/.claude/memory/ 저장
 
 set -uo pipefail
+
+# 재귀 방지: memory-learn이 spawning한 claude -p 서브세션이면 스킵
 [ -z "${CLAUDE_SKIP_MEMORY_LEARN:-}" ] || exit 0
 
 MEM_DIR="$HOME/.claude/memory"
 mkdir -p "$MEM_DIR"
 
 INPUT=$(cat 2>/dev/null || echo "")
-TRANSCRIPT_PATH=$(echo "$INPUT" | python3 -c "
-import json, sys
-try:
-    d = json.load(sys.stdin)
-    print(d.get('transcript_path', '') or '')
-except:
-    print('')
-" 2>/dev/null || echo "")
-
+TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path // empty' 2>/dev/null || echo "")
 [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ] || exit 0
 
+# JSONL 파싱: 사용자/어시스턴트 메시지만 추출
 TURNS=$(python3 -c "
 import json, sys
 msgs = []
@@ -44,6 +39,7 @@ except:
 print('\n'.join(msgs[-20:]))
 " "$TRANSCRIPT_PATH" 2>/dev/null || echo "")
 
+# 5턴 미만 세션 스킵
 TURN_COUNT=$(echo "$TURNS" | grep -c '^[UA]:' 2>/dev/null || echo 0)
 [ "$TURN_COUNT" -ge 5 ] || exit 0
 
@@ -52,6 +48,7 @@ TIME=$(date +%H%M)
 SESSION_FILE="$MEM_DIR/session_${DATE}_${TIME}.md"
 TURNS_COPY="$TURNS"
 
+# 완전 분리된 백그라운드 프로세스 (부모 쉘 즉시 종료)
 PROMPT="아래 대화에서 이 사람을 이해하는 데 도움이 되는 정보를 추출하라. 업무 내용보다 이 사람이 어떤 사람인지에 집중. 없는 항목은 완전히 생략.
 
 대화:
@@ -74,12 +71,12 @@ ${TURNS_COPY}
     EXTRACT=$(echo "$PROMPT" | CLAUDE_SKIP_MEMORY_LEARN=1 claude -p 2>/dev/null | head -40 || echo "")
     [ -n "$EXTRACT" ] || exit 0
 
-    SESSION_CONTENT="# 세션: ${DATE} ${TIME}
-
-${EXTRACT}
-"
-    # 마크다운 저장 (기존 방식 유지)
-    echo "$SESSION_CONTENT" > "$SESSION_FILE"
+    {
+        echo "# 세션: ${DATE} ${TIME}"
+        echo ""
+        echo "$EXTRACT"
+        echo ""
+    } > "${SESSION_FILE}"
 
     {
         echo "# 이전 세션 메모리"
@@ -89,25 +86,6 @@ ${EXTRACT}
             echo "---"
         done
     } > "${MEM_DIR}/LATEST.md"
-
-    # LanceDB에도 저장
-    python3 -c "
-import sys
-sys.path.insert(0, '$HOME/.claude/bin')
-try:
-    import mem_db
-    content = '''${SESSION_CONTENT}'''
-    chunks = [content[i:i+600] for i in range(0, len(content), 600)]
-    for chunk in chunks:
-        chunk = chunk.strip()
-        if chunk and len(chunk) > 30:
-            mem_db.add(chunk, source='session_${DATE}_${TIME}.md', agent='claude')
-except Exception as e:
-    pass
-" 2>/dev/null || true
-
-    # Wiki 자동 재빌드
-    python3 "$HOME/.claude/bin/wiki_builder.py" 2>/dev/null || true
 
     echo "💾 [MEMORY-LEARN] 저장: ${SESSION_FILE}" >&2
 } > /dev/null 2>&1 &

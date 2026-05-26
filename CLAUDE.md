@@ -25,4 +25,6 @@
 1. 실행 전에 완료 조건을 명시하고 사용자 승인을 받는다
 2. 예: "완료 조건: [A, B, C]. 진행할까요?"
 3. 생성·읽기·설명 요청은 이 단계를 생략한다
-
+# graphify
+- **graphify** (`~/.claude/skills/graphify/SKILL.md`) - any input to knowledge graph. Trigger: `/graphify`
+When the user types `/graphify`, invoke the Skill tool with `skill: "graphify"` before doing anything else.
