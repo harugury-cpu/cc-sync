@@ -23,7 +23,7 @@ echo ""
 mkdir -p "$TARGET_DIR"
 
 # 디렉토리 복사
-for dir in agents hooks skills memory plugins commands scripts rules teams data; do
+for dir in agents hooks skills memory plugins commands scripts rules teams data bin; do
     if [ -d "$SCRIPT_DIR/$dir" ]; then
         echo "✓ $dir 복사 중..."
         sync_dir "$SCRIPT_DIR/$dir" "$TARGET_DIR/$dir"
@@ -81,6 +81,7 @@ fi
 echo "✓ 실행 권한 설정 중..."
 chmod +x "$TARGET_DIR/hooks"/*.sh 2>/dev/null
 chmod +x "$TARGET_DIR/scripts"/*.sh 2>/dev/null
+chmod +x "$TARGET_DIR/bin"/*.py 2>/dev/null
 
 # 플러그인 자동 설치
 INSTALLED_PLUGINS="$SCRIPT_DIR/plugins/installed_plugins.json"
