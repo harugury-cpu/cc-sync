@@ -13,6 +13,7 @@ claude_code_config.json
 .opencode/.mcp.json
 .omc/
 **/.omc/
+**/sessions/
 
 # Memory data (contains personal conversation history)
 memory/
