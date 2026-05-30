@@ -18,6 +18,34 @@ memory-bank-sync/
 
 # Plugin cache (large, regeneratable)
 plugins/cache/
+codex/plugins/cache/
+
+# Codex local-only / sensitive / bulky state
+codex/auth.json
+codex/installation_id
+codex/.personality_migration
+codex/.codex-global-state.json*
+codex/models_cache.json
+codex/logs_*.sqlite*
+codex/state_*.sqlite*
+codex/goals_*.sqlite*
+codex/history.jsonl
+codex/session_index.jsonl
+codex/cache/
+codex/.tmp/
+codex/tmp/
+codex/log/
+codex/logs/
+codex/sessions/
+codex/archived_sessions/
+codex/shell_snapshots/
+codex/node_repl/
+codex/generated_images/
+codex/computer-use/
+codex/sqlite/
+codex/ambient-suggestions/
+codex/pets/
+codex/vendor_imports/skills-curated-cache.json
 
 # Rendered video output
 video/*/out/

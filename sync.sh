@@ -15,6 +15,16 @@ sync_dir() {
     fi
 }
 
+sync_dir_rsync() {
+    local src="$1" dst="$2"
+    shift 2
+    if [ -d "$src" ]; then
+        mkdir -p "$dst"
+        rsync -a --delete "$@" "$src"/ "$dst"/
+        rm -rf "$dst/.git" 2>/dev/null
+    fi
+}
+
 echo "🔄 Claude Code 설정 동기화 중..."
 echo "Source: $SOURCE_DIR"
 echo "Target: $SCRIPT_DIR"
@@ -31,7 +41,10 @@ done
 # ~/.agents 동기화 → home-agents/
 if [ -d "$HOME/.agents" ]; then
     echo "✓ ~/.agents 동기화 중..."
-    sync_dir "$HOME/.agents" "$SCRIPT_DIR/home-agents"
+    sync_dir_rsync "$HOME/.agents" "$SCRIPT_DIR/home-agents" \
+        --exclude ".git/" \
+        --exclude "__pycache__/" \
+        --exclude "*.pyc"
 fi
 
 # ~/.agents/skills → ~/.claude/skills 동기화 (Claude Code + Codex 공유 스킬)
@@ -49,6 +62,42 @@ fi
 if [ -d "$HOME/.opencode" ]; then
     echo "✓ .opencode 동기화 중..."
     sync_dir "$HOME/.opencode" "$SCRIPT_DIR/.opencode"
+fi
+
+# ~/.codex 동기화 → codex/
+# 토큰/세션/로그/캐시/임시 파일은 제외하고, 설정·스킬·규칙·메모리·자동화만 동기화한다.
+if [ -d "$HOME/.codex" ]; then
+    echo "✓ ~/.codex 동기화 중..."
+    sync_dir_rsync "$HOME/.codex" "$SCRIPT_DIR/codex" \
+        --exclude ".git/" \
+        --exclude "auth.json" \
+        --exclude "installation_id" \
+        --exclude ".personality_migration" \
+        --exclude ".codex-global-state.json*" \
+        --exclude "models_cache.json" \
+        --exclude "logs_*.sqlite*" \
+        --exclude "state_*.sqlite*" \
+        --exclude "goals_*.sqlite*" \
+        --exclude "history.jsonl" \
+        --exclude "session_index.jsonl" \
+        --exclude "cache/" \
+        --exclude ".tmp/" \
+        --exclude "tmp/" \
+        --exclude "log/" \
+        --exclude "logs/" \
+        --exclude "sessions/" \
+        --exclude "archived_sessions/" \
+        --exclude "shell_snapshots/" \
+        --exclude "node_repl/" \
+        --exclude "generated_images/" \
+        --exclude "computer-use/" \
+        --exclude "sqlite/" \
+        --exclude "ambient-suggestions/" \
+        --exclude "pets/" \
+        --exclude "plugins/cache/" \
+        --exclude "vendor_imports/skills-curated-cache.json" \
+        --exclude "__pycache__/" \
+        --exclude "*.pyc"
 fi
 
 # 단일 파일 동기화

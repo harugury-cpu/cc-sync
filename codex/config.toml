@@ -1,0 +1,218 @@
+model = "gpt-5.5"
+model_reasoning_effort = "medium"
+notify = ["/Users/harugury/.codex/computer-use/Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient", "turn-ended"]
+
+[projects."/Users/harugury/Documents/Playground"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/0.work/0. pyson-study"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/0.work/원진"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/0.work/원진/칼선 프로젝트"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/0.work/원진/칠텐 알림"]
+trust_level = "trusted"
+
+[projects."/Users/harugury"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/0.work/0. pyson-study/ai-jsx script"]
+trust_level = "trusted"
+
+[projects."/Volumes/Package/1_part/1_Auto/NAS_공유용/바커_자동생성"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/awfvcz36"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/0.work/0. pyson-study/box-engine"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/uuorblyr"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/g9uyu7yn"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/ouumqsxn"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.agents/skills/spigen-slides"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/6f6sgkmv"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/s0rbyrl4"]
+trust_level = "trusted"
+
+[projects."/private/tmp"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/0.work/0. pyson-study/monday-automation"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/w51gxym1"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/m2de78rd"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/wirxn9hd"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/oqaxeiar"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/8xvmtbeh"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/0.work/0. pyson-study/seling-point-creater"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/aofs0yh9"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/Code/trace"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/0.work/1. 진행중/26.06 업무정량화"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/jgrmjiud"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/yk3v9yia"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/m2de78rd/selling-point-creater"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/zqu3yd3z"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/ulgk3ksz"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/n4uq1xox"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/befl5yoc"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/aenjfytn"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/5jzz5nw2"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/B3078965"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/ssonehty"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/y9vntfb8"]
+trust_level = "trusted"
+
+[notice.model_migrations]
+"gpt-5.3-codex" = "gpt-5.4"
+
+[plugins."github@openai-curated"]
+enabled = true
+
+[plugins."documents@openai-primary-runtime"]
+enabled = true
+
+[plugins."spreadsheets@openai-primary-runtime"]
+enabled = true
+
+[plugins."presentations@openai-primary-runtime"]
+enabled = true
+
+[plugins."google-drive@openai-curated"]
+enabled = true
+
+[plugins."browser@openai-bundled"]
+enabled = true
+
+[plugins."monday-com@openai-curated"]
+enabled = true
+
+[tui.model_availability_nux]
+"gpt-5.5" = 4
+
+[marketplaces.openai-bundled]
+last_updated = "2026-05-25T01:30:17Z"
+source_type = "local"
+source = "/Users/harugury/.codex/.tmp/bundled-marketplaces/openai-bundled"
+
+[marketplaces.openai-primary-runtime]
+last_updated = "2026-05-23T08:28:55Z"
+source_type = "local"
+source = "/Users/harugury/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime"
+
+[mcp_servers.monday-api]
+command = "npx"
+args = ["-y", "@mondaydotcomorg/monday-api-mcp@latest"]
+
+[mcp_servers.monday-api.env]
+MONDAY_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJ0aWQiOjQ1MTIxMDg2MSwiYWFpIjoxMSwidWlkIjoyODM5NjY2NiwiaWFkIjoiMjAyNC0xMi0yNFQwOTowMTo1Ny4wMDBaIiwicGVyIjoibWU6d3JpdGUiLCJhY3RpZCI6MTExNjU5NTcsInJnbiI6InVzZTEifQ.l0uAa7SJiOQL4NCfnw648jaLcLiqMLr2YcpcJpSn6jQ"
+
+[mcp_servers.node_repl]
+args = []
+command = "/Applications/Codex.app/Contents/Resources/node_repl"
+startup_timeout_sec = 120
+
+[mcp_servers.node_repl.env]
+BROWSER_USE_AVAILABLE_BACKENDS = "chrome,iab"
+BROWSER_USE_MARKETPLACE_NAME = "openai-bundled"
+CODEX_CLI_PATH = "/Applications/Codex.app/Contents/Resources/codex"
+CODEX_HOME = "/Users/harugury/.codex"
+NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS = "1000"
+NODE_REPL_NODE_MODULE_DIRS = ""
+NODE_REPL_NODE_PATH = "/Applications/Codex.app/Contents/Resources/node"
+NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "167fdf579477181fba1773c1efb067b00c5a64fe85dafb50a2001bde198dc739"
+NODE_REPL_TRUSTED_CODE_PATHS = "/Users/harugury/.codex"
+NODE_REPL_UNTRUSTED_ENV_ALLOWLIST = "BROWSER_USE_MARKETPLACE_NAME"
+
+[mcp_servers.filesystem]
+command = "npx"
+args = [
+  "-y",
+  "@modelcontextprotocol/server-filesystem@latest",
+  "/Users/harugury/Code",
+  "/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/0.work",
+  "/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault"
+]
+
+[mcp_servers.github]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-github@latest"]
+
+[mcp_servers.korean-law]
+command = "npx"
+args = ["-y", "korean-law-mcp@latest"]
+
+[mcp_servers.memory]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-memory@latest"]
+
+[mcp_servers.memory.env]
+MEMORY_FILE_PATH = "/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/0.work/원진/Trace/user-settings/memory.jsonl"
+
+[features]
+js_repl = false
+
+[desktop.open-in-target-preferences]
+global = "terminal"
+
+[desktop.open-in-target-preferences.perPath]
+"/Users/harugury/Documents/Playground" = "terminal"

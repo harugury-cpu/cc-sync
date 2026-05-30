@@ -15,6 +15,16 @@ sync_dir() {
     fi
 }
 
+sync_dir_rsync() {
+    local src="$1" dst="$2"
+    shift 2
+    if [ -d "$src" ]; then
+        mkdir -p "$dst"
+        rsync -a --delete "$@" "$src"/ "$dst"/
+        rm -rf "$dst/.git" 2>/dev/null
+    fi
+}
+
 echo "📦 Claude Code 설정 적용 중..."
 echo "Source: $SCRIPT_DIR"
 echo "Target: $TARGET_DIR"
@@ -34,6 +44,51 @@ done
 if [ -d "$SCRIPT_DIR/.opencode" ]; then
     echo "✓ .opencode 복사 중..."
     sync_dir "$SCRIPT_DIR/.opencode" "$HOME/.opencode"
+fi
+
+# ~/.agents 복원
+if [ -d "$SCRIPT_DIR/home-agents" ]; then
+    echo "✓ ~/.agents 복사 중..."
+    sync_dir_rsync "$SCRIPT_DIR/home-agents" "$HOME/.agents" \
+        --exclude ".git/" \
+        --exclude "__pycache__/" \
+        --exclude "*.pyc"
+fi
+
+# ~/.codex 복원
+# repo에 저장된 설정·스킬·규칙·메모리·자동화만 복원한다. 인증/세션/캐시는 복원 대상이 아니다.
+if [ -d "$SCRIPT_DIR/codex" ]; then
+    echo "✓ ~/.codex 복사 중..."
+    sync_dir_rsync "$SCRIPT_DIR/codex" "$HOME/.codex" \
+        --exclude ".git/" \
+        --exclude "auth.json" \
+        --exclude "installation_id" \
+        --exclude ".personality_migration" \
+        --exclude ".codex-global-state.json*" \
+        --exclude "models_cache.json" \
+        --exclude "logs_*.sqlite*" \
+        --exclude "state_*.sqlite*" \
+        --exclude "goals_*.sqlite*" \
+        --exclude "history.jsonl" \
+        --exclude "session_index.jsonl" \
+        --exclude "cache/" \
+        --exclude ".tmp/" \
+        --exclude "tmp/" \
+        --exclude "log/" \
+        --exclude "logs/" \
+        --exclude "sessions/" \
+        --exclude "archived_sessions/" \
+        --exclude "shell_snapshots/" \
+        --exclude "node_repl/" \
+        --exclude "generated_images/" \
+        --exclude "computer-use/" \
+        --exclude "sqlite/" \
+        --exclude "ambient-suggestions/" \
+        --exclude "pets/" \
+        --exclude "plugins/cache/" \
+        --exclude "vendor_imports/skills-curated-cache.json" \
+        --exclude "__pycache__/" \
+        --exclude "*.pyc"
 fi
 
 # 단일 파일 복사

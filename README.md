@@ -1,6 +1,6 @@
 # cc-sync
 
-Back up and sync all your Claude Code settings (`~/.claude/`) via Git. Restore instantly on any device.
+Back up and sync your Claude Code settings (`~/.claude/`) plus shared Agents/Codex config via Git. Restore instantly on any device.
 
 ![Why You Need This](docs/images/01-problem.png)
 
@@ -24,13 +24,12 @@ Back up and sync all your Claude Code settings (`~/.claude/`) via Git. Restore i
 
 ```
 ~/.claude/                    cc-sync (Git repo)              Other Device
-  skills/     ──sync.sh──→     skills/      ──apply.sh──→     ~/.claude/
-  hooks/                       hooks/                           skills/
-  rules/                       rules/                           hooks/
-  agents/                      agents/                          rules/
-  plugins/                     plugins/                         agents/
-  settings.json                settings.json                    ...
-  ...                          memory-bank-sync/   ←── import-sync.sh
+~/.agents/    ──sync.sh──→     skills/      ──apply.sh──→     ~/.claude/
+~/.codex/                      hooks/                           ~/.agents/
+  skills/                      rules/                           ~/.codex/
+  rules/                       home-agents/
+  memories/                    codex/
+  automations/                 memory-bank-sync/   ←── import-sync.sh
 ```
 
 ## Quick Start
@@ -88,7 +87,15 @@ Then in Claude Code:
 | `teams/` | Team definitions |
 | `settings.json` | Global settings |
 | `CLAUDE.md` | Global instructions |
+| `home-agents/` | Shared `~/.agents/` skills and setup |
+| `codex/` | Safe Codex config: skills, rules, memories, automations, non-cache plugin metadata |
 | `memory-bank-sync/` | Cross-device memory-bank facts |
+
+### What is intentionally not synced
+
+- `~/.cokacdir/`
+- Codex auth/session/runtime state: `auth.json`, `sessions/`, `history.jsonl`, sqlite DBs, logs, cache, tmp, generated images, Computer Use app bundle
+- Claude/Codex credentials that should be re-authenticated per device
 
 ## Automation
 
