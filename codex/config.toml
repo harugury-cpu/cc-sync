@@ -122,6 +122,15 @@ trust_level = "trusted"
 [projects."/Users/harugury/.cokacdir/workspace/y9vntfb8"]
 trust_level = "trusted"
 
+[projects."/Users/harugury/.cokacdir/workspace/cql9xme6"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/n7ameifs"]
+trust_level = "trusted"
+
+[projects."/Users/harugury/.cokacdir/workspace/ozlp6aeh"]
+trust_level = "trusted"
+
 [notice.model_migrations]
 "gpt-5.3-codex" = "gpt-5.4"
 

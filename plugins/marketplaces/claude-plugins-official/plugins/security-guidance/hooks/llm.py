@@ -479,10 +479,21 @@ def _call_claude(prompt, output_schema, thinking_budget=10000, max_tokens=16000,
         "max_tokens": max_tokens,
         "system": CLAUDE_CODE_SYSTEM_PROMPT,
         "messages": [{"role": "user", "content": prompt}],
-        "output_format": {
-            "type": "json_schema",
-            "schema": output_schema
-        }
+        # API moved the structured-output schema from top-level `output_format`
+        # to `output_config.format` per
+        # https://platform.claude.com/docs/en/build-with-claude/structured-outputs.
+        # The old form "continues to work for a transition period" for some
+        # auth modes (API key + non-streaming), but is rejected with
+        # `invalid_request_error: output_format: This field is deprecated.
+        # Use 'output_config.format' instead.` for others (OAuth Bearer +
+        # newer CLI versions hit it consistently — reporter saw 462 errors
+        # in one day). See #2098.
+        "output_config": {
+            "format": {
+                "type": "json_schema",
+                "schema": output_schema,
+            },
+        },
     }
     if thinking_budget > 0:
         # Models trained on adaptive thinking (4.6+) reject the budget_tokens
@@ -490,7 +501,10 @@ def _call_claude(prompt, output_schema, thinking_budget=10000, max_tokens=16000,
         # models (4.5 and earlier, all 3.x) reject adaptive. Pick by model.
         if _model_supports_adaptive_thinking(payload["model"]):
             payload["thinking"] = {"type": "adaptive"}
-            payload["output_config"] = {"effort": "high"}
+            # Merge `effort` into the existing output_config dict (which
+            # now carries the `format` schema) rather than reassigning —
+            # otherwise the schema is silently overwritten. See #2098.
+            payload["output_config"]["effort"] = "high"
         else:
             payload["thinking"] = {
                 "type": "enabled",
