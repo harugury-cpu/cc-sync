@@ -108,6 +108,15 @@ for file in settings.json CLAUDE.md keybindings.json claude_desktop_config.json 
     fi
 done
 
+# dotfiles 동기화 (.zshrc, .zprofile)
+mkdir -p "$SCRIPT_DIR/dotfiles"
+for dotfile in .zshrc .zprofile; do
+    if [ -f "$HOME/$dotfile" ]; then
+        echo "✓ $dotfile 동기화 중..."
+        cp "$HOME/$dotfile" "$SCRIPT_DIR/dotfiles/$dotfile"
+    fi
+done
+
 # memory-bank sync 데이터 (멀티 디바이스 동기화)
 SYNC_SOURCE="$HOME/.config/superpowers/conversation-index/sync"
 if [ -d "$SYNC_SOURCE" ]; then

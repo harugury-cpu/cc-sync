@@ -160,6 +160,24 @@ for name in d.get('plugins', {}).keys():
     done
 fi
 
+# dotfiles 복원 (.zshrc, .zprofile)
+if [ -f "$SCRIPT_DIR/dotfiles/.zshrc" ]; then
+    echo "✓ .zshrc 복원 중..."
+    sed "s|/Users/[^/\"' ]*/|$HOME/|g" "$SCRIPT_DIR/dotfiles/.zshrc" > "$HOME/.zshrc"
+fi
+if [ -f "$SCRIPT_DIR/dotfiles/.zprofile" ]; then
+    echo "✓ .zprofile 복원 중..."
+    sed "s|/Users/[^/\"' ]*/|$HOME/|g" "$SCRIPT_DIR/dotfiles/.zprofile" > "$HOME/.zprofile"
+fi
+
+# cokacdir 바이너리 (iCloud에서)
+ICLOUD_COKACDIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/0.work/원진/Trace/bin/cokacdir"
+if [ -f "$ICLOUD_COKACDIR" ]; then
+    echo "✓ cokacdir 설치 중..."
+    sudo cp "$ICLOUD_COKACDIR" /usr/local/bin/cokacdir
+    sudo chmod +x /usr/local/bin/cokacdir
+fi
+
 echo ""
 echo "✅ 설정 적용 완료!"
 echo ""
