@@ -113,6 +113,15 @@ if [ -f "$TARGET_DIR/settings.json" ]; then
     sed -i '' "s|/Users/[^/\"']*/|$HOME/|g" "$TARGET_DIR/settings.json"
 fi
 
+# hooks, skills, agents, codex 경로 치환 ($HOME 기준으로 자동 보정)
+echo "✓ hooks/skills/agents 경로 치환 중 ($HOME)..."
+find "$TARGET_DIR/hooks" "$TARGET_DIR/skills" "$HOME/.agents/skills" "$HOME/.codex" \
+    -type f \( -name "*.sh" -o -name "*.md" -o -name "*.toml" \) 2>/dev/null | \
+while IFS= read -r f; do
+    grep -q "/Users/" "$f" 2>/dev/null && \
+    sed -i '' "s|/Users/[^/\"' ]*/|$HOME/|g" "$f"
+done
+
 # claude-dashboard 자동 설치 (없을 경우)
 DASHBOARD_DIR="$TARGET_DIR/claude-dashboard"
 if [ ! -d "$DASHBOARD_DIR" ]; then

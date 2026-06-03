@@ -128,6 +128,24 @@ fi
 echo ""
 echo "✅ 동기화 완료!"
 
+# 경로 정규화 — harugury canonical 유지 (멀티 머신 호환)
+CURRENT_USER=$(whoami)
+if [ "$CURRENT_USER" != "harugury" ]; then
+    echo "✓ 경로 정규화 중 ($CURRENT_USER → harugury canonical)..."
+    find "$SCRIPT_DIR/hooks" "$SCRIPT_DIR/skills" "$SCRIPT_DIR/home-agents" \
+        "$SCRIPT_DIR/codex" "$SCRIPT_DIR/dotfiles" \
+        -type f \( -name "*.sh" -o -name "*.md" -o -name "*.toml" \) 2>/dev/null | \
+    while IFS= read -r f; do
+        grep -q "/Users/$CURRENT_USER/" "$f" 2>/dev/null && \
+        sed -i '' "s|/Users/$CURRENT_USER/|/Users/harugury/|g" "$f"
+    done
+    # 단일 파일도 정규화
+    for f in "$SCRIPT_DIR/settings.json" "$SCRIPT_DIR/CLAUDE.md"; do
+        [ -f "$f" ] && grep -q "/Users/$CURRENT_USER/" "$f" 2>/dev/null && \
+        sed -i '' "s|/Users/$CURRENT_USER/|/Users/harugury/|g" "$f"
+    done
+fi
+
 # --auto 플래그: 자동 커밋 + push
 if [[ "$1" == "--auto" ]]; then
     cd "$SCRIPT_DIR"
