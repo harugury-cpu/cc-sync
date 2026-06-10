@@ -33,21 +33,22 @@ def colors():
 
 
 # ─────────────────────────────────────────────────────────────────
-# 캔버스 (16:9 720×405pt 고정)
+# 캔버스 (16:9 1920×1080pt 고정, V2)
 # ─────────────────────────────────────────────────────────────────
 
 CANVAS = {
-    "width": _lib.W,            # 720
-    "height": _lib.H,           # 405
-    "margin": _lib.M,           # 36
+    "width": _lib.W,            # 1920
+    "height": _lib.H,           # 1080
+    "margin": _lib.M,           # 96
     "content_top": _lib.CONTENT_TOP,        # 112 (mk_* legacy)
-    "content_bottom": _lib.CONTENT_BOTTOM,  # 381 (mk_* legacy)
-    "content_w": _lib.W - _lib.M * 2,       # 648
-    "content_h": _lib.CONTENT_BOTTOM - _lib.CONTENT_TOP,  # 269
-    # V5.7: 자유 빌딩 블록(start_slide+) 모드 콘텐츠 영역
-    # 위 빈 여백 = eyebrow 시작 y=32, 아래도 동일 32pt 빈 여백 → end=373
-    "v57_content_top": 100,    # start_slide 헤더 후 콘텐츠 시작
-    "v57_content_bottom": 373, # 405 - 32 (위 여백과 대칭)
+    "content_bottom": _lib.CONTENT_BOTTOM,  # mk_* legacy
+    "content_w": _lib.W - _lib.M * 2,
+    "content_h": _lib.CONTENT_BOTTOM - _lib.CONTENT_TOP,
+    # V2: dark guide 상세판 기준 콘텐츠 영역
+    # header(eyebrow/title/lead) 이후 y≈300부터, 하단 64pt 안전 여백 유지
+    "v57_content_top": 300,
+    "v57_content_bottom": _lib.H - 64,
+    "corner_radius": 4,
 }
 
 
@@ -172,7 +173,7 @@ SHEET_GEOM = {
         "card_w": 206,
         "card_h": 190,
         "gap_x": 12,
-        "x0": 36,                # 캔버스 마진과 일치
+        "x0": _lib.M,            # 캔버스 마진과 일치
         "y0": 116,
         "padding_x": 18,         # 카드 내 좌우 인셋
         "label_y_offset": 16,    # 카드 top → label

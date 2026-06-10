@@ -5,7 +5,7 @@ Design source:
     https://docs.google.com/presentation/d/1rh_2NNwM2CeZxFaZFfgoK3s1RAU2SyzZd794480hrVo/edit
 
 Design direction:
-    - 720 × 405pt Google Slides 16:9 canvas
+    - 1920 × 1080pt Google Slides 16:9 canvas (V2)
     - theme-selectable token system (dark / light)
     - orange accent (#FF6B1A)
     - native Google Slides shapes/text only
@@ -39,20 +39,20 @@ def c255(r, g, b):
 THEME_TOKENS = {
     "dark": {
         "BG":         c255(0, 0, 0),          # #000000 (V6.3: 표지와 통일)
-        "SURFACE":    c255(38, 38, 38),       # #262626 (★ V6.0: 14→38, 24% 밝게)
-        "SURFACE_HI": c255(48, 48, 48),       # #303030
-        "SURFACE_2":  c255(42, 42, 42),       # #2A2A2A
-        "BORDER":     c255(53, 53, 53),       # rgba(255,255,255,.12) 합성
+        "SURFACE":    c255(14, 14, 14),       # #0E0E0E (V2 수정: V4 내지 기준)
+        "SURFACE_HI": c255(24, 24, 24),       # #181818
+        "SURFACE_2":  c255(24, 24, 24),       # #181818
+        "BORDER":     c255(50, 50, 50),       # #323232
         "BORDER_HI":  c255(72, 72, 72),       # rgba(255,255,255,.20) 합성
         "ORANGE":     c255(255, 107, 26),     # #FF6B1A
         "ORANGE_DIM": c255(58, 37, 26),       # 14% 합성 (★ V6.0)
         "ORANGE_LINE": c255(152, 71, 26),     # 55% 합성
         "ORANGE_SOFT": c255(35, 29, 26),      # 4% 합성
         "WHITE":      {"red": 1, "green": 1, "blue": 1},
-        "TEXT":       c255(228, 228, 228),    # 88% 합성
-        "TEXT_DIM":   c255(196, 196, 196),    # 74% 합성
-        "TEXT_FAINT": c255(154, 154, 154),    # 56% 합성
-        "GOOD":       c255(156, 227, 125),    # #9CE37D
+        "TEXT":       c255(245, 245, 245),    # #F5F5F5
+        "TEXT_DIM":   c255(172, 172, 172),    # #ACACAC
+        "TEXT_FAINT": c255(105, 105, 105),    # #696969
+        "GOOD":       c255(52, 168, 83),      # #34A853
         "BAD":        c255(255, 122, 122),    # #FF7A7A
         "BLACK":      c255(0, 0, 0),
     },
@@ -166,7 +166,7 @@ def render_slide_spec(slide_spec, insert_index, reqs, total=None):
             department=props.get("department", "디자인부문ㅣ패키지디자인팀"),
             owner=props.get("owner", "한원진 담당"),
             date_text=props.get("date_text", ""),
-            version=props.get("version", "V1.0"),
+            version=props.get("version", "V2.0"),
         )
 
     if first.type == "section-divider":
@@ -273,9 +273,9 @@ def set_theme(theme="dark"):
 # initialize default theme
 set_theme("dark")
 
-W, H, M = 720, 405, 36
-CONTENT_TOP = 112
-CONTENT_BOTTOM = 381
+W, H, M = 1920, 1080, 96
+CONTENT_TOP = 300
+CONTENT_BOTTOM = H - 64
 
 # theme= 인자는 기존 API 호환용으로 남아 있으며,
 # 실제 색상 토큰은 set_theme('dark'|'light') 로 전환한다.
@@ -776,7 +776,7 @@ def _new_slide(sid, insert_index, reqs, layout_id=None):
 
 def mk_cover(slide_oid, title, insert_index, reqs, subtitle="",
              department="디자인부문ㅣ패키지디자인팀", owner="한원진 담당",
-             date_text="", version="V1.0"):
+             date_text="", version="V2.0"):
     """
     Theme-aware standard cover helper.
 
@@ -1389,7 +1389,7 @@ def mk_flow(sid, steps, cost_map=None, reqs=None, theme="dark"):
             h += COST_H
         h += PAD
         max_ch = max(max_ch, h)
-    ch = min(round(max_ch), 405 - y0 - 8)
+    ch = min(round(max_ch), H - y0 - 8)
 
     # ── Pass 2: render with computed ch ──────────────────────────────
     def _is_marked(step):

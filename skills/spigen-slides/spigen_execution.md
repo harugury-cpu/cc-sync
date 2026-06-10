@@ -30,7 +30,7 @@ v6 기본 방향:
 import sys, shutil
 
 # 빌더 복사
-shutil.copy2("/Users/harugury/.agents/skills/spigen-slides/spigen_build.py",
+shutil.copy2("/Users/user/.agents/skills/spigen-slides/spigen_build.py",
              "/tmp/spigen_build.py")
 sys.path.insert(0, "/tmp")
 from spigen_build import SpigenBuilder
@@ -166,7 +166,7 @@ KPI / 목표 / 실적 내용이 있을 때는 `SpigenBuilder(title, template="kp
 ```python
 import sys, shutil
 
-shutil.copy2("/Users/harugury/.agents/skills/spigen-slides/spigen_build.py",
+shutil.copy2("/Users/user/.agents/skills/spigen-slides/spigen_build.py",
              "/tmp/spigen_build.py")
 sys.path.insert(0, "/tmp")
 from spigen_build import SpigenBuilder

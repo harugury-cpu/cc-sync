@@ -1,8 +1,8 @@
 {
   "_meta": {
-    "canvas_w_pt": 720,
-    "canvas_h_pt": 405,
-    "margin_pt": 36,
+    "canvas_w_pt": 1920,
+    "canvas_h_pt": 1080,
+    "margin_pt": 96,
     "tolerance_pt": 2.5,
     "emu_per_pt": 12700,
     "source": "spigen_lib.py 측정값 기준 — 변경 시 spigen_lib.py와 동기화 필요"
