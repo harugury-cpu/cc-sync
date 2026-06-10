@@ -168,6 +168,23 @@ Step 2 진입 전 아래를 내부적으로 수행한다. 사용자에게 출력
 | KPI 진행 현황 | KPI / 목표 / 실적 / 달성률 | `kpi_status()` ★ template="kpi" |
 | KPI 핵심과제 | 연관KPI / 핵심과제 / 실행계획 | `kpi_tasks()` ★ template="kpi" |
 | **결론 페이지 (선택)** — 대부분 사용 안 함 | 좌 큰 메트릭 + 우 디테일 4개 (시트 mk_conclusion_detail 양식) | `conclusion(metric, caption, details=[...])` |
+| **이미지 추천** | 아래 이미지 판단 기준 참조 | 사용자에게 이미지 요청 → `b.image()` |
+
+**이미지 추천 판단 기준 — 아래 중 하나라도 해당하면 이미지를 제안한다:**
+- 실제 화면·UI 캡처가 설명보다 명확한 경우 (예: 설치 화면, 설정 경로, 오류 메시지)
+- 다이어그램·흐름도가 텍스트 플로우보다 직관적인 경우 (예: 시스템 아키텍처, 데이터 흐름)
+- 비교 결과물이 텍스트보다 시각으로 전달이 빠른 경우 (예: Before/After 디자인, 결과물 스크린샷)
+- 브랜드·제품 이미지가 내용의 핵심인 경우 (예: 패키지 디자인, 제품 사진)
+
+**이미지 요청 방법:**
+Step 2 구성 제안 시, 이미지가 필요한 슬라이드에 `[이미지 필요]` 표시를 붙이고 아래처럼 안내한다:
+```
+[3] 설치 화면 예시 [이미지 필요]
+    → 실제 화면 캡처 이미지를 제공해주시면 삽입합니다.
+       (스크린샷 파일 또는 공개 URL)
+```
+사용자가 이미지를 제공하면 `b.image(url=..., x=40, y=100, w=640, h=260)` 또는 파일 업로드 후 Drive URL로 삽입한다.
+이미지가 없으면 해당 슬라이드는 텍스트 대체 컴포넌트로 진행하거나 슬라이드를 제거한다 — 빈 이미지 플레이스홀더 절대 금지.
 
 **자유 레이아웃 빌딩 블록:**
 
@@ -373,7 +390,7 @@ import sys, shutil
 # 필수 파일 복사
 for f in ["spigen_build.py", "spigen_lib.py", "spigen_models.py",
           "spigen_layout.py", "spigen_tokens.py"]:
-    shutil.copy2(f"/Users/harugury/.agents/skills/spigen-slides/{f}", f"/tmp/{f}")
+    shutil.copy2(f"/Users/user/.agents/skills/spigen-slides/{f}", f"/tmp/{f}")
 sys.path.insert(0, "/tmp")
 
 from spigen_build import SpigenBuilder, load_pid, save_pid
