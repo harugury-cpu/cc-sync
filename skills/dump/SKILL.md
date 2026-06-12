@@ -12,19 +12,19 @@ description: Obsidian에 자유 발화를 분류·기록할 때 사용한다. "d
 Obsidian Vault:
 
 ```text
-/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault/
+/Users/user/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault/
 ```
 
 Daily 회고:
 
 ```text
-/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault/회고일기/Daily/
+/Users/user/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault/회고일기/Daily/
 ```
 
 업무 PDF 조회 기준:
 
 ```text
-/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/0.work
+/Users/user/Library/Mobile Documents/com~apple~CloudDocs/0.work
 ```
 
 ## 자동 적용 조건
@@ -91,7 +91,7 @@ Daily 회고:
 
 ### 3. PDF 작업 내용 기록
 
-스케줄이 `/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/0.work`에서 오늘 수정/생성된 PDF를 리스팅한 경우, 사용자의 답변을 아래 섹션에 남긴다.
+스케줄이 `/Users/user/Library/Mobile Documents/com~apple~CloudDocs/0.work`에서 오늘 수정/생성된 PDF를 리스팅한 경우, 사용자의 답변을 아래 섹션에 남긴다.
 
 ```markdown
 ## 오늘 업데이트한 PDF 파일

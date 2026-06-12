@@ -20,10 +20,10 @@
     ],
     "defaultMode": "bypassPermissions",
     "additionalDirectories": [
-      "/Users/harugury/Documents/Obsidian Vault"
+      "/Users/user/Documents/Obsidian Vault"
     ]
   },
-  "model": "sonnet",
+  "model": "claude-fable-5",
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -107,7 +107,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "node /Users/harugury/.claude/claude-dashboard/dist/index.js"
+    "command": "node /Users/user/.claude/claude-dashboard/dist/index.js"
   },
   "enabledPlugins": {
     "oh-my-claudecode@omc": true,
