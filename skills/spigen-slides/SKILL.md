@@ -5,7 +5,7 @@ license: MIT
 metadata:
   category: productivity
   locale: ko-KR
-  phase: v7.0.0-v2
+  phase: v7.1.0-v3
 ---
 
 # spigen-slides
@@ -29,7 +29,16 @@ metadata:
 - **오렌지 통일 금지.** Spigen orange는 브랜드 accent이자 1순위 강조색이다. 완료/정상/PASS는 green, 보정/대기/NEXT는 yellow·amber, 위험/BLOCK은 red, 구조·구분은 gray/line으로 분리한다.
 - **카드 R값은 작게.** 기본은 crisp rectangle이며, 라운드가 필요해도 4pt 수준만 허용한다.
 - **해상도/좌표계 변경은 템플릿 보존과 함께만 한다.** 현재 Google Slides 공식 템플릿을 복사하는 경로에서는 기존 템플릿 pageSize를 존중한다. 1920×1080 등 true high-resolution 경로를 도입할 때도 light/dark cover와 KPI 템플릿 복사 동작을 먼저 보존해야 한다.
-- **80/20 소울 원칙**: 80%는 토큰·컴포넌트 규칙 준수, 20%는 이 덱만의 차별점 1가지. 이 덱 스크린샷을 Spigen 팀원이 보면 어떤 프로젝트인지 알 수 있어야 완성이다. 차별점 후보: 핵심 수치를 `callout()`으로 배치, 내용 구조에 맞는 비대칭 레이아웃, 원본 데이터를 직접 담은 수치 강조.
+- **80/20 소울 원칙**: 80%는 토큰·컴포넌트 규칙 준수, 20%는 이 덱만의 차별점 1가지. 이 덱 스크린샷을 Spigen 팀원이 보면 어떤 프로젝트인지 알 수 있어야 완성이다. 차별점 후보: 핵심 수치를 `stat_row()`/`callout()`으로 배치, 내용 구조에 맞는 비대칭 레이아웃, 원본 데이터를 직접 담은 수치 강조.
+- **수치는 텍스트에 묻지 않는다 (V3).** 원본에 수치·달성률·일정·상태가 있으면 9pt 본문 줄글로 풀지 말고 리치 블록(`stat_row` / `bars` / `progress` / `timeline` / `badge`)으로 시각화한다. "수치 먼저" 원칙의 시각 구현이다.
+- **카드 사용 문법 (V7).** 카드는 형태가 아니라 기능으로 판단한다. 박스를 치면 그 테두리가 자(ruler)가 되어 내부 간격·여백의 불균질이 더 크게 지각되므로, 기능 없이 박스만 치는 것을 금한다.
+    - **오픈 레이아웃이 기본값** — 검정 바탕 위 타이포 위계 + 선 + 여백 + 큰 숫자. 박스는 "이 박스를 지우면 정보 구조가 무너지는가?"에 YES일 때만.
+    - **강조·묶음 = 카드 O** (내용이 적어 시각적으로 한번 잡아줘야 할 때). **나열 = 카드 ✗** (설명을 박스에 욱여넣지 않는다 → 오픈 텍스트).
+    - **순서 = 카드 + 화살표 연결**(다이어그램화). 카드만 나란히 두지 말고 사이를 `→`로 잇는다.
+    - **비교 = 행 단위 표**(셀마다 박스 ✗). 비교축을 행으로 정렬하고 가로 행선으로 나눈다. 도착점(신규)은 박스가 아니라 라벨 색(accent)으로 표시.
+- **시선 흐름·영역 분할 검토 (V7, 빌드 전 필수).** 슬라이드마다 두 가지를 먼저 정한다.
+    - **시선 흐름:** 보는 사람의 눈이 어디서 시작해 어떤 순서로 이동하는가(1→2→3).
+    - **영역 분할 기준:** 화면을 무슨 기준으로 쪼개 보게 되는가. **분할을 만드는 시각 장치는 하나여야 한다** — 세로 그룹핑(열 묶음 박스)과 가로 분할(행선)을 동시에 쓰지 않는다. 주 분할 단위가 충돌하면 시선이 길을 잃는다.
 
 ---
 
@@ -41,7 +50,8 @@ metadata:
 - dark 배경: `#000000` / 텍스트: `#FFFFFF` (다크 표지와 통일)
 - light 배경: `#FFFFFF` / 텍스트: `#1C1C1E`
 - V2 dark 내지 팔레트: `BG #000000`, `SURFACE #0E0E0E`, `SURFACE_HI #181818`, `LINE #323232`, `TEXT #F5F5F5`, `DIM #ACACAC`, `FAINT #696969`
-- V2 semantic color: `ORANGE #FF6B1A` = 핵심 강조, `GREEN #34A853` = 완료/정상/PASS, `YELLOW #F5B041` = 대기/보정/NEXT
+- V2 semantic color: `ORANGE #FF6B1A` = 핵심 강조, `GREEN #34A853` = 완료/정상/PASS, `YELLOW #F5B041` = 대기/보정/NEXT, `RED #FF7A7A` = 위험/BLOCK
+- V3 tone 시스템: 리치 블록의 `tone` 인자 = `accent` / `good` / `warn` / `bad` / `neutral` — 코드 토큰(`COLORS`)에 시맨틱 전경색 + 틴트 배경색 쌍으로 내장 (light 테마는 대비 보정값 자동 적용)
 - 빌더: `~/.agents/skills/spigen-slides/spigen_build.py`
 
 ---
@@ -164,6 +174,12 @@ Step 2 진입 전 아래를 내부적으로 수행한다. 사용자에게 출력
 | 단순 서술/나열 | 구조화 어려운 설명·주의사항·요약 본문 | `slide()` |
 | 단일 강조 메시지 | 한 슬라이드 = 한 문장 강조 | `callout()` |
 | 챕터 구분 (SECTION 01/02) | 큰 오렌지 숫자 + 라벨 + 제목 — 발표 휴지 구간 | `section_divider()` |
+| **핵심 수치 2~4개 (★V3)** | 목표/실적/달성률 — 수치가 슬라이드의 주인공 | `start_slide()` + `stat_row()` |
+| **수치 크기 비교 (★V3)** | 항목별 양·비중 비교 (점유율, 건수 등) | `start_slide()` + `bars()` |
+| **진척도 % (★V3)** | 항목별 진행률 표기 | `start_slide()` + `progress()` 반복 |
+| **일정·마일스톤 (★V3)** | 날짜 순 진행 단계 3~6개 | `start_slide()` + `timeline()` |
+| **상태 라벨 (★V3)** | 완료/대기/위험 짧은 칩 — 다른 블록과 조합 | `badge()` |
+| **실물·화면 증빙 (★V3)** | 스크린샷/제품 컷/도식 PNG | `image()` / `full_image()` |
 | 완료·미완료 체크리스트 | 항목별 완료 여부 점검 (●/○ 마크) | `checklist()` |
 | 순서·방법 안내 | "이 순서대로 따라해라" 단계 안내 (01-NN 숫자 라벨) | `numbered_steps()` |
 | 자유 카드 조합 | 항목 수가 4개+ 또는 시트 슬롯과 다른 카드 그룹 | `start_slide()` + `card()` 반복 |
@@ -238,6 +254,40 @@ b.text(x=40, y=110, w=300, h=24, content="자유 위치 **굵게**", size=14, bo
 
 # 구분선
 b.divider(x=40, y=240, w=640, orange=False)
+
+# ── V3 리치 블록 — 수치·차트·일정·상태·이미지 ──────────────────
+
+# 큰 숫자 메트릭 2~4개 가로 배치 (수치가 주인공인 슬라이드의 표준)
+#   tone 생략 = 기본 텍스트색 (오렌지 규율 자동 준수), 핵심 1개만 tone="accent"
+#   delta_tone: "good"(증가/정상) / "warn"(대기) / "bad"(감소/위험)
+b.stat_row(y=120, stats=[
+    {"value": "96.4%", "label": "H1 달성률", "delta": "+4.2%p", "delta_tone": "good"},
+    {"value": "12건", "label": "완료 항목", "delta": "잔여 3건", "delta_tone": "warn"},
+])
+
+# 가로 바 차트 — 항목별 수치 비교. primary=True 1개만 오렌지, 나머지 중립 회색
+b.bars(x=48, y=120, w=624, data=[
+    {"label": "쿠팡", "value": 42, "display": "42%", "primary": True},
+    {"label": "아마존 US", "value": 31, "display": "31%"},
+])
+
+# 진행률 바 — 달성률/진척도 한 줄
+b.progress(x=48, y=120, w=500, pct=72, label="울트라 하이브리드 — 검수 중", tone="accent")
+
+# 가로 타임라인 — 일정/마일스톤. state: done(green)/current(orange)/next(중립)
+b.timeline(y=140, milestones=[
+    {"label": "디자인 확정", "date": "05.30", "state": "done"},
+    {"label": "문안 검수", "date": "06.18", "state": "current"},
+    {"label": "본 발주", "date": "06.27", "state": "next"},
+])
+
+# 상태 배지 — 시맨틱 틴트 칩. tone: good/warn/bad/accent/neutral
+b.badge(x=572, y=118, text="진행중", tone="accent")
+
+# 이미지 — 공개 접근 가능 URL 필수 (스크린샷·제품 컷 증빙)
+b.image(url="https://...", x=48, y=100, w=300, h=200)
+b.full_image(url="https://...", heading="패키지 시안", eyebrow="DESIGN",
+             caption="2026.06 인쇄 샘플 촬영본")
 ```
 
 > ★ **모든 콘텐츠 슬라이드에 eyebrow 권장**. 카테고리 라벨로 슬라이드 의미 명확화 (예: PROBLEM / COMPARE / ACTION PLAN / WORKFLOW / STATUS / CONCLUSION).
@@ -398,12 +448,13 @@ python3 ~/.agents/skills/spigen-slides/spigen_preflight.py /tmp/spigen_plan_<BUI
 ### 기본 빌드 패턴
 
 ```python
-import sys, shutil
+import os, sys, shutil
 
-# 필수 파일 복사
-for f in ["spigen_build.py", "spigen_lib.py", "spigen_models.py",
-          "spigen_layout.py", "spigen_tokens.py"]:
-    shutil.copy2(f"/Users/user/.agents/skills/spigen-slides/{f}", f"/tmp/{f}")
+# 필수 파일 복사 (에이전트 스킬 경로 — ~/.agents 와 ~/.claude 가 심링크된 환경 모두 동작)
+SKILL_DIR = os.path.expanduser("~/.agents/skills/spigen-slides")
+for f in ["spigen_build.py", "spigen_lib.py",
+          "spigen_models.py", "spigen_layout.py", "spigen_tokens.py"]:
+    shutil.copy2(os.path.join(SKILL_DIR, f), f"/tmp/{f}")
 sys.path.insert(0, "/tmp")
 
 from spigen_build import SpigenBuilder, load_pid, save_pid
@@ -586,9 +637,12 @@ python3 /tmp/build_<name>.py
 - ✅ 넓은 본문 영역에서만 `paragraph_bullets` 호출 허용
 - ❌ 불렛이 첫 줄보다 위에 떠 있는 상태
 
-### 8. 차트
+### 8. 차트·수치 (V3)
 - ❌ 그라디언트 fill / 3D / 과도한 애니메이션 차트
-- ❌ 여러 KPI 수치를 동등하게 나열 — 핵심 1개를 큰 숫자로 분리
+- ❌ 여러 KPI 수치를 동등하게 나열 — 핵심 1개를 큰 숫자로 분리 (`stat_row`에서 핵심 1개만 `tone="accent"`)
+- ❌ `bars()`에서 모든 막대를 accent로 — `primary=True`는 1개만, 나머지는 중립 회색 자동
+- ❌ 수치·달성률·일정이 있는데 9pt 본문 줄글로만 서술 — `stat_row` / `bars` / `progress` / `timeline` 우선 검토
+- ❌ `badge()` 남발 — 슬라이드당 상태 칩은 행당 1개, 의미 없는 장식 배지 금지
 
 ### 9. 슬라이드 메시지
 - ❌ 한 슬라이드에 경쟁하는 주 메시지 2개 이상
@@ -622,7 +676,8 @@ python3 /tmp/build_<name>.py
 
 | 파일 | 용도 |
 |------|------|
-| `spigen_build.py` | 슬라이드 빌더 (cover / slide / two_col / start_slide / 빌딩 블록 / 자동 강제 룰) |
+| `spigen_build.py` | 슬라이드 빌더 (cover / slide / two_col / start_slide / 빌딩 블록 / V3 리치 블록 / 자동 강제 룰) |
+| `examples/demo_v3_build.py` | V3 리치 블록 실물 빌드 데모 — `python3 examples/demo_v3_build.py [dark|light]` |
 | `spigen_lib.py` | mk_* 컴포넌트 라이브러리 + THEME_TOKENS |
 | `spigen_tokens.py` | 디자인 토큰 (HEADER / SHEET_GEOM / SPACING / TYPO / FONT_HIERARCHY / EMPHASIS) |
 | `spigen_pid_guard.py` | 수정 모드 PID 안전성 확인 (expect-stable / assert-stable) |
