@@ -85,7 +85,7 @@ EXTRACT_PROMPT="다음은 사용자가 !!!를 사용해 강한 불만을 표현�
 # 1) HARSH_CRITIC_LEARN_DISABLE=1 상속
 # 2) 직접 타임아웃 감시
 (
-  printf '%s\n' "$EXTRACT_PROMPT" | HARSH_CRITIC_LEARN_DISABLE=1 claude -p > "$TMP_OUT" 2>/dev/null
+  printf '%s\n' "$EXTRACT_PROMPT" | HARSH_CRITIC_LEARN_DISABLE=1 CLAUDE_SKIP_MEMORY_LEARN=1 claude --model claude-sonnet-4-6 -p > "$TMP_OUT" 2>/dev/null
 ) &
 CLAUDE_PID=$!
 
@@ -101,6 +101,11 @@ while kill -0 "$CLAUDE_PID" 2>/dev/null; do
   elapsed=$((elapsed + 1))
 done
 wait "$CLAUDE_PID" 2>/dev/null || true
+
+NOISE_PATTERN='claude-fable-5|issue with the selected model|Run --model|session limit|hit your session limit'
+if [ ! -s "$TMP_OUT" ] || grep -qiE "$NOISE_PATTERN" "$TMP_OUT"; then
+  exit 0
+fi
 
 RULE_JSON=$(tr -d '\n' < "$TMP_OUT" | grep -o '{[^{}]*}' | head -1 || echo "")
 

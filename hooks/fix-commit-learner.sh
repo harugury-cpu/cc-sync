@@ -27,7 +27,13 @@ ${DIFF}
 형식 (JSON만, 다른 텍스트 없음):
 {\"id\":\"auto_\",\"description\":\"한 줄 설명\",\"keywords\":[\"응답에서감지할키워드1\",\"키워드2\"],\"context\":\"원인 요약 한 줄\"}"
 
-RULE_JSON=$(echo "$EXTRACT_PROMPT" | claude -p 2>/dev/null | tr -d '\n' | grep -o '{[^{}]*}' | head -1 || echo "")
+CLAUDE_OUT=$(echo "$EXTRACT_PROMPT" | claude --model claude-sonnet-4-6 -p 2>/dev/null || echo "")
+NOISE_PATTERN='claude-fable-5|issue with the selected model|Run --model|session limit|hit your session limit'
+if [ -z "$CLAUDE_OUT" ] || printf '%s\n' "$CLAUDE_OUT" | grep -qiE "$NOISE_PATTERN"; then
+  exit 0
+fi
+
+RULE_JSON=$(printf '%s\n' "$CLAUDE_OUT" | tr -d '\n' | grep -o '{[^{}]*}' | head -1 || echo "")
 
 if [ -z "$RULE_JSON" ] || ! echo "$RULE_JSON" | jq . >/dev/null 2>&1; then
   exit 0

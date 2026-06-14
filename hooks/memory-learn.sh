@@ -47,6 +47,11 @@ print('\n'.join(msgs[-20:]))
 TURN_COUNT=$(echo "$TURNS" | grep -c '^[UA]:' 2>/dev/null || echo 0)
 [ "$TURN_COUNT" -ge 5 ] || exit 0
 
+# 실제 사용자 발화가 0건이면 추출하지 않는다 — hook이 띄운 중첩 세션이나
+# 에이전트 보고만 있는 대화에서 성향을 추출하면 가짜 인물 정보로 메모리가 오염된다.
+USER_COUNT=$(echo "$TURNS" | grep -c '^U:' 2>/dev/null || true)
+[ "$USER_COUNT" -ge 1 ] || exit 0
+
 DATE=$(date +%Y-%m-%d)
 TIME=$(date +%H%M)
 SESSION_FILE="$MEM_DIR/session_${DATE}_${TIME}.md"
@@ -71,8 +76,12 @@ ${TURNS_COPY}
 -"
 
 {
-    EXTRACT=$(echo "$PROMPT" | CLAUDE_SKIP_MEMORY_LEARN=1 claude -p 2>/dev/null | head -40 || echo "")
+    EXTRACT=$(echo "$PROMPT" | CLAUDE_SKIP_MEMORY_LEARN=1 HARSH_CRITIC_LEARN_DISABLE=1 claude --model claude-sonnet-4-6 -p 2>/dev/null | head -40 || echo "")
     [ -n "$EXTRACT" ] || exit 0
+    NOISE_PATTERN='claude-fable-5|issue with the selected model|Run --model|session limit|hit your session limit'
+    if printf '%s\n' "$EXTRACT" | grep -qiE "$NOISE_PATTERN"; then
+        exit 0
+    fi
 
     SESSION_CONTENT="# 세션: ${DATE} ${TIME}
 
@@ -85,6 +94,9 @@ ${EXTRACT}
         echo "# 이전 세션 메모리"
         echo ""
         ls -t "${MEM_DIR}"/session_*.md 2>/dev/null | head -10 | while IFS= read -r f; do
+            if grep -qilE "$NOISE_PATTERN" "$f"; then
+                continue
+            fi
             cat "$f"
             echo "---"
         done
