@@ -83,10 +83,6 @@
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/auto-validate.sh"
-          },
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/codex-review-reminder.sh"
           }
         ]
       },
