@@ -23,7 +23,6 @@
       "/Users/user/Documents/Obsidian Vault"
     ]
   },
-  "model": "claude-fable-5",
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -39,6 +38,16 @@
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/context-enrichment.sh"
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/vault-search.sh",
+            "timeout": 8
+          },
+          {
+            "type": "command",
+            "command": "/Users/user/.claude/plugins/fablize/hooks/router.sh",
+            "timeout": 10
           }
         ]
       }
@@ -57,6 +66,10 @@
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/harsh-critic-learn.sh"
+          },
+          {
+            "type": "command",
+            "command": "/Users/user/.claude/plugins/fablize/hooks/finish-the-work.sh"
           }
         ]
       }
@@ -177,5 +190,6 @@
         "apps"
       ]
     }
-  }
+  },
+  "model": "sonnet"
 }
