@@ -30,6 +30,9 @@
 - mv 사용 시 항상 -n 플래그를 사용합니다.
 - 대상이 이미 존재하면 덮어쓰지 않고 멈춘 뒤 사용자에게 확인합니다.
 
+# 인증/자격증명 보호 (데이터 손실 방지)
+- gws 인증 문제를 디버깅할 때 keyring/file backend를 번갈아 가며 API smoke test하지 않는다. 잘못된 backend로 encrypted credentials를 읽으면 gws가 undecryptable로 판단해 `credentials.enc`를 삭제할 수 있다. 먼저 사용할 backend(`GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND`)를 하나로 고정하고, 그 backend로만 auth status와 API 호출을 확인한다.
+
 # 수정 요청 시 완료 조건 사전 확인
 수정(fix, 버그 수정, 기능 변경, 코드 수정) 요청을 받으면:
 1. 실행 전에 완료 조건을 명시하고 사용자 승인을 받는다
@@ -38,3 +41,15 @@
 # graphify
 - **graphify** (`~/.claude/skills/graphify/SKILL.md`) - any input to knowledge graph. Trigger: `/graphify`
 When the user types `/graphify`, invoke the Skill tool with `skill: "graphify"` before doing anything else.
+
+<!-- FABLIZE:BEGIN — run Opus like Fable (always-on router). Verified procedures only. Install/update: fablize setup.sh -->
+## Operating mode (always on — auto-route by task signal)
+
+Apply what the task signals; with no signal, baseline only. Read each pack only when needed. Routing: smallest matching discipline only, overlap only when genuinely multi-category, mimic observable behavior only.
+
+- **[always]** Lead with the outcome · stay within the requested scope (no incidental refactors) · ground completion claims in this session's tool results · confirm before destructive or hard-to-reverse actions.
+- **[2+ sequential stories]** Run `python3 /Users/user/.claude/plugins/fablize/scripts/goals.py`: create → next → checkpoint (with evidence) → final verification gate (no completion without `--verify-cmd` and `--verify-evidence`). Run from the repo root; state in `./.fablize/` (resume with `status`). Skip for single-step tasks.
+- **[debugging / test failure / unknown cause / review]** Follow `/Users/user/.claude/plugins/fablize/packs/investigation-protocol.txt`: reproduce first → 3+ competing hypotheses → evidence per hypothesis → full causal chain → verify before/after → report rejected hypotheses.
+- **[render/executable artifact: HTML, SVG, game, UI, chart]** Follow `/Users/user/.claude/plugins/fablize/packs/verification-grounding-pack.txt` grounding loop: run it in the real renderer → observe the output → fix what you see → re-run. A static check is not observation.
+- **[hard or ambiguous task]** Adaptive thinking scales with difficulty automatically. To go higher, recommend `/effort xhigh` to the user. Depth (capability) cannot be raised: if stuck 2+ times or out-of-spec discovery is needed, report the limit honestly and escalate.
+<!-- FABLIZE:END -->
