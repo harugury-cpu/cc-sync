@@ -1,7 +1,6 @@
 ---
 name: graphify
-description: "any input (code, docs, papers, images, videos) to knowledge graph. Use when user asks any question about a codebase, documents, or project content - especially if graphify-out/ exists, treat the question as a /graphify query."
-trigger: /graphify
+description: "업무 자동화 코드, Apps Script, GWS, HTML Service, Illustrator/Adobe 스크립트, Monday/Drive/Sheets/API 연동의 함수·파일·트리거·시트·보드·레이어·출력물 관계를 지식 그래프, Mermaid 다이어그램, Obsidian 구조 노트로 정리해야 할 때 사용한다. 사용자가 graphify, 관계도, 구조도, 다이어그램, Obsidian에 구조 정리, graphify-out을 언급하면 사용한다. 일반 버그 검토나 수정 전 위험 점검은 automation-code-review를 사용한다."
 ---
 
 # /graphify

@@ -6,7 +6,7 @@
 
 ```
 Apple-style product hero composition.
-Seamless pure white background (#FFFFFF), no gradient.
+Seamless pure white background (#FFFFFF) with flat clean tone.
 Studio softbox lighting, even illumination, soft minimal shadow under product.
 Product floating slightly above ground with crisp grounded contact shadow.
 3/4 hero angle, slight elevation, 100mm macro lens feel, f/8 deep focus.
@@ -14,8 +14,8 @@ Sharp product edges, true material rendering: visible texture of case material, 
 Generous negative space, product occupies 30-50% of frame, centered.
 Cool neutral palette, slightly desaturated except for the product's own color.
 Apple device may be visible inside the case to show fit and compatibility.
-No text, no logo overlays, no props, no people.
-Photorealistic, ultra-clean Apple-style commercial product photography.
+Clean blank copy area reserved for later layout, brand-free surface treatment, minimal product-only studio setup.
+Photorealistic Apple-style commercial product photography with crisp product edges and controlled material rendering.
 ```
 
 ## lifestyle — 사용 상황·실사용 신뢰·맥락·감성 전달이 핵심일 때
@@ -23,13 +23,13 @@ Photorealistic, ultra-clean Apple-style commercial product photography.
 ```
 Apple-style product lifestyle composition.
 Real-world environment matching the use case (cafe, travel, outdoor, desk, etc.).
-Natural daylight, warm soft tones, gentle shadows, no harsh contrast.
+Natural daylight, warm soft tones, gentle shadows, controlled low-contrast rendering.
 Single person or hands shown when interaction matters; otherwise environment-only.
 35-50mm lens feel, eye-level or slight downward angle, shallow depth of field keeping the cased Apple device sharp while background softly blurs.
-Minimalist, premium, unhurried mood — clean composition without visual noise.
+Minimalist, premium, unhurried mood with one clear hero subject and controlled spacing.
 Apple device with the case is the clear hero subject occupying 30-40% of frame.
 Color palette tied to the environment but stays calm and neutral overall.
-No text, no logo overlays, no other branded products visible.
+Clean blank copy area reserved for later layout, brand-free environment, only the cased Apple device as the recognizable product focus.
 Photorealistic Apple-style editorial product lifestyle photography.
 ```
 

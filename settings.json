@@ -20,7 +20,7 @@
     ],
     "defaultMode": "bypassPermissions",
     "additionalDirectories": [
-      "/Users/user/Documents/Obsidian Vault"
+      "/Users/harugury/Documents/Obsidian Vault"
     ]
   },
   "hooks": {
@@ -46,7 +46,7 @@
           },
           {
             "type": "command",
-            "command": "/Users/user/.claude/plugins/fablize/hooks/router.sh",
+            "command": "/Users/harugury/.claude/plugins/fablize/hooks/router.sh",
             "timeout": 10
           }
         ]
@@ -69,7 +69,7 @@
           },
           {
             "type": "command",
-            "command": "/Users/user/.claude/plugins/fablize/hooks/finish-the-work.sh"
+            "command": "/Users/harugury/.claude/plugins/fablize/hooks/finish-the-work.sh"
           }
         ]
       }
@@ -116,7 +116,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "node /Users/user/.claude/claude-dashboard/dist/index.js"
+    "command": "node /Users/harugury/.claude/claude-dashboard/dist/index.js"
   },
   "enabledPlugins": {
     "oh-my-claudecode@omc": true,

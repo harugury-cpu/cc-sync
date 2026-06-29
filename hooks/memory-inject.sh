@@ -17,12 +17,13 @@ except:
 
 OUTPUT=""
 
-# 1. 프로젝트 메모리 (사용자 프로필, 설정, 피드백) — 기존 방식 유지
-PROJECT_MEM_DIR="$HOME/.claude/projects/-Users-harugury--cokacdir-workspace-yizd0re4/memory"
-for f in user_profile.md project_setup.md feedback.md; do
-    FPATH="$PROJECT_MEM_DIR/$f"
+# 1. LLM Wiki 요약 (vault 정본) — 항상 필요한 사용자 맥락(목차+성향)만 고정 주입.
+#    나머지 칸(관심사·작업·도구·보안)은 vault-search.sh가 키워드 매칭 시 자동 주입.
+WIKI_DIR="/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault/_wiki"
+for f in INDEX.md 성향_말투.md; do
+    FPATH="$WIKI_DIR/$f"
     [ -f "$FPATH" ] || continue
-    BODY=$(grep -v '^---' "$FPATH" | grep -v '^name:' | grep -v '^description:' | grep -v '^metadata:' | grep -v 'node_type:' | grep -v 'type:' | grep -v 'originSessionId:' | sed '/^$/N;/^\n$/d')
+    BODY=$(grep -v '^---$' "$FPATH")
     [ -n "$BODY" ] && OUTPUT="${OUTPUT}${BODY}
 
 "
@@ -54,7 +55,7 @@ fi
 if [ -z "$SEMANTIC" ]; then
     LATEST="$HOME/.claude/memory/LATEST.md"
     if [ -f "$LATEST" ]; then
-        LATEST_CONTENT=$(head -60 "$LATEST" 2>/dev/null || echo "")
+        LATEST_CONTENT=$(head -20 "$LATEST" 2>/dev/null || echo "")
         [ -n "$LATEST_CONTENT" ] && OUTPUT="${OUTPUT}${LATEST_CONTENT}"
     fi
 fi

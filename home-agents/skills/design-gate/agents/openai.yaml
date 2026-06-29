@@ -1,0 +1,4 @@
+interface:
+  display_name: "Design Gate"
+  short_description: "Gate UI design with plan flow visual"
+  default_prompt: "UI 디자인 전에 design gate로 구조를 잡아줘"

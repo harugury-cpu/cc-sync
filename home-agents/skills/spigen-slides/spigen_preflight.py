@@ -30,7 +30,6 @@ import sys
 from pathlib import Path
 
 
-TEXT_COMPONENTS = {"slide", "text", "numbered_text", "free_text"}
 DIAGRAM_COMPONENTS = {
     "diagram",
     "free_diagram",

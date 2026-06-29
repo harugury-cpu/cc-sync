@@ -14,7 +14,7 @@ Claude와 Codex가 같은 장기 기억을 보도록 하는 공통 4-layer 메�
 의미 검색이 필요할 때 우선 사용한다.
 
 ```text
-/Users/user/.claude/lancedb
+/Users/harugury/.claude/lancedb
 ```
 
 현재 기본 테이블:
@@ -46,7 +46,7 @@ http://127.0.0.1:11434/api/embeddings
 대화 초반 또는 사용자 맥락 파악이 필요할 때 먼저 훑는다.
 
 ```text
-/Users/user/.claude/wiki
+/Users/harugury/.claude/wiki
 ```
 
 핵심 파일:
@@ -71,7 +71,7 @@ http://127.0.0.1:11434/api/embeddings
 공통 스킬 경로:
 
 ```text
-/Users/user/.agents/skills/graphify
+/Users/harugury/.agents/skills/graphify
 ```
 
 사용 기준:
@@ -85,19 +85,19 @@ http://127.0.0.1:11434/api/embeddings
 최종 기록과 회고 정리는 Obsidian Vault에 남긴다.
 
 ```text
-/Users/user/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault
+/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault
 ```
 
 Daily 회고:
 
 ```text
-/Users/user/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault/회고일기/Daily
+/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault/회고일기/Daily
 ```
 
 업무 PDF 기준:
 
 ```text
-/Users/user/Library/Mobile Documents/com~apple~CloudDocs/0.work
+/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/0.work
 ```
 
 사용 기준:
@@ -119,7 +119,7 @@ Daily 회고:
 사용자가 수정, 구현, 자동화, 스케줄, 메모리 인프라, Obsidian 연동 변경을 요청하면 먼저 공통 `task-gate` 스킬을 적용한다.
 
 ```text
-/Users/user/.agents/skills/task-gate
+/Users/harugury/.agents/skills/task-gate
 ```
 
 실행 전 반드시 제시할 것:
@@ -141,10 +141,10 @@ Daily 회고:
 ## 관련 공통 스킬
 
 ```text
-/Users/user/.agents/skills/dump
-/Users/user/.agents/skills/wrap-up
-/Users/user/.agents/skills/graphify
-/Users/user/.agents/skills/memory-infra
+/Users/harugury/.agents/skills/dump
+/Users/harugury/.agents/skills/wrap-up
+/Users/harugury/.agents/skills/graphify
+/Users/harugury/.agents/skills/memory-infra
 ```
 
 ## 회고 세션 규칙
@@ -153,7 +153,7 @@ Daily 회고:
 
 - 사용자의 모든 발화는 `dump` 스킬 기준으로 기록 후보로 본다.
 - 사용자가 "정리해줘", "마무리", "랩업", "wrap up"이라고 하면 `wrap-up` 스킬을 실행한다.
-- 오늘 업데이트된 PDF는 `/Users/user/Library/Mobile Documents/com~apple~CloudDocs/0.work` 기준 `.pdf`만 본다.
+- 오늘 업데이트된 PDF는 `/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/0.work` 기준 `.pdf`만 본다.
 - 회고 최종 기록은 Obsidian Daily에 남긴다.
 
 ## 안전 규칙

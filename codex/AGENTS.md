@@ -58,6 +58,28 @@
 1. 실행 전에 완료 조건을 명시하고 사용자 승인을 받는다.
 2. 예: "완료 조건: [A, B, C]. 진행할까요?"
 3. 생성·읽기·설명 요청은 이 단계를 생략한다.
+4. 강도는 작업 크기에 비례한다 — 한 줄 수정·단순 조회는 게이트 생략 또는 한 줄 확인, 기능 하나는 완료조건+실패케이스만 짧게, 새 앱·멀티파일·아키텍처 변경은 완료조건+실패케이스+검증방법까지 명세. 같은 맥락 반복 작업은 한 번 정한 기준을 재사용하고 다시 묻지 않는다. (상세 절차는 task-gate 스킬)
+
+---
+
+# 업무 자동화 유지보수 운영 원칙
+
+Google Apps Script, Google Workspace/GWS, Apps Script HTML Service, 내부 HTML 서비스, Illustrator/Adobe 스크립트, Monday, Drive, Sheets, Docs, Gmail, 파일 처리 자동화 관련 문제는 GitHub PR/이슈가 없는 운영 환경으로 본다.
+
+- 구두 전달, Telegram 메모, "뭔가 이상함" 수준의 제보도 먼저 유지보수 티켓으로 구조화한다.
+- 바로 고치지 말고 관련 스킬을 우선 적용한다.
+  - `automation-ops-triage`: 구두 제보/이상징후를 티켓화하고 우선순위·영향범위·다음 액션 정리
+  - `automation-code-review`: 자동화 코드의 시트/문서/파일/보드/레이어/트리거/API 의존성, 날짜/중복/누락/덮어쓰기 위험 점검
+  - `automation-change-safety`: 수정 전 완료조건·실패케이스·백업·원본 보존·롤백·검증방법 고정
+  - `automation-regression-check`: 수정 후 정상/문제/예외/중복 실행/파일 산출물 검증 체크리스트 실행
+  - `automation-incident-log`: 장애, 수동 복구, 재발 방지, 수정 이력을 Obsidian에 기록
+- 운영 데이터, 원본 파일, 디자인 파일, 템플릿에 쓰는 변경은 가능하면 테스트 사본, 샘플 입력, 백업, 로그 확인을 먼저 거친다.
+- 완료를 주장하기 전 문제 케이스와 기존 정상 케이스를 모두 확인한다.
+- Monday 업무기록 입력 요청은 기존 파닥몬/Monday 업무기록 규칙을 따르고, Obsidian `dump`와 혼동하지 않는다.
+- secret, API token, credential 원문은 코드/로그/Obsidian에 기록하지 않는다.
+- 로컬 스킬을 추가/수정한 뒤에는 `python3 /Users/harugury/.agents/scripts/validate-agent-skills.py`로 검증한다.
+- 업무 자동화 운영 도구 맥락이 필요하면 `/Users/harugury/.agents/tools.md`를 참고한다.
+- 업무 자동화 구조나 운영 규칙이 바뀌면 Obsidian `brain/Automation Changelog.md`에 변경 이력을 남긴다.
 
 ---
 

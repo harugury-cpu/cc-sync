@@ -113,6 +113,25 @@ if [ -z "$RULE_JSON" ] || ! echo "$RULE_JSON" | jq . >/dev/null 2>&1; then
   exit 0
 fi
 
+# ── 키워드 품질 게이트 ──────────────────────────────────────────────
+# 광범위 키워드가 누적돼 정상 응답을 오발동시키는 근본 원인을 입구에서 차단한다.
+#  1) 4자 미만(변별력 없는 단문) 제거
+#  2) 일반어(일상 대화에 흔히 등장) 제거
+#  3) harsh 시스템 자기참조어 제거 → 시스템 점검 대화에서 자기차단 방지
+#  4) 정제 후 키워드가 비면 규칙 자체를 만들지 않는다(노이즈 0)
+STOPWORDS_RE='완료|기본|표준|방식|수정|작성|처리|확인|진행|이전|동일|그대로|늘 하던|항상|레이아웃|구성|harsh|critic|user_frustration|불만|트리거|규칙|차단|래퍼'
+RULE_JSON=$(echo "$RULE_JSON" | jq --arg sw "$STOPWORDS_RE" '
+  .keywords = ([ .keywords[]?
+    | select((. | length) >= 4)
+    | select(test($sw) | not) ])
+')
+KW_COUNT=$(echo "$RULE_JSON" | jq '.keywords | length' 2>/dev/null || echo 0)
+if [ "${KW_COUNT:-0}" -lt 1 ]; then
+  echo "🚧 [HARSH-LEARN] 키워드가 품질 게이트를 통과하지 못함 — 규칙 생성 생략" >&2
+  exit 0
+fi
+# ────────────────────────────────────────────────────────────────────
+
 # ID에 타임스탬프 붙여 고유화, 메타데이터 추가
 TIMESTAMP=$(date +%s)
 RULE_JSON=$(echo "$RULE_JSON" | jq \

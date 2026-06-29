@@ -31,21 +31,13 @@ check_auto_rules() {
       "$TRIGGERS_FILE" > /tmp/harsh_triggers_update.json \
       && mv /tmp/harsh_triggers_update.json "$TRIGGERS_FILE"
 
-    if [ "$hit_count" -ge 2 ] && [ "$level" = "SOFT" ]; then
-      jq --arg rid "$id" \
-        '(.auto_rules[] | select(.id == $rid) | .level) |= "HARD"' \
-        "$TRIGGERS_FILE" > /tmp/harsh_triggers_update.json \
-        && mv /tmp/harsh_triggers_update.json "$TRIGGERS_FILE"
-      level="HARD"
-      echo "⬆️ [PROMOTED] ${id} — SOFT → HARD" >&2
-    fi
-
+    # 자동 SOFT→HARD 승격 폐기: 자동학습 규칙은 절대 응답을 차단하지 않는다.
+    # (광범위 키워드일수록 hit이 빨리 쌓여 차단으로 승격되는 역설을 제거)
     local desc
     desc="$(echo "$rule" | jq -r '.description // .id')"
     case "$level" in
       HARD)
-        echo "🚫 [HARD] ${desc} — 응답 차단" >&2
-        return 2
+        echo "⚠️ [HARD] ${desc} — 자기검토 권고(비차단)" >&2
         ;;
       SOFT)
         echo "💡 [SOFT] ${desc}" >&2

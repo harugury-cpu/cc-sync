@@ -32,7 +32,7 @@ GAS(Google Apps Script) 파일을 분석해 Obsidian `monday-automation.md`에 �
 ## 대상 파일
 
 ```
-/Users/user/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault/work/Project/leading/monday-automation.md
+/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault/work/Project/leading/monday-automation.md
 ```
 
 ---
@@ -67,7 +67,7 @@ cat "<GAS_FILE_PATH>"
 
 ### STEP 4: monday-automation.md 현재 상태 파악
 ```bash
-cat "/Users/user/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault/work/Project/leading/monday-automation.md"
+cat "/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault/work/Project/leading/monday-automation.md"
 ```
 
 확인 항목:
@@ -99,7 +99,7 @@ cat "/Users/user/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault/wor
 **삽입 스크립트 (Python heredoc):**
 ```bash
 python3 << 'PYEOF'
-FILE = "/Users/user/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault/work/Project/leading/monday-automation.md"
+FILE = "/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault/work/Project/leading/monday-automation.md"
 
 with open(FILE, 'r', encoding='utf-8') as f:
     content = f.read()
@@ -136,7 +136,7 @@ PYEOF
 
 ### STEP 6: 검증
 ```bash
-grep -n "abstract" "/Users/user/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault/work/Project/leading/monday-automation.md" | tail -5
+grep -n "abstract" "/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault/work/Project/leading/monday-automation.md" | tail -5
 ```
 새 토글이 정상적으로 추가되었는지 확인.
 

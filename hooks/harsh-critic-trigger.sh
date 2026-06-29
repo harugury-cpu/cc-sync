@@ -1,6 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
+# hook이 띄운 중첩 claude -p 세션에서는 발화하지 않는다 — 인용된 "!!!"에
+# 반응해 학습 파일을 또 만들면 learn hook과 무한 재귀 루프가 된다.
+[ "${HARSH_CRITIC_LEARN_DISABLE:-}" = "1" ] && exit 0
+[ -n "${CLAUDE_SKIP_MEMORY_LEARN:-}" ] && exit 0
+
 input=$(cat)
 prompt=$(echo "$input" | jq -r '.prompt // empty' 2>/dev/null || true)
 

@@ -19,7 +19,7 @@ triggers:
 ## 스크립트 위치
 
 ```
-/Users/user/Library/Mobile Documents/com~apple~CloudDocs/0.work/1. 진행중/26.04 디바이스 검토용/check_package.py
+/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/0.work/1. 진행중/26.04 디바이스 검토용/check_package.py
 ```
 
 ## 사용법
@@ -65,7 +65,7 @@ triggers:
 # conda 위치 탐색
 CONDA=$(which conda 2>/dev/null || find /opt /usr/local /Users/harugury -name "conda" -type f 2>/dev/null | head -1)
 $CONDA run -n cq python \
-  "/Users/user/Library/Mobile Documents/com~apple~CloudDocs/0.work/1. 진행중/26.04 디바이스 검토용/check_package.py" \
+  "/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/0.work/1. 진행중/26.04 디바이스 검토용/check_package.py" \
   "<device_stp_path>" --side <side> --back <back> --no-browser
 ```
 
@@ -76,7 +76,7 @@ python3 -m venv /tmp/cq-venv
 /tmp/cq-venv/bin/pip install cadquery plotly --quiet
 
 /tmp/cq-venv/bin/python \
-  "/Users/user/Library/Mobile Documents/com~apple~CloudDocs/0.work/1. 진행중/26.04 디바이스 검토용/check_package.py" \
+  "/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/0.work/1. 진행중/26.04 디바이스 검토용/check_package.py" \
   "<device_stp_path>" --side <side> --back <back> --no-browser
 ```
 

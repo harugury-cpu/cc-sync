@@ -17,6 +17,7 @@ description: 제품 기능과 경쟁사 자료를 기반으로 상세페이지�
 - 차별화는 메시지 제거가 아니라 구도, 증명 방식, 비교 방식, 정보 구조 개선으로 달성한다.
 - 경쟁사 이미지는 분석용으로만 사용하고 복제하지 않는다.
 - 셀링포인트에서 바로 프롬프트로 가지 말고, 반드시 분석 메모와 비주얼 브리프를 거친다.
+- 최종 이미지 프롬프트를 작성할 때는 `references/prompt-compiler.md`를 적용해 네거티브 문장, SD식 품질태그, 장비 스펙 나열을 제거하고 긍정형·결과형 표현으로 컴파일한다.
 - 사진/일러스트 중 하나만 고르지 말고, 필요하면 주 표현과 보조 표현으로 나눈다.
 - 점수는 직관이 아니라 `references/scoring.md` 통과 조건에 매핑해서 산정한다.
 - scoreReasons에는 일반론 금지. 분석 메모의 데이터를 인용한다.
@@ -136,14 +137,20 @@ project/
    - baseline 텍스트를 prefix로 두고, ChatGPT 웹 이미지 생성 등 외부 이미지 생성 환경에 붙여넣기 쉬운 자연어 brief 형태로 출력한다.
    - 같은 셀링포인트에 baseline 2종을 동시에 출력하지 않는다.
 
-10. **구도 미리보기/이미지 생성 핸드오프**
+10. **이미지 프롬프트 컴파일**
+   - 최종 이미지 프롬프트를 출력하는 경우 `references/prompt-compiler.md`를 적용한다.
+   - 추가 LLM 호출을 만들지 않고, 작성 규칙으로만 반영한다.
+   - `No text`, `Do not`, `Avoid`, `without` 같은 네거티브 문장을 긍정형 상태 설명으로 바꾼다.
+   - `best quality`, `8k`, `ultra detailed` 같은 SD식 품질 태그를 제거하고, 조명·재질·구도·AR·must show를 구체화한다.
+
+11. **구도 미리보기/이미지 생성 핸드오프**
    - 로컬 Codex CLI 데몬 환경에서는 AI 이미지 자동 생성을 수행하지 않는다.
    - 별도 과금이 발생할 수 있는 OpenAI API 키 기반 이미지 생성 스크립트도 기본 사용하지 않는다.
    - 결과물은 비주얼 브리프, 복사용 프롬프트, 웹 UI에서 그릴 수 있는 SVG/HTML 구도 미리보기용 구조 정보까지 제공한다.
    - 사용자가 실제 이미지를 원하면 프롬프트를 ChatGPT 웹 이미지 생성 등 별도 환경에 복사해 사용한다.
    - 경쟁사 이미지의 레이아웃, 브랜드, 디자인을 복제하지 않는다.
 
-11. **(평가 모드) 정답 일치율 측정**
+12. **(평가 모드) 정답 일치율 측정**
    - `expected.md`가 있거나 사용자가 평가를 요청하면 `references/evaluation.md`의 보고서 양식으로 결과를 추가 출력한다.
 
 ## 출력 형식
@@ -159,8 +166,9 @@ project/
 7. TOP 1, 2, 3 카드 (점수, scoreReasons, fitValidation, evidenceAudit, selfReview, baseline 선택, 추천 구도, 피해야 할 표현 포함)
 8. 사진/일러스트 판단 보조 노트
 9. 비주얼 브리프 (각 TOP 카드별, baseline + 8필드 영문)
-10. 구도 미리보기/이미지 생성 핸드오프
-11. (평가 모드) 평가 보고서
+10. 이미지 프롬프트 컴파일 메모
+11. 구도 미리보기/이미지 생성 핸드오프
+12. (평가 모드) 평가 보고서
 
 ## 결과 작성 규칙
 
@@ -182,6 +190,7 @@ project/
 | `references/scoring.md` | 점수 1~5점 정량 통과 조건 + inputDataConfidence 게이트 + selfReview 룰 |
 | `references/baseline.md` | Apple 톤 product_hero / lifestyle baseline 2종 |
 | `references/visual-brief.md` | 비주얼 브리프 8필드 작성 규칙 + scoreReasons 객관성 룰 |
+| `references/prompt-compiler.md` | 이미지 품질 향상용 프롬프트 컴파일 규칙 |
 | `references/output-format.md` | 출력 순서 9단계 + TOP 카드 양식 |
 | `references/evaluation.md` | 골든 케이스 평가 모드 (TOP 일치율, 객관성, 안정성, 이미지 5점 평가) |
 | `references/web-enrichment.md` | 기본 웹 보강 검색 절차, 출처 라벨, Deep Research 파일 처리 |

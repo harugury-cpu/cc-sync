@@ -33,3 +33,5 @@ export PATH="$BUN_INSTALL/bin:$PATH"
  
 # tofu-at: install Agent Teams orchestration into the current project
 alias set-agent-team='bash ~/tools/tofu-at/install.sh'
+export OPENCRAB_TOKEN="echo export OPENCRAB_TOKEN=토큰 >> ~/.zshrc
+source ~/.zshrc"

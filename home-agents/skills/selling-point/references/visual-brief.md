@@ -36,9 +36,10 @@
 - 모든 필드 영문 1줄. 두 줄 금지.
 - baseline은 product_hero 또는 lifestyle 중 하나를 선택한 후 visualBrief 위에 prefix로 둔다.
 - "best quality", "8k resolution", "ultra detailed" 같은 클리셰 키워드 금지. baseline에 이미 충분한 품질 키워드가 포함되어 있다.
-- 텍스트 오버레이, 워터마크, 한국어 텍스트 등장 금지. 이미지 생성 모델이 텍스트를 합성하면 결과가 망가진다.
-- "Spigen", "Apple", "MagSafe" 등 공식 브랜드 표기는 케이스에 장착된 Apple 디바이스 또는 액세서리 컨텍스트에 한해 자연스럽게 사용. 별도 로고 합성 지시는 하지 않는다.
+- 텍스트/로고/워터마크를 배제해야 할 때는 네거티브 문장 대신 긍정형으로 쓴다. 예: `clean blank copy area reserved for later layout`, `brand-free clean surface treatment`.
+- "Spigen", "Apple", "MagSafe" 등 공식 브랜드 표기는 케이스에 장착된 Apple 디바이스 또는 액세서리 컨텍스트에 한해 자연스럽게 사용. 별도 로고 합성 지시 대신 `brand-free surface treatment`처럼 표현한다.
 - 같은 셀링포인트에 product_hero와 lifestyle을 동시에 출력하지 않는다. 1개만 선택.
+- 최종 이미지 프롬프트까지 작성하는 경우 `references/prompt-compiler.md`를 적용해 이미지 품질 저하 표현을 제거한다.
 
 ## 최종 출력 형식 (외부 이미지 생성 환경에 복사 가능한 형태)
 

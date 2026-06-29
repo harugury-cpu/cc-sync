@@ -12,13 +12,13 @@ Obsidian 회고 세션을 끝낼 때 실행하는 마무리 점검 스킬이다.
 Obsidian Vault:
 
 ```text
-/Users/user/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault/
+/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault/
 ```
 
 Daily 회고:
 
 ```text
-/Users/user/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault/회고일기/Daily/
+/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/Obsidian Vault/회고일기/Daily/
 ```
 
 ## 중요 규칙
@@ -77,7 +77,7 @@ Daily 회고:
 
 주의:
 
-- 기준 폴더는 `/Users/user/Library/Mobile Documents/com~apple~CloudDocs/0.work`다.
+- 기준 폴더는 `/Users/harugury/Library/Mobile Documents/com~apple~CloudDocs/0.work`다.
 - `.pdf`만 기록한다.
 - 같은 파일명으로 `.ai`, `.jpg`, `.png`가 있어도 PDF 업데이트만 기록한다.
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenMontage Video"
+  short_description: "Route video requests to OpenMontage"
+  default_prompt: "OpenMontage로 15초 쇼츠 영상을 만들어줘"
